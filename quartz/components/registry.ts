@@ -34,6 +34,16 @@ class ComponentRegistry {
     this.components.set(name, { component, source, manifest })
   }
 
+  replace(
+    name: string,
+    component: QuartzComponent | QuartzComponentConstructor,
+    source: string,
+    manifest?: ComponentManifest,
+  ): void {
+    this.components.set(name, { component, source, manifest })
+    this.instanceCache.clear()
+  }
+
   get(name: string): RegisteredComponent | undefined {
     return this.components.get(name)
   }

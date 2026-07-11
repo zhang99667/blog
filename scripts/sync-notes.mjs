@@ -1,0 +1,975 @@
+import { createHash } from "node:crypto"
+import { execFileSync, spawnSync } from "node:child_process"
+import { promises as fs } from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { parse as parseYaml } from "yaml"
+import { blogConfig } from "./blog.config.mjs"
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const designTokens = JSON.parse(
+  await fs.readFile(path.join(root, "design-system/tokens.json"), "utf8"),
+)
+const brand = designTokens.brand
+const cacheDir = path.join(root, ".cache")
+const noteDir = path.join(cacheDir, "note")
+const contentRoot = path.join(root, "content")
+const blogContentDir = path.join(contentRoot, "site")
+const notesContentDir = path.join(contentRoot, "notes")
+const manifestPath = path.join(cacheDir, "publish-manifest.json")
+const noteOrigin = "https://note.markz.fun"
+
+const noteRepo = process.env.NOTE_REPO ?? "https://github.com/zhang99667/note.git"
+const noteRepoPrecheckedOut = process.env.NOTE_REPO_PRECHECKED_OUT === "1"
+const defaultCollections = new Map([
+  ["AI", { slug: "ai", title: "AI 工程" }],
+  ["Android", { slug: "android", title: "Android" }],
+  ["网络", { slug: "network", title: "网络" }],
+])
+const includeCollections = splitList(process.env.BLOG_INCLUDE_DIRS, ["AI", "Android", "网络"]).map(
+  (source) => {
+    const defaults = defaultCollections.get(source)
+    return {
+      source,
+      slug: defaults?.slug ?? slugifySegment(source),
+      title: defaults?.title ?? source,
+    }
+  },
+)
+const includeDirs = includeCollections.map((collection) => collection.source)
+const excludeDirs = new Set(splitList(process.env.BLOG_EXCLUDE_DIRS, ["Tasks", "promotion docs"]))
+const allowedAssetExts = new Set([
+  ".avif",
+  ".gif",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".pdf",
+  ".png",
+  ".svg",
+  ".webp",
+])
+const configuredPosts = new Map(
+  (blogConfig.posts ?? []).map((post, index) => [
+    normalizeRel(post.source),
+    { ...post, order: index },
+  ]),
+)
+
+function splitList(value, fallback) {
+  if (!value) return fallback
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    cwd: root,
+    ...options,
+  })
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}`)
+  }
+}
+
+function read(command, args, options = {}) {
+  return execFileSync(command, args, {
+    cwd: root,
+    encoding: "utf8",
+    ...options,
+  }).trim()
+}
+
+async function pathExists(fp) {
+  try {
+    await fs.access(fp)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function toPosix(fp) {
+  return fp.split(path.sep).join("/")
+}
+
+function normalizeRel(rel) {
+  return toPosix(rel).replace(/^\/+/, "")
+}
+
+function hashBuffer(buffer) {
+  return createHash("sha256").update(buffer).digest("hex")
+}
+
+function shouldSkipRelative(rel) {
+  const parts = rel.split("/")
+  if (parts.some((part) => part === ".git" || part === ".obsidian" || part === ".DS_Store")) {
+    return true
+  }
+  if (parts.some((part) => excludeDirs.has(part))) return true
+  if (rel.includes(".bak")) return true
+  if (rel.endsWith("progress.json")) return true
+  return false
+}
+
+function isPublishableFile(rel) {
+  const ext = path.extname(rel).toLowerCase()
+  if (ext === ".md" || ext === ".canvas") return true
+  return allowedAssetExts.has(ext)
+}
+
+function splitFrontmatter(text) {
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (!match) return { data: {}, body: text, raw: "" }
+
+  try {
+    return {
+      data: parseYaml(match[1]) ?? {},
+      body: text.slice(match[0].length).trimStart(),
+      raw: match[1],
+    }
+  } catch {
+    return { data: {}, body: text.slice(match[0].length).trimStart(), raw: match[1] }
+  }
+}
+
+function asBoolean(value) {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") return ["true", "yes", "1"].includes(value.toLowerCase())
+  return false
+}
+
+function asString(value) {
+  if (value == null) return undefined
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (Array.isArray(value)) return value.join(", ")
+  return String(value).trim() || undefined
+}
+
+function asArray(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean)
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function isPrivateFrontmatter(fm) {
+  return (
+    asBoolean(fm.draft) ||
+    asBoolean(fm.private) ||
+    fm.publish === false ||
+    String(fm.publish).toLowerCase() === "false"
+  )
+}
+
+async function walk(dir, out = []) {
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await walk(full, out)
+    } else if (entry.isFile()) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
+async function cloneOrPullNotes() {
+  await fs.mkdir(cacheDir, { recursive: true })
+  if (noteRepoPrecheckedOut) {
+    if (!(await pathExists(path.join(noteDir, ".git")))) {
+      throw new Error("NOTE_REPO_PRECHECKED_OUT=1 requires the note repository at .cache/note")
+    }
+    return
+  }
+
+  if (await pathExists(path.join(noteDir, ".git"))) {
+    run("git", ["-C", noteDir, "pull", "--ff-only"])
+  } else {
+    run("git", ["clone", "--depth", "1", noteRepo, noteDir])
+  }
+}
+
+async function loadOldManifest() {
+  if (!(await pathExists(manifestPath))) return { files: {} }
+  return JSON.parse(await fs.readFile(manifestPath, "utf8"))
+}
+
+async function cleanupGeneratedShell() {
+  await fs.rm(blogContentDir, { recursive: true, force: true })
+
+  // Remove files generated by the previous single-site layout.
+  await fs.rm(path.join(contentRoot, "index.md"), { force: true })
+  await fs.rm(path.join(contentRoot, "blog"), { recursive: true, force: true })
+  await fs.rm(path.join(contentRoot, "ai-data"), { recursive: true, force: true })
+
+  // Migration from the first notes-first layout.
+  for (const legacy of new Set([...includeDirs, "AI", "ai", "Android", "网络"])) {
+    await fs.rm(path.join(contentRoot, legacy), { recursive: true, force: true })
+  }
+}
+
+async function syncContent() {
+  const oldManifest = await loadOldManifest()
+  await fs.mkdir(contentRoot, { recursive: true })
+  await fs.mkdir(notesContentDir, { recursive: true })
+  await cleanupGeneratedShell()
+
+  const files = {}
+  const records = []
+  let copied = 0
+  let unchanged = 0
+  let skippedPrivate = 0
+  let skippedFolderIndex = 0
+  const inputs = []
+
+  for (const collection of includeCollections) {
+    const sourceRoot = path.join(noteDir, collection.source)
+    if (!(await pathExists(sourceRoot))) continue
+
+    for (const sourceFile of await walk(sourceRoot)) {
+      const srcRel = normalizeRel(path.relative(noteDir, sourceFile))
+      if (shouldSkipRelative(srcRel) || !isPublishableFile(srcRel)) continue
+
+      const relInsideCollection = normalizeRel(path.relative(sourceRoot, sourceFile))
+      inputs.push({
+        collection,
+        sourceFile,
+        srcRel,
+        destRel: normalizeRel(path.posix.join(collection.slug, relInsideCollection)),
+        ext: path.extname(srcRel).toLowerCase(),
+      })
+    }
+  }
+
+  const assetLookup = createAssetLookup(inputs.filter((input) => allowedAssetExts.has(input.ext)))
+
+  for (const input of inputs) {
+    const { collection, sourceFile, srcRel, destRel, ext } = input
+    const sourceData = await fs.readFile(sourceFile)
+    let outputData = sourceData
+    let sourceText
+
+    if (ext === ".md") {
+      sourceText = sourceData.toString("utf8")
+      const { data: fm } = splitFrontmatter(sourceText)
+      if (isPrivateFrontmatter(fm)) {
+        skippedPrivate += 1
+        continue
+      }
+      if (await isRedundantFolderIndex(sourceFile, srcRel, sourceText)) {
+        skippedFolderIndex += 1
+        continue
+      }
+
+      outputData = Buffer.from(rewriteNoteAssetTargets(sourceText, input, assetLookup), "utf8")
+    }
+
+    const destFile = path.join(notesContentDir, destRel)
+    const hash = hashBuffer(outputData)
+    files[destRel] = {
+      source: srcRel,
+      hash,
+      size: outputData.length,
+      type: ext === ".md" ? "note" : "asset",
+    }
+
+    if (oldManifest.files?.[destRel]?.hash === hash && (await pathExists(destFile))) {
+      unchanged += 1
+    } else {
+      await fs.mkdir(path.dirname(destFile), { recursive: true })
+      await fs.writeFile(destFile, outputData)
+      copied += 1
+    }
+
+    if (ext === ".md") {
+      const stat = await fs.stat(sourceFile)
+      records.push(buildRecord(destRel, srcRel, collection, sourceText, stat, hash))
+    }
+  }
+
+  for (const oldRel of Object.keys(oldManifest.files ?? {})) {
+    if (!files[oldRel]) {
+      await fs.rm(path.join(notesContentDir, oldRel), { force: true })
+    }
+  }
+
+  records.sort((a, b) => a.path.localeCompare(b.path, "zh-CN"))
+  const posts = records
+    .filter((record) => record.post)
+    .sort((a, b) => a.post.order - b.post.order || b.date.localeCompare(a.date))
+  const sourceCommit = read("git", ["-C", noteDir, "rev-parse", "HEAD"])
+  const generatedAt = new Date().toISOString()
+  const manifest = {
+    generatedAt,
+    source: {
+      repo: noteRepo,
+      commit: sourceCommit,
+      includeDirs,
+      excludeDirs: [...excludeDirs],
+    },
+    counts: {
+      posts: posts.length,
+      notes: records.length,
+      files: Object.keys(files).length,
+      copied,
+      unchanged,
+      skippedPrivate,
+      skippedFolderIndex,
+    },
+    files,
+  }
+
+  await writeGeneratedPages(records, posts, manifest, assetLookup)
+  await writeAiFiles(records, posts, manifest)
+  await fs.mkdir(cacheDir, { recursive: true })
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+  console.log(
+    `Synced ${posts.length} posts, ${records.length} notes and ${
+      Object.keys(files).length - records.length
+    } assets from ${sourceCommit.slice(0, 7)}. Copied ${copied}, unchanged ${unchanged}.`,
+  )
+}
+
+async function isRedundantFolderIndex(sourceFile, srcRel, text) {
+  if (path.basename(srcRel).toLowerCase() !== "index.md") return false
+  const parentDir = path.dirname(sourceFile)
+  const parentName = path.basename(parentDir)
+  const sibling = path.join(parentDir, `${parentName}.md`)
+  if (!(await pathExists(sibling))) return false
+  return stripMarkdown(text).length < 220
+}
+
+function removeFrontmatter(text) {
+  return splitFrontmatter(text).body
+}
+
+function stripMarkdown(text) {
+  return removeFrontmatter(text)
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, " ")
+    .replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g, "$2$1")
+    .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/[#*_`>|~-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function extractTitle(rel, text, fm) {
+  const fmTitle = asString(fm.title)
+  if (fmTitle) return stripMarkdown(fmTitle)
+  const body = removeFrontmatter(text)
+  const match = body.match(/^#\s+(.+)$/m)
+  if (match) return stripMarkdown(match[1])
+  return path.basename(rel, ".md")
+}
+
+function extractSummary(text, fm) {
+  const fmSummary = asString(fm.summary) ?? asString(fm.description) ?? asString(fm.excerpt)
+  if (fmSummary) return stripMarkdown(fmSummary).slice(0, 260)
+
+  const body = removeFrontmatter(text).replace(/```[\s\S]*?```/g, "\n")
+  const paragraphs = body
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+
+  for (const paragraph of paragraphs) {
+    if (/^(#|[-*]\s|\||>|!?\[\[)/.test(paragraph)) continue
+    const cleaned = stripMarkdown(paragraph)
+    if (cleaned.length >= 24) return cleaned.slice(0, 220)
+  }
+
+  return stripMarkdown(body).slice(0, 220)
+}
+
+function extractHeadings(text) {
+  return [...removeFrontmatter(text).matchAll(/^(#{2,4})\s+(.+)$/gm)].slice(0, 12).map((match) => ({
+    depth: match[1].length,
+    text: stripMarkdown(match[2]).slice(0, 120),
+  }))
+}
+
+function extractTags(text, fm) {
+  const tags = new Set(asArray(fm.tags))
+  for (const match of text.matchAll(/(^|\s)#([\p{L}\p{N}_/-]{2,})/gu)) {
+    tags.add(match[2])
+  }
+  return [...tags].sort((a, b) => a.localeCompare(b, "zh-CN"))
+}
+
+function extractLinks(text) {
+  const links = new Set()
+  for (const match of text.matchAll(/!?\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g)) {
+    const target = match[1].trim()
+    if (
+      !target ||
+      target.includes("/img/") ||
+      allowedAssetExts.has(path.extname(target).toLowerCase())
+    ) {
+      continue
+    }
+    links.add(target.replace(/\.md$/i, ""))
+  }
+  for (const match of text.matchAll(/\[[^\]]+]\(([^)]+\.md)\)/g)) {
+    links.add(decodeURIComponent(match[1]).replace(/\.md$/i, ""))
+  }
+  return [...links].sort((a, b) => a.localeCompare(b, "zh-CN"))
+}
+
+function classifyPost(sourceRel, fm) {
+  const configured = configuredPosts.get(sourceRel)
+  const type = asString(fm.type)?.toLowerCase()
+  const explicitPost =
+    ["post", "blog", "article", "essay"].includes(type ?? "") ||
+    asBoolean(fm.blog) ||
+    asBoolean(fm.post) ||
+    asBoolean(fm.featured)
+
+  if (!configured && !explicitPost) return undefined
+
+  const title = asString(fm.title) ?? configured?.title
+  return {
+    slug: slugifySegment(
+      asString(fm.slug) ?? configured?.slug ?? title ?? path.basename(sourceRel, ".md"),
+    ),
+    order: configured?.order ?? 1000,
+    featured: configured?.featured ?? asBoolean(fm.featured),
+  }
+}
+
+function buildRecord(destRel, sourceRel, collection, text, stat, hash) {
+  const { data: fm } = splitFrontmatter(text)
+  const configured = configuredPosts.get(sourceRel)
+  const plain = stripMarkdown(text)
+  const title = asString(fm.title) ?? configured?.title ?? extractTitle(sourceRel, text, fm)
+  const summary =
+    asString(fm.summary) ??
+    asString(fm.description) ??
+    asString(fm.excerpt) ??
+    configured?.summary ??
+    extractSummary(text, fm)
+  const date =
+    asString(fm.date) ??
+    asString(fm.created) ??
+    asString(fm.createdAt) ??
+    asString(fm.updated) ??
+    stat.mtime.toISOString().slice(0, 10)
+  const post = classifyPost(sourceRel, fm)
+  const id = destRel.replace(/\.md$/i, "")
+
+  return {
+    id,
+    sourcePath: sourceRel,
+    path: destRel,
+    url: `/${encodeURI(id)}`,
+    title,
+    summary,
+    tags: extractTags(text, fm),
+    headings: extractHeadings(text),
+    links: extractLinks(text),
+    wordCount: [...plain].length,
+    date,
+    updatedAt: stat.mtime.toISOString(),
+    collection,
+    post: post
+      ? {
+          ...post,
+          url: `/blog/${encodeURI(post.slug)}`,
+        }
+      : undefined,
+    hash,
+    markdown: text,
+    plainText: plain,
+  }
+}
+
+function buildGraph(records) {
+  const byTitle = new Map()
+  const byPath = new Map()
+  for (const record of records) {
+    byTitle.set(record.title, record.id)
+    byTitle.set(path.basename(record.id), record.id)
+    byPath.set(record.id, record.id)
+  }
+
+  const edges = []
+  for (const record of records) {
+    for (const link of record.links) {
+      const target = byTitle.get(link) ?? byPath.get(link)
+      if (target) edges.push({ source: record.id, target })
+    }
+  }
+
+  return {
+    nodes: records.map((record) => ({
+      id: record.id,
+      title: record.title,
+      url: record.post?.url ?? `${noteOrigin}${record.url}`,
+      noteUrl: `${noteOrigin}${record.url}`,
+      tags: record.tags,
+      type: record.post ? "post" : "note",
+    })),
+    edges,
+  }
+}
+
+function buildChunks(records) {
+  const chunks = []
+  for (const record of records) {
+    const chars = [...record.plainText]
+    const size = 900
+    const overlap = 120
+    for (let offset = 0; offset < chars.length; offset += size - overlap) {
+      const chunkText = chars
+        .slice(offset, offset + size)
+        .join("")
+        .trim()
+      if (chunkText.length < 80) continue
+      chunks.push({
+        id: `${record.id}#${chunks.length + 1}`,
+        note: record.id,
+        title: record.title,
+        url: record.post?.url ?? `${noteOrigin}${record.url}`,
+        noteUrl: `${noteOrigin}${record.url}`,
+        type: record.post ? "post" : "note",
+        text: chunkText,
+      })
+    }
+  }
+  return chunks
+}
+
+async function writeGeneratedPages(records, posts, manifest, assetLookup) {
+  await writeHome(posts)
+  await writeBlogIndex(posts, manifest)
+  await writeBlogPosts(posts, records, assetLookup)
+  await writeNotesIndex(records, manifest)
+}
+
+async function writeHome(posts) {
+  const latestPosts = posts.slice(0, 5)
+  const postRows = latestPosts.map(renderPostRow).join("\n")
+
+  const body = `---
+title: ${brand.name}
+description: ${brand.name} 的个人博客，记录 AI 工程、Android、工具和系统设计。
+---
+
+<div class="blog-home">
+  <section class="blog-hero">
+    <p class="eyebrow">${brand.tagline}</p>
+    <h1 class="brand-mark brand-mark--hero" data-brand-version="${designTokens.version}">${brand.name}<span class="brand-dot" aria-hidden="true"></span></h1>
+    <p class="hero-lede">${brand.description}</p>
+    <p class="hero-copy">关注 AI 工程、Android 与系统设计。这里放经过整理、值得长期保留的文章。</p>
+    <nav class="home-actions" aria-label="主要入口">
+      <a class="primary" href="/blog/">浏览全部文章</a>
+      <a href="${noteOrigin}/">打开公开笔记</a>
+    </nav>
+  </section>
+
+  <section class="home-writing">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Latest writing</p>
+        <h2>最近文章</h2>
+      </div>
+      <a href="/blog/">查看全部</a>
+    </div>
+    <div class="post-feed">
+${postRows || "<p>还没有发布文章。</p>"}
+    </div>
+  </section>
+
+  <section class="notes-bridge">
+    <div>
+      <p class="eyebrow">Notes</p>
+      <h2>笔记是工作台，博客是成稿。</h2>
+      <p>零散记录、资料索引和仍在生长的内容，放在独立的公开笔记库。</p>
+    </div>
+    <a class="bridge-link" href="${noteOrigin}/">进入笔记库</a>
+  </section>
+</div>
+`
+
+  await fs.mkdir(blogContentDir, { recursive: true })
+  await fs.writeFile(path.join(blogContentDir, "index.md"), body)
+}
+
+async function writeBlogIndex(posts, manifest) {
+  const postRows = posts.map(renderPostRow).join("\n")
+  const body = `---
+title: 文章
+description: MarkZ 的文章归档。
+---
+
+<div class="blog-index">
+  <header class="archive-intro">
+    <p class="eyebrow">Writing archive</p>
+    <h1>文章</h1>
+    <p>经过整理的长文，按发布时间排列。相关资料与过程记录会链接到独立笔记库。</p>
+  </header>
+
+  <div class="archive-summary">
+    <span>共 ${posts.length} 篇</span>
+    <span>AI 工程 · Android · 系统设计</span>
+  </div>
+
+  <div class="post-feed archive-feed">
+${postRows || "<p>还没有发布文章。</p>"}
+  </div>
+
+  <p class="sync-line">更新于 ${htmlEscape(manifest.generatedAt.slice(0, 10))}</p>
+</div>
+`
+
+  await fs.mkdir(path.join(blogContentDir, "blog"), { recursive: true })
+  await fs.writeFile(path.join(blogContentDir, "blog", "index.md"), body)
+}
+
+async function writeBlogPosts(posts, records, assetLookup) {
+  const blogDir = path.join(blogContentDir, "blog")
+  const noteLookup = createNoteLookup(records)
+  await fs.mkdir(blogDir, { recursive: true })
+
+  for (const post of posts) {
+    const fm = [
+      "---",
+      `title: ${JSON.stringify(post.title)}`,
+      `description: ${JSON.stringify(post.summary)}`,
+      `date: ${JSON.stringify(post.date)}`,
+      `sourceNote: ${JSON.stringify(`${noteOrigin}${post.url}`)}`,
+      post.tags.length > 0 ? "tags:" : "tags: []",
+      ...post.tags.map((tag) => `  - ${JSON.stringify(tag)}`),
+      "---",
+      "",
+    ].join("\n")
+    const body = rewriteBlogMarkdown(
+      removeFrontmatter(post.markdown),
+      post,
+      noteLookup,
+      assetLookup,
+    )
+    const source = `\n\n<aside class="article-source">\n  <span>原始笔记</span>\n  <a href="${noteOrigin}${post.url}">在笔记库中查看</a>\n</aside>\n`
+    await fs.writeFile(
+      path.join(blogDir, `${post.post.slug}.md`),
+      `${fm}${body.trimStart()}${source}`,
+    )
+  }
+}
+
+async function writeNotesIndex(records, manifest) {
+  const collectionStats = renderCollectionStats(records)
+  const latest = [...records]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 12)
+    .map(renderNoteLine)
+    .join("\n")
+  const body = `---
+title: Notes
+description: 从 Obsidian 同步出来的公开笔记库。
+---
+
+<div class="site-section">
+  <div class="section-intro">
+    <p class="eyebrow">Notes</p>
+    <h2>公开笔记库</h2>
+    <p>这里保留笔记的网络结构、原始分类和增量同步结果。适合查资料、顺链接和看未整理成文章的材料。</p>
+  </div>
+
+  <div class="stat-grid wide">
+${collectionStats}
+  </div>
+
+  <div class="home-panel compact">
+    <div class="section-head">
+      <p class="eyebrow">Recent</p>
+      <h3>最近更新</h3>
+    </div>
+    <ul class="quiet-list">
+${latest || "<li>还没有可发布笔记</li>"}
+    </ul>
+  </div>
+
+  <p class="sync-line">共 ${records.length} 篇公开笔记 · 同步时间：${htmlEscape(
+    manifest.generatedAt,
+  )}</p>
+</div>
+`
+
+  await fs.mkdir(notesContentDir, { recursive: true })
+  await fs.writeFile(path.join(notesContentDir, "index.md"), body)
+}
+
+async function writeAiFiles(records, posts, manifest) {
+  const aiDir = path.join(blogContentDir, "ai-data")
+  await fs.mkdir(aiDir, { recursive: true })
+
+  const publicRecords = records.map(({ plainText, markdown, ...record }) => ({
+    ...record,
+    canonicalUrl: record.post?.url ?? `${noteOrigin}${record.url}`,
+    noteUrl: `${noteOrigin}${record.url}`,
+  }))
+  const publicPosts = posts.map(({ plainText, markdown, ...record }) => ({
+    ...record,
+    canonicalUrl: record.post.url,
+  }))
+
+  await fs.writeFile(
+    path.join(aiDir, "index.json"),
+    `${JSON.stringify({ records: publicRecords, posts: publicPosts }, null, 2)}\n`,
+  )
+  await fs.writeFile(
+    path.join(aiDir, "graph.json"),
+    `${JSON.stringify(buildGraph(records), null, 2)}\n`,
+  )
+  await fs.writeFile(
+    path.join(aiDir, "chunks.json"),
+    `${JSON.stringify({ chunks: buildChunks(records) }, null, 2)}\n`,
+  )
+  await fs.writeFile(path.join(aiDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
+function normalizeAssetKey(value) {
+  return normalizeRel(path.posix.normalize(String(value).normalize("NFKC"))).toLowerCase()
+}
+
+function createAssetLookup(inputs) {
+  const bySource = new Map()
+  const byDest = new Map()
+  const byBasename = new Map()
+
+  for (const input of inputs) {
+    bySource.set(normalizeAssetKey(input.srcRel), input)
+    byDest.set(normalizeAssetKey(input.destRel), input)
+
+    const basename = normalizeAssetKey(path.posix.basename(input.srcRel))
+    const matches = byBasename.get(basename) ?? []
+    matches.push(input)
+    byBasename.set(basename, matches)
+  }
+
+  return { bySource, byDest, byBasename }
+}
+
+function decodeAssetTarget(target) {
+  const clean = target.trim().split("?")[0].split("#")[0]
+  try {
+    return decodeURI(clean)
+  } catch {
+    return clean
+  }
+}
+
+function resolveAssetTarget(target, input, assetLookup) {
+  const clean = decodeAssetTarget(target)
+  const sourceCandidates = [
+    path.posix.join(path.posix.dirname(input.srcRel), clean),
+    path.posix.join(input.collection.source, clean),
+    clean,
+  ]
+  for (const candidate of sourceCandidates) {
+    const match = assetLookup.bySource.get(normalizeAssetKey(candidate))
+    if (match) return match
+  }
+
+  const destCandidates = [
+    path.posix.join(path.posix.dirname(input.destRel), clean),
+    path.posix.join(input.collection.slug, clean),
+    clean,
+  ]
+  for (const candidate of destCandidates) {
+    const match = assetLookup.byDest.get(normalizeAssetKey(candidate))
+    if (match) return match
+  }
+
+  const basenameMatches = assetLookup.byBasename.get(normalizeAssetKey(path.posix.basename(clean)))
+  if (!basenameMatches) return undefined
+  if (basenameMatches.length === 1) return basenameMatches[0]
+  return basenameMatches.find((match) => match.collection.slug === input.collection.slug)
+}
+
+function rewriteNoteAssetTargets(markdown, input, assetLookup) {
+  const renderImage = (asset, alt, options = "") => {
+    const optionWidth = options.match(/\|(\d+)/)?.[1]
+    const altWidth = alt.match(/\|(\d+)$/)?.[1]
+    const width = optionWidth ?? altWidth
+    const cleanAlt = alt.replace(/\|\d+$/, "")
+    const widthAttr = width ? ` width="${width}"` : ""
+    return `<img src="/${encodeURI(asset.destRel)}" alt="${htmlEscape(cleanAlt)}"${widthAttr} />`
+  }
+
+  return rewriteOutsideCode(markdown, (text) =>
+    text
+      .replace(
+        /!\[\[([^|\]#]+)(#[^|\]]+)?(\|[^\]]+)?\]\]/g,
+        (match, target, anchor = "", options = "") => {
+          const asset = resolveAssetTarget(target, input, assetLookup)
+          if (!asset) return match
+          return renderImage(asset, "", options)
+        },
+      )
+      .replace(/!\[([^\]]*)]\((?!https?:|mailto:|#|\/)([^)]+)\)/g, (match, alt, target) => {
+        const asset = resolveAssetTarget(target, input, assetLookup)
+        if (!asset) return match
+        return renderImage(asset, alt)
+      }),
+  )
+}
+
+function createNoteLookup(records) {
+  const lookup = new Map()
+  for (const record of records) {
+    const keys = [
+      record.title,
+      record.id,
+      record.sourcePath.replace(/\.md$/i, ""),
+      path.posix.basename(record.id),
+      path.posix.basename(record.sourcePath, ".md"),
+    ]
+    for (const key of keys) {
+      const normalized = normalizeLookupKey(key)
+      const existing = lookup.get(normalized)
+      if (!existing?.post || record.post) {
+        lookup.set(normalized, record)
+      }
+    }
+  }
+  return lookup
+}
+
+function normalizeLookupKey(value) {
+  return String(value).normalize("NFKC").replace(/\.md$/i, "").trim().toLowerCase()
+}
+
+function rewriteOutsideCode(markdown, transform) {
+  let fenceChar
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const fence = line.match(/^\s*(`{3,}|~{3,})/)?.[1]
+      if (fence) {
+        if (!fenceChar) fenceChar = fence[0]
+        else if (fence[0] === fenceChar) fenceChar = undefined
+        return line
+      }
+      if (fenceChar) return line
+
+      return line
+        .split(/(`+[^`]*`+)/g)
+        .map((part, index) => (index % 2 === 0 ? transform(part) : part))
+        .join("")
+    })
+    .join("\n")
+}
+
+function rewriteBlogMarkdown(markdown, post, noteLookup, assetLookup) {
+  const input = {
+    srcRel: post.sourcePath,
+    destRel: post.path,
+    collection: post.collection,
+  }
+  return rewriteOutsideCode(markdown, (text) =>
+    text
+      .replace(
+        /!\[\[([^|\]#]+)(#[^|\]]+)?(\|[^\]]+)?\]\]/g,
+        (match, target, anchor = "", options = "") => {
+          const cleanTarget = target.trim()
+          if (!shouldRewriteAssetTarget(cleanTarget)) return match
+          const asset = resolveAssetTarget(cleanTarget, input, assetLookup)
+          if (!asset) return match
+          const src = `${noteOrigin}/${encodeURI(asset.destRel)}`
+          const width = options.match(/\|(\d+)/)?.[1]
+          const widthAttr = width ? ` width="${width}"` : ""
+          return `<img src="${src}" alt=""${widthAttr} />`
+        },
+      )
+      .replace(/!\[([^\]]*)]\((?!https?:|mailto:|#|\/)([^)]+)\)/g, (match, alt, target) => {
+        if (!shouldRewriteAssetTarget(target)) return match
+        const asset = resolveAssetTarget(target, input, assetLookup)
+        if (!asset) return match
+        return `![${alt}](${noteOrigin}/${encodeURI(asset.destRel)})`
+      })
+      .replace(
+        /\[\[([^|\]#]+)(?:#([^|\]]+))?(?:\|([^\]]+))?\]\]/g,
+        (match, target, anchor, alias) => {
+          const record = noteLookup.get(normalizeLookupKey(target))
+          const label = (alias ?? record?.title ?? target).trim()
+          if (!record) return label
+
+          const href =
+            record.post && record.id !== post.id ? record.post.url : `${noteOrigin}${record.url}`
+          const fragment = anchor ? `#${encodeURIComponent(anchor.trim())}` : ""
+          return `[${label}](${href}${fragment})`
+        },
+      ),
+  )
+}
+
+function shouldRewriteAssetTarget(target) {
+  const clean = target.split("?")[0].split("#")[0]
+  return clean.startsWith("img/") || allowedAssetExts.has(path.extname(clean).toLowerCase())
+}
+
+function renderPostRow(post) {
+  return `      <article class="post-row">
+        <a href="${post.post.url}">
+          <div class="post-row-meta">
+            <time datetime="${htmlEscape(post.date)}">${htmlEscape(post.date)}</time>
+            <span>${htmlEscape(post.collection.title)}</span>
+          </div>
+          <div class="post-row-copy">
+            <strong>${htmlEscape(post.title)}</strong>
+            <p>${htmlEscape(post.summary)}</p>
+          </div>
+          <span class="post-row-arrow" aria-hidden="true">→</span>
+        </a>
+      </article>`
+}
+
+function renderNoteLine(record) {
+  return `        <li><a href="${record.url}">${htmlEscape(record.title)}</a><span>${htmlEscape(
+    record.collection.title,
+  )}</span></li>`
+}
+
+function renderCollectionStats(records) {
+  return includeCollections
+    .map((collection) => {
+      const count = records.filter((record) => record.collection.slug === collection.slug).length
+      return `        <a class="stat-card" href="/${collection.slug}/">
+          <strong>${count}</strong>
+          <span>${htmlEscape(collection.title)}</span>
+        </a>`
+    })
+    .join("\n")
+}
+
+function slugifySegment(value) {
+  const slug = String(value)
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug || "post"
+}
+
+function htmlEscape(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+await cloneOrPullNotes()
+await syncContent()

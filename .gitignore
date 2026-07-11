@@ -1,7 +1,13 @@
 .DS_Store
-.gitignore
+.env*
+.cache
 node_modules
 public
+public-notes
+content/site/
+content/notes/
+playwright-report
+test-results
 prof
 tsconfig.tsbuildinfo
 .obsidian

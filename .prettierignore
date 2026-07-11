@@ -1,3 +1,13 @@
 public
+public-notes
 node_modules
 .quartz-cache
+.cache
+content
+quartz/brand.generated.ts
+quartz/styles/_brand.generated.scss
+quartz/static
+design-system/reference
+evals/**/*.jsonl
+playwright-report
+test-results

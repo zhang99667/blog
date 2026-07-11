@@ -1,0 +1,31 @@
+name: MarkZ Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Public source checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npx quartz plugin install
+      - run: npm run check
+      - run: npm test
+      - run: npm run evals:check
+      - run: npm run security:check

@@ -1,6 +1,6 @@
 import test, { describe } from "node:test"
 import assert from "node:assert"
-import { renderTranscludes, pageResources } from "./renderPage"
+import { enhanceContentAccessibility, renderTranscludes, pageResources } from "./renderPage"
 import { Root, Element } from "hast"
 import { FullSlug } from "../util/path"
 import { GlobalConfiguration } from "../cfg"
@@ -40,6 +40,30 @@ function makePageData(slug: string, htmlAst: Root, extra?: Record<string, unknow
 }
 
 const cfg = { locale: "en-US" } as GlobalConfiguration
+
+test("content tables are keyboard focusable", () => {
+  const table: Element = {
+    type: "element",
+    tagName: "table",
+    properties: {},
+    children: [],
+  }
+  const root: Root = {
+    type: "root",
+    children: [
+      {
+        type: "element",
+        tagName: "div",
+        properties: {},
+        children: [table],
+      },
+    ],
+  }
+
+  enhanceContentAccessibility(root)
+
+  assert.equal(table.properties.tabIndex, 0)
+})
 
 function makeComponentData(
   allFiles: QuartzComponentProps["allFiles"],

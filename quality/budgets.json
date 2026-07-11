@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "outputs": [
+    {
+      "id": "blog",
+      "root": "public",
+      "maxTotalCssBytes": 250000,
+      "maxTotalJsBytes": 450000,
+      "maxHtmlBytes": 500000,
+      "allowedExternalRoutes": ["/zhangjihao/"]
+    },
+    {
+      "id": "notes",
+      "root": "public-notes",
+      "maxTotalCssBytes": 125000,
+      "maxTotalJsBytes": 225000,
+      "maxHtmlBytes": 500000,
+      "allowedExternalRoutes": []
+    }
+  ]
+}

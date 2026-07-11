@@ -29,6 +29,20 @@ interface RenderComponents {
   frame?: string
 }
 
+export function enhanceContentAccessibility(root: Root) {
+  const visit = (node: Root | Element | ElementContent) => {
+    if (node.type === "element" && node.tagName === "table") {
+      node.properties ??= {}
+      node.properties.tabIndex = 0
+    }
+    if ("children" in node) {
+      for (const child of node.children) visit(child as Element | ElementContent)
+    }
+  }
+
+  visit(root)
+}
+
 const headerRegex = new RegExp(/h[1-6]/)
 export function pageResources(
   baseDir: FullSlug | RelativeURL,
@@ -317,6 +331,8 @@ export function renderPage(
       transform(root, slug, componentData)
     }
   }
+
+  enhanceContentAccessibility(root)
 
   // set componentData.tree to the edited html that has transclusions rendered
   componentData.tree = root

@@ -1,0 +1,59 @@
+{
+  "$schema": "./manifest.schema.json",
+  "version": "1.0.0",
+  "project": "MarkZ blog and public notes",
+  "authorities": [
+    { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
+    { "id": "architecture", "path": "docs/ARCHITECTURE.md", "kind": "architecture" },
+    { "id": "operations", "path": "docs/OPERATIONS.md", "kind": "runbook" },
+    { "id": "visual-tokens", "path": "design-system/tokens.json", "kind": "source" },
+    { "id": "surface-boundaries", "path": "design-system/manifest.json", "kind": "contract" },
+    { "id": "decisions", "path": "docs/AI-DECISIONS.md", "kind": "decision-log" }
+  ],
+  "instructionLayers": [
+    { "scope": "repository", "path": "AGENTS.md" },
+    { "scope": "design-system", "path": ".github/instructions/design-system.instructions.md" },
+    {
+      "scope": "content-pipeline",
+      "path": ".github/instructions/content-pipeline.instructions.md"
+    },
+    { "scope": "deployment", "path": ".github/instructions/deployment.instructions.md" }
+  ],
+  "workflows": {
+    "visualChange": {
+      "risk": "medium",
+      "prompt": ".github/prompts/brand-change.prompt.md",
+      "requiredCommands": ["npm run design:check", "npm test", "npm run quality:check"],
+      "requiredEvidence": ["desktop-and-mobile", "light-and-dark", "accessibility-report"]
+    },
+    "contentPublish": {
+      "risk": "medium",
+      "prompt": ".github/prompts/publish-content.prompt.md",
+      "requiredCommands": ["npm run sync", "npm run build", "npm run quality:build"],
+      "requiredEvidence": ["sync-summary", "generated-route-check"]
+    },
+    "edgeDeploy": {
+      "risk": "high",
+      "prompt": ".github/prompts/edge-incident.prompt.md",
+      "requiredCommands": ["npm run verify", "npm run deploy"],
+      "requiredEvidence": ["all-public-routes", "exclusive-port-ownership", "nginx-config-test"]
+    }
+  },
+  "qualityGates": {
+    "fast": ["npm run design:check", "npm run ai:check", "npm run evals:check"],
+    "complete": ["npm run verify", "npm run quality:web"],
+    "production": ["npm run deploy", "npm run smoke:production"]
+  },
+  "evalSuites": [
+    {
+      "id": "design-system",
+      "path": "evals/design-system/cases.json",
+      "runner": "npm run evals:check"
+    },
+    {
+      "id": "browser-quality",
+      "path": "tests/quality/site-quality.spec.ts",
+      "runner": "npm run quality:web"
+    }
+  ]
+}

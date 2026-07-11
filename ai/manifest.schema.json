@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MarkZ AI infrastructure manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "project",
+    "authorities",
+    "instructionLayers",
+    "workflows",
+    "qualityGates",
+    "evalSuites"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "project": { "type": "string", "minLength": 1 },
+    "authorities": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "kind"],
+        "additionalProperties": false
+      }
+    },
+    "instructionLayers": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["scope", "path"],
+        "additionalProperties": false
+      }
+    },
+    "workflows": {
+      "type": "object",
+      "required": ["visualChange", "contentPublish", "edgeDeploy"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["risk", "prompt", "requiredCommands", "requiredEvidence"]
+      }
+    },
+    "qualityGates": {
+      "type": "object",
+      "required": ["fast", "complete", "production"]
+    },
+    "evalSuites": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "runner"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -237,6 +237,7 @@ async function getManifest(source: PluginSource): Promise<PluginManifest | null>
 
 export async function loadQuartzConfig(
   configOverrides?: Partial<GlobalConfiguration>,
+  layoutOverrides?: QuartzLayoutOverrides,
 ): Promise<QuartzConfig> {
   const json = readPluginsJson()
 
@@ -490,7 +491,7 @@ export async function loadQuartzConfig(
 
   // Load layout and add PageTypeDispatcher to emitters.
   // This must happen after plugin instantiation so the component registry is populated.
-  const layout = await loadQuartzLayout()
+  const layout = await loadQuartzLayout(layoutOverrides)
   plugins.emitters.push(
     builtinPlugins.PageTypes.PageTypeDispatcher({
       defaults: layout.defaults,
@@ -613,10 +614,12 @@ function detectCategoryFromModule(module: unknown): ProcessingCategory | null {
   return null
 }
 
-export async function loadQuartzLayout(layoutOverrides?: {
+export interface QuartzLayoutOverrides {
   defaults?: Partial<FullPageLayout>
   byPageType?: Record<string, Partial<FullPageLayout>>
-}): Promise<{
+}
+
+export async function loadQuartzLayout(layoutOverrides?: QuartzLayoutOverrides): Promise<{
   defaults: Partial<FullPageLayout>
   byPageType: Record<string, Partial<FullPageLayout>>
 }> {

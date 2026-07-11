@@ -136,6 +136,7 @@ async function startWatching(
   }
 
   const gitIgnoredMatcher = await isGitIgnored()
+  const includeGitIgnored = process.env.QUARTZ_INCLUDE_GITIGNORED === "1"
   const buildData: BuildData = {
     ctx,
     mut,
@@ -143,7 +144,7 @@ async function startWatching(
     ignored: (fp) => {
       const pathStr = toPosixPath(fp.toString())
       if (pathStr.startsWith(".git/")) return true
-      if (gitIgnoredMatcher(pathStr)) return true
+      if (!includeGitIgnored && gitIgnoredMatcher(pathStr)) return true
       for (const pattern of cfg.configuration.ignorePatterns) {
         if (minimatch(pathStr, pattern)) {
           return true

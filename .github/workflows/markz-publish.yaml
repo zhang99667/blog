@@ -1,0 +1,77 @@
+name: MarkZ Publish
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 * * * *"
+  repository_dispatch:
+    types:
+      - notes-updated
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: markz-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, verify, and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BLOG_SSH_HOST: ${{ vars.BLOG_SSH_HOST || 'markz@39.97.237.248' }}
+      NOTE_REPO_PRECHECKED_OUT: "1"
+    steps:
+      - name: Check out blog source
+        uses: actions/checkout@v6
+
+      - name: Check out private notes
+        uses: actions/checkout@v6
+        with:
+          repository: zhang99667/note
+          ssh-key: ${{ secrets.NOTE_REPO_SSH_KEY }}
+          path: .cache/note
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npx quartz plugin install
+      - run: npx playwright install --with-deps chromium
+
+      - name: Configure deployment SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.MARKZ_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${BLOG_SSH_HOST#*@}" >> ~/.ssh/known_hosts
+
+      - name: Verify and deploy
+        run: npm run deploy
+
+      - name: Smoke production
+        run: npm run smoke:production
+
+      - name: Upload browser quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: markz-browser-quality-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14

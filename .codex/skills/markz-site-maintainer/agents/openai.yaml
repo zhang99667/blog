@@ -1,0 +1,4 @@
+interface:
+  display_name: "MarkZ Site Maintainer"
+  short_description: "Keep MarkZ design and publishing consistent"
+  default_prompt: "Maintain the MarkZ blog and notes using the repository design system and verification gates."

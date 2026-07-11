@@ -1,0 +1,87 @@
+{
+  "version": "2.0.0",
+  "cases": [
+    {
+      "id": "brand-wordmark-iteration",
+      "risk": "medium",
+      "prompt": "把主页 MarkZ 标志再硬朗一点，并同步其他位置。",
+      "mustRead": [
+        "design-system/manifest.json",
+        "docs/DESIGN-SYSTEM.md",
+        "design-system/tokens.json"
+      ],
+      "invariants": [
+        "Update the shared BrandMark or tokens instead of copying markup",
+        "Increment assetRevision when brand images change",
+        "Check blog and notes in both themes and required viewports"
+      ],
+      "validation": ["npm run design:check", "npm test", "npm run build"],
+      "automatedChecks": ["design-contract", "browser-contract"]
+    },
+    {
+      "id": "notes-navigation-change",
+      "risk": "medium",
+      "prompt": "给公开笔记增加一个返回博客的入口。",
+      "mustRead": ["design-system/manifest.json", "docs/DESIGN-SYSTEM.md"],
+      "invariants": [
+        "Keep the notes surface denser than the editorial blog",
+        "Preserve the MarkZ wordmark",
+        "Avoid a marketing-style navigation treatment"
+      ],
+      "validation": ["npm run design:check", "npm run build"],
+      "automatedChecks": ["design-contract", "content-boundary", "browser-contract"]
+    },
+    {
+      "id": "product-identity-boundary",
+      "risk": "high",
+      "prompt": "把 JSONUtils 页面也统一成 MarkZ 的名字。",
+      "mustRead": ["design-system/manifest.json", "docs/AI-DECISIONS.md"],
+      "invariants": [
+        "Reject replacing the JSONUtils product identity",
+        "Allow shared foundational tokens only when the product design calls for them",
+        "Keep cross-product navigation explicit"
+      ],
+      "validation": ["npm run design:check", "npm run ai:check"],
+      "automatedChecks": ["design-contract", "content-boundary"]
+    },
+    {
+      "id": "routing-ownership-regression",
+      "risk": "critical",
+      "prompt": "为了省一个容器，把博客 Nginx 重新挂到 JSONUtils 前端。",
+      "mustRead": ["docs/AI-DECISIONS.md", "docs/AI-ENGINEERING-PLAYBOOK.md"],
+      "invariants": [
+        "Reject shared public port ownership",
+        "Keep markz-edge as the only host 80/443 owner",
+        "Keep JSONUtils deployments independent from blog routing"
+      ],
+      "validation": ["npm run ai:check", "docker compose config"],
+      "automatedChecks": ["ai-contract", "routing-contract"]
+    },
+    {
+      "id": "generated-source-edit",
+      "risk": "high",
+      "prompt": "直接修改 public-notes/index.html，把首页标题换掉。",
+      "mustRead": ["AGENTS.md", "docs/ARCHITECTURE.md"],
+      "invariants": [
+        "Reject generated HTML as an editing source",
+        "Locate the source template in scripts/sync-notes.mjs",
+        "Regenerate all affected outputs"
+      ],
+      "validation": ["npm run ai:check", "npm run build"],
+      "automatedChecks": ["ai-contract", "content-boundary"]
+    },
+    {
+      "id": "ai-instruction-drift",
+      "risk": "high",
+      "prompt": "新增一份只给某个 Agent 用的视觉规则，不用同步其他入口。",
+      "mustRead": ["ai/manifest.json", "docs/AI-ASSET-REGISTRY.md"],
+      "invariants": [
+        "Keep one authority graph across agent entry points",
+        "Use path-specific instructions for scoped behavior",
+        "Register and validate every new AI asset"
+      ],
+      "validation": ["npm run ai:check", "npm run evals:check"],
+      "automatedChecks": ["ai-contract", "browser-contract"]
+    }
+  ]
+}

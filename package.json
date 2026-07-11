@@ -1,33 +1,50 @@
 {
-  "name": "@jackyzha0/quartz",
-  "description": "🌱 publish your digital garden and notes as a website",
+  "name": "markz-blog",
+  "description": "MarkZ personal blog and public notes publishing system",
   "private": true,
   "version": "5.0.0",
   "type": "module",
-  "author": "jackyzha0 <j.zhao2k19@gmail.com>",
+  "author": "MarkZ",
   "license": "MIT",
-  "homepage": "https://quartz.jzhao.xyz",
+  "homepage": "https://markz.fun",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jackyzha0/quartz.git"
+    "url": "https://github.com/zhang99667/blog.git"
   },
   "scripts": {
     "quartz": "./quartz/bootstrap-cli.mjs",
+    "sync": "node scripts/sync-notes.mjs",
+    "build": "npm run design:generate && node scripts/sync-notes.mjs && npm run build:blog && npm run build:notes-fallback && npm run build:notes",
+    "design:generate": "node scripts/design-system/generate.mjs",
+    "design:check": "node scripts/design-system/generate.mjs --check && node scripts/design-system/check.mjs",
+    "ai:check": "node scripts/ai/check-ai-infra.mjs",
+    "evals:check": "node scripts/ai/run-evals.mjs",
+    "quality:build": "node scripts/quality/check-build.mjs",
+    "quality:web": "playwright test",
+    "quality:check": "npm run build && npm run quality:build && npm run quality:web",
+    "security:check": "npm audit --audit-level=high",
+    "smoke:production": "node scripts/quality/smoke-production.mjs",
+    "build:blog": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=blog npx quartz build -d content/site -o public",
+    "build:notes-fallback": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=notes-fallback npx quartz build -d content/notes -o public/notes",
+    "build:notes": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=notes npx quartz build -d content/notes -o public-notes",
+    "preview": "node scripts/sync-notes.mjs && QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=blog npx quartz build --serve -d content/site",
+    "preview:notes": "node scripts/sync-notes.mjs && QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=notes npx quartz build --serve -d content/notes --port 8081 --wsPort 3002",
+    "deploy": "npm run verify && npm run quality:web && node scripts/deploy.mjs",
     "docs": "npx quartz build --serve -d docs",
-    "check": "tsc --noEmit && npx prettier . --check",
+    "check": "tsc --noEmit && npm run design:check && npm run ai:check && npx prettier . --check",
+    "verify": "npm run check && npm test && npm run build && npm run quality:build && npm run evals:check && npm run security:check",
     "format": "npx prettier . --write",
     "test": "tsx --test",
     "profile": "0x -D prof ./quartz/bootstrap-cli.mjs build --concurrency=1",
-    "install-plugins": "npx tsx ./quartz/plugins/loader/install-plugins.ts",
-    "prebuild": "npm run install-plugins"
+    "install-plugins": "npx tsx ./quartz/plugins/loader/install-plugins.ts"
   },
   "engines": {
     "npm": ">=10.9.2",
     "node": ">=22"
   },
   "keywords": [
-    "site generator",
-    "ssg",
+    "personal-blog",
+    "obsidian",
     "digital-garden",
     "markdown",
     "blog",
@@ -72,6 +89,8 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
     "@quartz-community/types": "github:quartz-community/types",
     "@quartz-community/utils": "github:quartz-community/utils",
     "@types/hast": "^3.0.4",
@@ -80,9 +99,10 @@
     "@types/source-map-support": "^0.5.10",
     "@types/ws": "^8.18.1",
     "@types/yargs": "^17.0.35",
-    "esbuild": "^0.27.2",
+    "esbuild": "^0.28.1",
+    "parse5": "^8.0.1",
     "prettier": "^3.8.1",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   }
 }

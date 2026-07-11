@@ -2,12 +2,14 @@ import { PageFrame } from "./types"
 import { DefaultFrame } from "./DefaultFrame"
 import { FullWidthFrame } from "./FullWidthFrame"
 import { MinimalFrame } from "./MinimalFrame"
+import { BlogFrame } from "./BlogFrame"
 import { frameRegistry } from "./registry"
 
 export type { PageFrame, PageFrameProps } from "./types"
 export { DefaultFrame } from "./DefaultFrame"
 export { FullWidthFrame } from "./FullWidthFrame"
 export { MinimalFrame } from "./MinimalFrame"
+export { BlogFrame } from "./BlogFrame"
 export { frameRegistry } from "./registry"
 export type { RegisteredFrame } from "./registry"
 
@@ -20,6 +22,7 @@ export type { RegisteredFrame } from "./registry"
  */
 const builtinFrames: Record<string, PageFrame> = {
   default: DefaultFrame,
+  blog: BlogFrame,
   "full-width": FullWidthFrame,
   minimal: MinimalFrame,
 }

@@ -1,0 +1,45 @@
+{
+  "version": "1.2.0",
+  "tokenVersion": "1.2.0",
+  "sourceOfTruth": "design-system/tokens.json",
+  "generatedArtifacts": [
+    "quartz/brand.generated.ts",
+    "quartz/styles/_brand.generated.scss",
+    "quartz/static/icon.png",
+    "quartz/static/og-image.png",
+    "quartz/static/markz-icon-v2.png",
+    "quartz/static/markz-card-v2.png"
+  ],
+  "surfaces": {
+    "blog": {
+      "host": "markz.fun",
+      "role": "editorial",
+      "identity": "MarkZ",
+      "frame": "blog"
+    },
+    "notes": {
+      "host": "note.markz.fun",
+      "role": "knowledge-base",
+      "identity": "MarkZ",
+      "frame": "default"
+    },
+    "jsonutils": {
+      "host": "jsonutils.markz.fun",
+      "role": "product",
+      "identity": "JSONUtils",
+      "inheritsPersonalWordmark": false
+    },
+    "packing-list": {
+      "host": "zhangjihao.markz.fun",
+      "role": "product",
+      "identity": "智能装箱单生成器",
+      "inheritsPersonalWordmark": false
+    }
+  },
+  "requiredViewports": [
+    { "name": "compact", "width": 320, "height": 800 },
+    { "name": "mobile", "width": 390, "height": 844 },
+    { "name": "desktop", "width": 1440, "height": 900 }
+  ],
+  "requiredThemes": ["light", "dark"]
+}
