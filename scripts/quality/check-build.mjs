@@ -31,7 +31,14 @@ function attributes(node) {
 
 export function inspectHtml(source) {
   const document = parse(source)
-  const facts = { lang: "", title: "", meta: new Map(), references: [] }
+  const facts = {
+    lang: "",
+    title: "",
+    meta: new Map(),
+    references: [],
+    canonical: "",
+    refresh: "",
+  }
 
   function visit(node) {
     const attrs = attributes(node)
@@ -45,6 +52,12 @@ export function inspectHtml(source) {
     if (node.nodeName === "meta") {
       const key = attrs.name ?? attrs.property
       if (key) facts.meta.set(key.toLowerCase(), attrs.content ?? "")
+      if (attrs["http-equiv"]?.toLowerCase() === "refresh") {
+        facts.refresh = attrs.content ?? ""
+      }
+    }
+    if (node.nodeName === "link" && attrs.rel?.toLowerCase() === "canonical") {
+      facts.canonical = attrs.href ?? ""
     }
     for (const name of ["href", "src"]) {
       if (attrs[name]) facts.references.push(attrs[name])
@@ -54,6 +67,27 @@ export function inspectHtml(source) {
 
   visit(document)
   return facts
+}
+
+export function validateHtmlMetadata(relativePath, facts) {
+  const failures = []
+  if (!facts.title) failures.push(`${relativePath} needs a title`)
+
+  if (facts.refresh) {
+    if (!/^0\s*;\s*url=\S+/i.test(facts.refresh)) {
+      failures.push(`${relativePath} has an invalid redirect target`)
+    }
+    if (!facts.canonical) failures.push(`${relativePath} redirect needs a canonical link`)
+    if (!facts.meta.get("robots")?.toLowerCase().includes("noindex")) {
+      failures.push(`${relativePath} redirect needs noindex`)
+    }
+    return failures
+  }
+
+  if (!facts.lang.toLowerCase().startsWith("zh")) failures.push(`${relativePath} needs zh lang`)
+  if (!facts.meta.get("description")) failures.push(`${relativePath} needs meta description`)
+  if (!facts.meta.get("viewport")) failures.push(`${relativePath} needs viewport metadata`)
+  return failures
 }
 
 function normalizeReference(reference) {
@@ -151,10 +185,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
         failures.push(`${relativePath} exceeds the HTML budget`)
       }
       const facts = inspectHtml(source)
-      if (!facts.lang.toLowerCase().startsWith("zh")) failures.push(`${relativePath} needs zh lang`)
-      if (!facts.title) failures.push(`${relativePath} needs a title`)
-      if (!facts.meta.get("description")) failures.push(`${relativePath} needs meta description`)
-      if (!facts.meta.get("viewport")) failures.push(`${relativePath} needs viewport metadata`)
+      failures.push(...validateHtmlMetadata(relativePath, facts))
       if (facts.meta.get("og:image:type") === "image/.png") {
         failures.push(`${relativePath} contains an invalid image MIME type`)
       }
