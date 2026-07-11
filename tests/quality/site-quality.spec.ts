@@ -22,6 +22,8 @@ function firstArticle(outputRoot: string, ignoredPrefixes: string[]) {
     .filter(
       (file) => file !== "index.html" && !ignoredPrefixes.some((prefix) => file.startsWith(prefix)),
     )
+    // Linux also emits case-preserving SEO redirects; browser checks need a rendered article.
+    .filter((file) => readFileSync(path.join(outputRoot, file), "utf8").includes("<article"))
     .sort()[0]
   if (!selected) throw new Error(`No article page found in ${outputRoot}`)
   return `/${selected.replace(/\.html$/, "")}`
