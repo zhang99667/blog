@@ -28,10 +28,10 @@ jobs:
       NOTE_REPO_PRECHECKED_OUT: "1"
     steps:
       - name: Check out blog source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check out private notes
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: zhang99667/note
           ssh-key: ${{ secrets.NOTE_REPO_SSH_KEY }}
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload browser quality evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: markz-browser-quality-${{ github.run_id }}
           path: |
