@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test } from "@playwright/test"
@@ -43,6 +43,9 @@ const pages = [
     path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"]),
   },
 ]
+
+const linkedGraphSlug = "ai/agent-mcp-完全指南"
+const linkedGraphRoute = "/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 
 for (const target of pages) {
   for (const viewport of manifest.requiredViewports) {
@@ -148,5 +151,66 @@ for (const target of pages) {
         })
       })
     }
+  }
+}
+
+for (const viewport of manifest.requiredViewports) {
+  for (const theme of manifest.requiredThemes) {
+    test(`notes linked graph ${viewport.name} ${theme}`, async ({ page }, testInfo) => {
+      test.skip(
+        !existsSync(path.join(root, "public-notes", `${linkedGraphSlug}.html`)),
+        "The private note fixture is only available in publishing builds",
+      )
+
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+      await page.goto(`http://127.0.0.1:4174${linkedGraphRoute}`, {
+        waitUntil: "domcontentloaded",
+      })
+
+      await expect(page.locator("body")).toHaveAttribute("data-slug", linkedGraphSlug)
+      const neighbourhood = await page.evaluate(async (slug) => {
+        const response = await fetch("/static/contentIndex.json")
+        const index = (await response.json()) as Record<string, { links?: string[] }>
+        const edges: Array<{ source: string; target: string }> = []
+        for (const [source, entry] of Object.entries(index)) {
+          for (const target of entry.links ?? []) {
+            if (source === slug || target === slug) edges.push({ source, target })
+          }
+        }
+        return {
+          edges: edges.length,
+          nodes: new Set(edges.flatMap(({ source, target }) => [source, target])).size,
+          outgoing: index[slug]?.links?.length ?? 0,
+        }
+      }, linkedGraphSlug)
+
+      expect(neighbourhood.outgoing).toBeGreaterThanOrEqual(4)
+      expect(neighbourhood.edges).toBeGreaterThanOrEqual(4)
+      expect(neighbourhood.nodes).toBeGreaterThanOrEqual(5)
+
+      const graphCanvas = page.locator(".graph-container canvas")
+      await expect(graphCanvas).toHaveCount(1, { timeout: 20_000 })
+      await expect(graphCanvas).toBeVisible()
+
+      await expect
+        .poll(
+          async () => {
+            return page.evaluate(() => JSON.parse(localStorage.getItem("graph-visited") ?? "[]"))
+          },
+          { timeout: 20_000 },
+        )
+        .toContain(linkedGraphSlug)
+
+      const visited = await page.evaluate(
+        () => JSON.parse(localStorage.getItem("graph-visited") ?? "[]") as string[],
+      )
+      expect(visited.some((slug) => slug.includes("%E5"))).toBe(false)
+
+      await testInfo.attach(`notes-linked-graph-${viewport.name}-${theme}`, {
+        body: await page.locator(".graph-outer").screenshot(),
+        contentType: "image/png",
+      })
+    })
   }
 }

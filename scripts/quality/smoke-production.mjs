@@ -12,9 +12,14 @@ const brandEvidence = [
   `markz-icon-${tokens.brand.assetRevision}.png`,
   `markz-card-${tokens.brand.assetRevision}.png`,
 ]
+const linkedGraphSlug = "ai/agent-mcp-完全指南"
 const routes = [
   { url: "https://markz.fun/", evidence: brandEvidence },
   { url: "https://note.markz.fun/", evidence: brandEvidence },
+  {
+    url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
+    evidence: [`data-slug="${linkedGraphSlug}"`],
+  },
   { url: "https://jsonutils.markz.fun/" },
   { url: "https://jsonutils.markz.fun/admin" },
   { url: "https://zhangjihao.markz.fun/" },
@@ -36,6 +41,21 @@ await Promise.all(
     }
   }),
 )
+
+try {
+  const response = await fetch("https://note.markz.fun/static/contentIndex.json", {
+    signal: AbortSignal.timeout(15000),
+  })
+  const index = await response.json()
+  const outgoing = index[linkedGraphSlug]?.links ?? []
+  if (outgoing.length < 4) {
+    failures.push(
+      `note graph index has only ${outgoing.length} outgoing links for ${linkedGraphSlug}`,
+    )
+  }
+} catch (error) {
+  failures.push(`note graph index failed: ${error.message}`)
+}
 
 if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
   try {
@@ -70,5 +90,7 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exitCode = 1
 } else {
-  console.log("Production routes, brand assets, API health, and port ownership are correct.")
+  console.log(
+    "Production routes, brand assets, notes graph index, API health, and port ownership are correct.",
+  )
 }

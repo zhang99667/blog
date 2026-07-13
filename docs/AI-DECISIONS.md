@@ -64,3 +64,12 @@
 - 反例：使用源 checkout 的 `mtime`、生成文件的 `mtime` 或 Action 运行时间作为笔记日期。
 - 边界：未纳入 Git 且没有日期 frontmatter 的本地新文件可以暂时回退到文件系统时间；CI 发布的文件必须有完整 Git 历史。
 - 锁定证据：`scripts/sync-notes.test.mjs`、`fetch-depth: 0`、`quartz.config.yaml` 日期优先级和 `npm run build`。
+
+## D-008 中文路由图谱必须使用 canonical slug
+
+- 日期：2026-07-13
+- 触发：用户发现 `Agent MCP 完全指南`明明关联了多篇笔记，局部关系图谱却只显示一个带 `%E5...` 标签的孤立点。
+- 决策：图谱从浏览器 URL 取路径时必须先解码，再与 `contentIndex.json` 中的 canonical slug 匹配。兼容修复由仓库内本地组件接管，不手改 `.quartz/` 插件缓存。
+- 反例：直接用 `window.location.pathname` 的百分号编码值扩展局部图，或在 `.quartz/plugins/graph` 里做一次性修改。
+- 边界：外部 URL 不进入图谱；无内链且无反链的笔记可以合理地显示单点。
+- 锁定证据：`quartz/components/GraphCompatibility.ts`、`GraphCompatibility.test.ts`、中文路由浏览器图谱用例和生产 `contentIndex.json` smoke。

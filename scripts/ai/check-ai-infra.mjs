@@ -230,7 +230,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
   }
 
   const decisions = await readText(root, "docs/AI-DECISIONS.md")
-  for (const decision of ["D-001", "D-002", "D-003", "D-004", "D-005", "D-006", "D-007"]) {
+  for (const decision of ["D-001", "D-002", "D-003", "D-004", "D-005", "D-006", "D-007", "D-008"]) {
     requireSnippet(decisions, "docs/AI-DECISIONS.md", decision, failures)
   }
 
