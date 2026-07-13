@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { parse as parseYaml } from "yaml"
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml"
 import { blogConfig } from "./blog.config.mjs"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -149,6 +149,71 @@ function asString(value) {
   return String(value).trim() || undefined
 }
 
+function asIsoTimestamp(value) {
+  const text = asString(value)
+  if (!text) return undefined
+  const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00Z` : text)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return parsed.toISOString()
+}
+
+export function parseGitDateLog(output, sourcePaths) {
+  const targets = new Set(sourcePaths.map(normalizeRel))
+  const dates = new Map()
+  let commitDate
+
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line.startsWith("--MARKZ-COMMIT--")) {
+      commitDate = asIsoTimestamp(line.slice("--MARKZ-COMMIT--".length))
+      continue
+    }
+    if (!line || !commitDate) continue
+
+    const sourcePath = normalizeRel(line)
+    if (!targets.has(sourcePath)) continue
+    const current = dates.get(sourcePath)
+    dates.set(sourcePath, {
+      createdAt: commitDate,
+      modifiedAt: current?.modifiedAt ?? commitDate,
+    })
+  }
+
+  return dates
+}
+
+export function resolveSourceDates(frontmatter, gitDates, stat) {
+  const filesystemCreated =
+    stat.birthtime instanceof Date && stat.birthtime.getTime() > 0
+      ? stat.birthtime.toISOString()
+      : stat.mtime.toISOString()
+  const createdAt =
+    asIsoTimestamp(frontmatter.created) ??
+    asIsoTimestamp(frontmatter.createdAt) ??
+    asIsoTimestamp(frontmatter.date) ??
+    gitDates?.createdAt ??
+    filesystemCreated
+  const modifiedAt =
+    asIsoTimestamp(frontmatter.modified) ??
+    asIsoTimestamp(frontmatter.updated) ??
+    asIsoTimestamp(frontmatter.updatedAt) ??
+    gitDates?.modifiedAt ??
+    stat.mtime.toISOString()
+  return { createdAt, modifiedAt }
+}
+
+export function withStableDates(text, dates) {
+  const { data, body, raw } = splitFrontmatter(text)
+  const generated = {}
+  if (!asString(data.created)) generated.created = dates.createdAt
+  if (!asString(data.modified)) generated.modified = dates.modifiedAt
+  if (Object.keys(generated).length === 0) return text
+
+  const additions = stringifyYaml(generated).trimEnd()
+  const existing = raw.trimEnd()
+  return `---\n${existing}${existing ? "\n" : ""}${additions}\n---\n${body}`
+}
+
 function asArray(value) {
   if (!value) return []
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean)
@@ -186,14 +251,41 @@ async function cloneOrPullNotes() {
     if (!(await pathExists(path.join(noteDir, ".git")))) {
       throw new Error("NOTE_REPO_PRECHECKED_OUT=1 requires the note repository at .cache/note")
     }
+    if (read("git", ["-C", noteDir, "rev-parse", "--is-shallow-repository"]) === "true") {
+      throw new Error("The prechecked note repository requires full history (fetch-depth: 0)")
+    }
     return
   }
 
   if (await pathExists(path.join(noteDir, ".git"))) {
+    if (read("git", ["-C", noteDir, "rev-parse", "--is-shallow-repository"]) === "true") {
+      run("git", ["-C", noteDir, "fetch", "--unshallow", "origin"])
+    }
     run("git", ["-C", noteDir, "pull", "--ff-only"])
   } else {
-    run("git", ["clone", "--depth", "1", noteRepo, noteDir])
+    run("git", ["clone", noteRepo, noteDir])
   }
+}
+
+function loadGitDates(sourcePaths) {
+  if (sourcePaths.length === 0) return new Map()
+  const output = read(
+    "git",
+    [
+      "-C",
+      noteDir,
+      "-c",
+      "core.quotepath=false",
+      "log",
+      "--format=--MARKZ-COMMIT--%cI",
+      "--name-only",
+      "--diff-filter=AMR",
+      "--",
+      ...sourcePaths,
+    ],
+    { maxBuffer: 50 * 1024 * 1024 },
+  )
+  return parseGitDateLog(output, sourcePaths)
 }
 
 async function loadOldManifest() {
@@ -249,12 +341,16 @@ async function syncContent() {
   }
 
   const assetLookup = createAssetLookup(inputs.filter((input) => allowedAssetExts.has(input.ext)))
+  const gitDates = loadGitDates(
+    inputs.filter((input) => input.ext === ".md").map((input) => input.srcRel),
+  )
 
   for (const input of inputs) {
     const { collection, sourceFile, srcRel, destRel, ext } = input
     const sourceData = await fs.readFile(sourceFile)
     let outputData = sourceData
     let sourceText
+    let sourceDates
 
     if (ext === ".md") {
       sourceText = sourceData.toString("utf8")
@@ -268,7 +364,10 @@ async function syncContent() {
         continue
       }
 
-      outputData = Buffer.from(rewriteNoteAssetTargets(sourceText, input, assetLookup), "utf8")
+      const stat = await fs.stat(sourceFile)
+      sourceDates = resolveSourceDates(fm, gitDates.get(srcRel), stat)
+      const rewritten = rewriteNoteAssetTargets(sourceText, input, assetLookup)
+      outputData = Buffer.from(withStableDates(rewritten, sourceDates), "utf8")
     }
 
     const destFile = path.join(notesContentDir, destRel)
@@ -289,8 +388,7 @@ async function syncContent() {
     }
 
     if (ext === ".md") {
-      const stat = await fs.stat(sourceFile)
-      records.push(buildRecord(destRel, srcRel, collection, sourceText, stat, hash))
+      records.push(buildRecord(destRel, srcRel, collection, sourceText, sourceDates, hash))
     }
   }
 
@@ -446,7 +544,7 @@ function classifyPost(sourceRel, fm) {
   }
 }
 
-function buildRecord(destRel, sourceRel, collection, text, stat, hash) {
+function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
   const { data: fm } = splitFrontmatter(text)
   const configured = configuredPosts.get(sourceRel)
   const plain = stripMarkdown(text)
@@ -462,7 +560,7 @@ function buildRecord(destRel, sourceRel, collection, text, stat, hash) {
     asString(fm.created) ??
     asString(fm.createdAt) ??
     asString(fm.updated) ??
-    stat.mtime.toISOString().slice(0, 10)
+    sourceDates.createdAt.slice(0, 10)
   const post = classifyPost(sourceRel, fm)
   const id = destRel.replace(/\.md$/i, "")
 
@@ -478,7 +576,8 @@ function buildRecord(destRel, sourceRel, collection, text, stat, hash) {
     links: extractLinks(text),
     wordCount: [...plain].length,
     date,
-    updatedAt: stat.mtime.toISOString(),
+    createdAt: sourceDates.createdAt,
+    updatedAt: sourceDates.modifiedAt,
     collection,
     post: post
       ? {
@@ -646,6 +745,8 @@ async function writeBlogPosts(posts, records, assetLookup) {
       `title: ${JSON.stringify(post.title)}`,
       `description: ${JSON.stringify(post.summary)}`,
       `date: ${JSON.stringify(post.date)}`,
+      `created: ${JSON.stringify(post.createdAt)}`,
+      `modified: ${JSON.stringify(post.updatedAt)}`,
       `sourceNote: ${JSON.stringify(`${noteOrigin}${post.url}`)}`,
       post.tags.length > 0 ? "tags:" : "tags: []",
       ...post.tags.map((tag) => `  - ${JSON.stringify(tag)}`),
@@ -971,5 +1072,8 @@ function htmlEscape(value) {
     .replace(/"/g, "&quot;")
 }
 
-await cloneOrPullNotes()
-await syncContent()
+const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+if (isCli) {
+  await cloneOrPullNotes()
+  await syncContent()
+}

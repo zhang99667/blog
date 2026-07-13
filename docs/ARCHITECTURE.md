@@ -66,6 +66,8 @@ tokens.json
 1. `sync-notes.mjs` 对输出计算 SHA-256，仅重写变化文件，并删除源端已移除的公开文件。
 2. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物。
 
+公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。同步器把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。
+
 生成内容虽然被 Git 忽略，项目构建脚本会显式设置 `QUARTZ_INCLUDE_GITIGNORED=1` 让 Quartz 读取它们；Quartz 的默认 gitignore 行为保持不变。构建和质量门禁每次从受控输入重新执行，避免复用不完整的远端状态。周期同步不需要 note Action；若需要推送后即时发布，note Action 只负责调用 blog 的 `repository_dispatch`，不接触服务器。
 
 ## 变更影响面

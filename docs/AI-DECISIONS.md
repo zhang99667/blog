@@ -55,3 +55,12 @@
 - 反例：把 Skill 安装到 `~/.codex/skills`、将原始 note 或生成内容提交到公开仓库、让 note Action 持有服务器 SSH 私钥。
 - 边界：若需要 push 后即时发布，note 可以用最小权限令牌发送 `notes-updated` dispatch，但同步与部署实现仍只存在于 blog。
 - 锁定证据：`.gitignore`、`.github/workflows/markz-verify.yaml`、`.github/workflows/markz-publish.yaml`、`NOTE_REPO_PRECHECKED_OUT` 和 `npm run ai:check`。
+
+## D-007 公开日期不依赖同步时间
+
+- 日期：2026-07-13
+- 触发：用户发现每次自动同步后，笔记日期都会整体更新成同步当天。
+- 决策：同步器以源 frontmatter 为最高优先级，否则读取 note 文件的 Git 首次和最近提交时间，并把稳定的 `created`、`modified` 写入生成 Markdown。Quartz 先读 frontmatter，不能只读文件系统时间。
+- 反例：使用源 checkout 的 `mtime`、生成文件的 `mtime` 或 Action 运行时间作为笔记日期。
+- 边界：未纳入 Git 且没有日期 frontmatter 的本地新文件可以暂时回退到文件系统时间；CI 发布的文件必须有完整 Git 历史。
+- 锁定证据：`scripts/sync-notes.test.mjs`、`fetch-depth: 0`、`quartz.config.yaml` 日期优先级和 `npm run build`。

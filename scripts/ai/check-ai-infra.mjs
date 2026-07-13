@@ -230,7 +230,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
   }
 
   const decisions = await readText(root, "docs/AI-DECISIONS.md")
-  for (const decision of ["D-001", "D-002", "D-003", "D-004", "D-005", "D-006"]) {
+  for (const decision of ["D-001", "D-002", "D-003", "D-004", "D-005", "D-006", "D-007"]) {
     requireSnippet(decisions, "docs/AI-DECISIONS.md", decision, failures)
   }
 
@@ -295,6 +295,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "zhang99667/note",
     "NOTE_REPO_SSH_KEY",
     "NOTE_REPO_PRECHECKED_OUT",
+    "fetch-depth: 0",
     "playwright install",
     "npm run deploy",
     "npm run smoke:production",
