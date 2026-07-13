@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test } from "@playwright/test"
+import type { Page } from "@playwright/test"
 
 const root = process.cwd()
 const tokens = JSON.parse(readFileSync(path.join(root, "design-system/tokens.json"), "utf8"))
@@ -72,12 +73,51 @@ const imagePages = [
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
 const linkedGraphRoute = "/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 
+async function mockReactions(page: Page, initialCount = 12) {
+  const counts = new Map<string, number>()
+  const visitors = new Map<string, Set<string>>()
+  const writes: Array<{ site: string; slug: string; visitor: string }> = []
+
+  await page.route("**/api/reactions**", async (route) => {
+    const request = route.request()
+    if (request.method() === "GET") {
+      const url = new URL(request.url())
+      const site = url.searchParams.get("site") ?? ""
+      const slug = url.searchParams.get("slug") ?? ""
+      const key = `${site}:${slug}`
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ count: counts.get(key) ?? initialCount }),
+      })
+      return
+    }
+
+    const body = request.postDataJSON() as { site: string; slug: string; visitor: string }
+    const key = `${body.site}:${body.slug}`
+    const pageVisitors = visitors.get(key) ?? new Set<string>()
+    const added = !pageVisitors.has(body.visitor)
+    if (added) pageVisitors.add(body.visitor)
+    visitors.set(key, pageVisitors)
+    counts.set(key, (counts.get(key) ?? initialCount) + (added ? 1 : 0))
+    writes.push(body)
+    await route.fulfill({
+      status: added ? 201 : 200,
+      contentType: "application/json",
+      body: JSON.stringify({ count: counts.get(key), liked: true, added }),
+    })
+  })
+
+  return { counts, writes }
+}
+
 for (const target of pages) {
   for (const viewport of manifest.requiredViewports) {
     for (const theme of manifest.requiredThemes) {
       test(`${target.id} ${viewport.name} ${theme}`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
         await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+        const reactions = await mockReactions(page)
         await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
         await page.evaluate(() =>
           Promise.race([
@@ -174,10 +214,103 @@ for (const target of pages) {
           body: await page.screenshot({ fullPage: false }),
           contentType: "image/png",
         })
+
+        const reactionRoot = page.locator("[data-article-reaction]")
+        if (target.id.endsWith("-article")) {
+          await expect(reactionRoot).toHaveCount(1)
+          await reactionRoot.scrollIntoViewIfNeeded()
+          const reactionButton = reactionRoot.locator("button")
+          await expect(reactionRoot).toHaveAttribute("aria-busy", "false")
+          await expect(reactionButton).toBeEnabled()
+          await expect(reactionButton).toHaveAttribute("aria-pressed", "false")
+          await expect(reactionButton).toHaveAttribute("aria-disabled", "false")
+          await expect(reactionButton.locator("[data-reaction-count]")).toHaveText("12")
+
+          const bounds = await reactionButton.boundingBox()
+          expect(bounds).not.toBeNull()
+          expect(bounds!.width).toBeGreaterThanOrEqual(44)
+          expect(bounds!.height).toBeGreaterThanOrEqual(44)
+          expect(bounds!.x).toBeGreaterThanOrEqual(0)
+          expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
+
+          await reactionButton.focus()
+          await page.keyboard.press("Enter")
+          await expect(reactionButton).toHaveAttribute("aria-pressed", "true")
+          await expect(reactionButton).toHaveAttribute("aria-disabled", "true")
+          await expect(reactionButton.locator("[data-reaction-label]")).toHaveText("已赞")
+          await expect(reactionButton.locator("[data-reaction-count]")).toHaveText("13")
+          await expect(reactionRoot.locator("[data-reaction-message]")).toHaveText("谢谢")
+          expect(reactions.writes).toHaveLength(1)
+          expect(reactions.writes[0]).toMatchObject({
+            site: target.id.startsWith("blog") ? "blog" : "notes",
+            slug: await page.locator("body").getAttribute("data-slug"),
+          })
+          expect(reactions.writes[0].visitor).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          )
+
+          const reactionAccessibility = await new AxeBuilder({ page })
+            .include("[data-article-reaction]")
+            .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+            .analyze()
+          expect(
+            reactionAccessibility.violations.map((violation) => ({
+              id: violation.id,
+              nodes: violation.nodes.length,
+            })),
+          ).toEqual([])
+
+          await testInfo.attach(`${target.id}-reaction-${viewport.name}-${theme}`, {
+            body: await page.screenshot({ fullPage: false }),
+            contentType: "image/png",
+          })
+        } else {
+          await expect(reactionRoot).toHaveCount(0)
+        }
       })
     }
   }
 }
+
+test.describe("article reactions", () => {
+  test("liked state survives reload and SPA navigation keeps page keys separate", async ({
+    page,
+  }) => {
+    const mock = await mockReactions(page, 4)
+    await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
+
+    const button = page.locator("[data-article-reaction] button")
+    await expect(button).toHaveAttribute("aria-pressed", "false")
+    await button.click()
+    await expect(button).toHaveAttribute("aria-pressed", "true")
+    const firstSlug = await page.locator("body").getAttribute("data-slug")
+
+    await page.reload({ waitUntil: "domcontentloaded" })
+    await expect(page.locator("[data-article-reaction] button")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+    expect(mock.writes).toHaveLength(1)
+
+    await page.evaluate(() =>
+      window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
+    )
+    await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
+    await expect(page.locator("[data-article-reaction]")).toHaveCount(1)
+    await expect(page.locator("[data-article-reaction] button")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    )
+    expect(firstSlug).not.toBe("blog/macos-network-automount")
+  })
+
+  test("notes folder pages do not expose article reactions", async ({ page }) => {
+    await mockReactions(page)
+    await page.goto("http://127.0.0.1:4174/ai/", { waitUntil: "domcontentloaded" })
+    await expect(page.locator(".page-listing")).toBeVisible()
+    await expect(page.locator("[data-article-reaction]")).toHaveCount(0)
+  })
+})
 
 test.describe("image lightbox", () => {
   test.describe.configure({ mode: "serial" })

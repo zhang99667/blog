@@ -1,7 +1,12 @@
 import { loadQuartzConfig, loadQuartzLayout } from "./quartz/plugins/loader/config-loader"
 import type { QuartzLayoutOverrides } from "./quartz/plugins/loader/config-loader"
 import { brandIdentity, brandTheme } from "./quartz/brand.generated"
-import { BrandPageTitle, ImageLightbox, componentRegistry } from "./quartz/components"
+import {
+  ArticleReactions,
+  BrandPageTitle,
+  ImageLightbox,
+  componentRegistry,
+} from "./quartz/components"
 import {
   finalizeGraphCompatibilityOverride,
   registerGraphCompatibilityOverride,
@@ -24,6 +29,7 @@ const layoutOverrides: QuartzLayoutOverrides | undefined =
 componentRegistry.replace("PageTitle", BrandPageTitle, "local:markz-design-system")
 componentRegistry.replace("page-title", BrandPageTitle, "local:markz-design-system")
 componentRegistry.replace("ImageLightbox", ImageLightbox, "local:markz-image-lightbox")
+componentRegistry.replace("ArticleReactions", ArticleReactions, "local:markz-article-reactions")
 registerGraphCompatibilityOverride()
 
 const config = await loadQuartzConfig(

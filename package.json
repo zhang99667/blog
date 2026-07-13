@@ -24,6 +24,7 @@
     "quality:check": "npm run build && npm run quality:build && npm run quality:web",
     "security:check": "npm audit --audit-level=high",
     "smoke:production": "node scripts/quality/smoke-production.mjs",
+    "reactions:serve": "REACTIONS_DB_PATH=.cache/reactions-dev.sqlite node services/reactions/server.mjs",
     "build:blog": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=blog npx quartz build -d content/site -o public",
     "build:notes-fallback": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=notes-fallback npx quartz build -d content/notes -o public/notes",
     "build:notes": "QUARTZ_INCLUDE_GITIGNORED=1 QUARTZ_SITE=notes npx quartz build -d content/notes -o public-notes",

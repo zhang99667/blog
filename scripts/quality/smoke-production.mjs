@@ -24,6 +24,8 @@ const routes = [
   { url: "https://jsonutils.markz.fun/admin" },
   { url: "https://zhangjihao.markz.fun/" },
   { url: "https://jsonutils.markz.fun/api/health" },
+  { url: "https://markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
+  { url: "https://note.markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
 ]
 
 const failures = []
@@ -57,6 +59,25 @@ try {
   failures.push(`note graph index failed: ${error.message}`)
 }
 
+try {
+  const response = await fetch("https://markz.fun/api/reactions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      site: "blog",
+      slug: "blog/__reaction-smoke__",
+      visitor: "00000000-0000-4000-8000-000000000001",
+    }),
+    signal: AbortSignal.timeout(15000),
+  })
+  const reaction = await response.json()
+  if (!response.ok || reaction.liked !== true || reaction.count < 1) {
+    failures.push("production reactions write is not idempotently available")
+  }
+} catch (error) {
+  failures.push(`production reactions write failed: ${error.message}`)
+}
+
 if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
   try {
     const output = execFileSync(
@@ -69,7 +90,7 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
         "-o",
         "ConnectTimeout=10",
         sshHost,
-        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}}" markz-edge jsonutil-app-frontend-1 jsonutil-app-backend-1',
+        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" markz-edge markz-reactions jsonutil-app-frontend-1 jsonutil-app-backend-1',
       ],
       { encoding: "utf8" },
     )
@@ -81,6 +102,9 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
         failures.push(`${container} unexpectedly binds a host port`)
       }
     }
+    if (!/markz-reactions \{\} healthy/.test(output)) {
+      failures.push("markz-reactions is unhealthy or unexpectedly binds a host port")
+    }
   } catch (error) {
     failures.push(`remote port ownership check failed: ${error.message}`)
   }
@@ -91,6 +115,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, brand assets, notes graph index, API health, and port ownership are correct.",
+    "Production routes, brand assets, notes graph index, reactions, API health, and port ownership are correct.",
   )
 }

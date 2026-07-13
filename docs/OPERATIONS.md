@@ -15,6 +15,8 @@ npm run build
 
 `quality/link-baseline.json` 只记录迁移自 Obsidian 的历史断链债务。`quality:build` 会拒绝新增断链和已修复但未清理的陈旧基线；只有在人工确认债务变化后才运行 `node scripts/quality/check-build.mjs --update-link-baseline`。
 
+本地调试点赞 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions`。
+
 ## 发布流程
 
 ### 自动发布
@@ -26,6 +28,18 @@ npm run build
 3. 运行 `npm run deploy`，其中包含完整 `verify`、浏览器质量门禁和差量部署。
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
+
+部署会先同步 `services/reactions/`，启动并等待 `markz-reactions` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，不会被静态站差量同步删除。
+
+### 点赞数据维护
+
+- 健康检查：`curl -fsS https://markz.fun/api/reactions/health`。
+- 容器状态：`docker inspect -f '{{.State.Health.Status}}' markz-reactions`。
+- 备份时先短暂停止 reactions，复制整个 `reactions-data` 目录后再启动，确保数据库、WAL 和共享内存文件属于同一时点。
+- 不要使用 `docker compose down -v` 代替普通重建；虽然当前数据库是 bind mount，运维习惯仍应保护持久化目录。
+- 恢复时保持目录属主为服务器 `markz` 用户，并在恢复后先检查健康接口，再重建 edge。
+
+匿名点赞只用于轻量反馈，不是账号级风控。唯一键阻止同一浏览器 ID 的重复写入，Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次点赞，这是当前产品边界。
 
 GitHub 仓库需要以下 Actions 配置：
 

@@ -11,6 +11,7 @@
 | 内容同步        | 筛选、复制、生成首页和文章元数据   | `scripts/sync-notes.mjs`          | `content/site/`、`content/notes/` |
 | 设计系统        | 品牌、主题、排版、布局和无障碍基础 | `design-system/tokens.json`       | TS、SCSS、favicon、分享图         |
 | Quartz 构建     | 博客、笔记和回退路由               | `quartz.ts`、`quartz.config.yaml` | `public/`、`public-notes/`        |
+| 匿名互动        | 文章点赞、幂等计数与持久化         | `services/reactions/`             | SQLite 数据文件                   |
 | 边缘路由        | TLS、域名分流和 API 代理           | `deploy/nginx.conf`               | `markz-edge`                      |
 | 独立工具        | JSONUtils、装箱单                  | 各自仓库                          | 独立产品界面                      |
 
@@ -28,6 +29,16 @@ private zhang99667/note
   -> markz.fun / note.markz.fun
 ```
 
+点赞走独立的运行时链路：
+
+```text
+article-reactions component
+  -> same-origin /api/reactions
+  -> markz-edge write rate limit
+  -> markz-reactions
+  -> SQLite reactions.sqlite
+```
+
 设计数据走单独的生成链：
 
 ```text
@@ -41,9 +52,11 @@ tokens.json
 
 - `markz.fun`：博客静态文件；`/notes/` 是笔记回退入口。
 - `note.markz.fun`：独立笔记静态文件。
+- `markz.fun/api/reactions`、`note.markz.fun/api/reactions`：同一个匿名点赞服务，按 `site + canonical slug` 分开计数。
 - `jsonutils.markz.fun`：JSONUtils 前端与 `/api/` 代理；`/admin` 进入后台。
 - `zhangjihao.markz.fun`：装箱单产品。
 - 只有 `markz-edge` 可以绑定宿主机 `80/443`。
+- `markz-reactions` 只加入 edge 内部网络，不发布宿主机端口，也不加入 JSONUtils 网络。
 
 ## 所有权规则
 
@@ -54,6 +67,7 @@ tokens.json
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
+- 点赞数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。数据库目录不参与静态文件 `rsync --delete`。
 - 用户纠偏归 `docs/AI-DECISIONS.md`，可判定规则必须进入自动门禁。
 - 第三方组件的兼容修复归本仓库源码和浏览器门禁，不能依赖 `.quartz/` 插件缓存中的手工改动。
 

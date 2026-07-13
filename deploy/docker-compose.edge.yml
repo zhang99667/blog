@@ -4,6 +4,9 @@ services:
   edge:
     image: nginx:1.28.0-alpine
     container_name: markz-edge
+    depends_on:
+      reactions:
+        condition: service_healthy
     ports:
       - "${EDGE_HTTP_PORT:-80}:80"
       - "${EDGE_HTTPS_PORT:-443}:443"
@@ -17,12 +20,58 @@ services:
       - jsonutils-static:/usr/share/nginx/html:ro
     networks:
       - jsonutils
+      - reactions
+    restart: unless-stopped
+
+  reactions:
+    image: node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+    container_name: markz-reactions
+    init: true
+    user: "${REACTIONS_UID:-1002}:${REACTIONS_GID:-1002}"
+    working_dir: /app
+    command: ["node", "/app/server.mjs"]
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      REACTIONS_DB_PATH: /data/reactions.sqlite
+      TMPDIR: /tmp
+    volumes:
+      - ${REACTIONS_APP_DIR:-/home/markz/apps/blog/reactions}:/app:ro
+      - ${REACTIONS_DATA_DIR:-/home/markz/apps/blog/reactions-data}:/data
+    networks:
+      - reactions
+    expose:
+      - "3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/reactions/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
 networks:
   jsonutils:
     external: true
     name: ${JSONUTILS_NETWORK:-jsonutil_app-network}
+  reactions:
+    internal: true
 
 volumes:
   jsonutils-static:

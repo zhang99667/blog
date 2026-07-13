@@ -7,6 +7,7 @@ import Flex from "./Flex"
 import ConditionalRender from "./ConditionalRender"
 import { BrandMark, BrandPageTitle } from "./BrandMark"
 import { ImageLightbox } from "./ImageLightbox"
+import { ArticleReactions } from "./ArticleReactions"
 
 export { componentRegistry, defineComponent } from "./registry"
 export { External } from "./external"
@@ -24,4 +25,5 @@ export {
   BrandMark,
   BrandPageTitle,
   ImageLightbox,
+  ArticleReactions,
 }
