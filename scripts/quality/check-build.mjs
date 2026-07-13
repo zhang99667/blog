@@ -133,6 +133,70 @@ async function sumFileSizes(files) {
   return sizes.reduce((total, size) => total + size, 0)
 }
 
+export function literalModuleReferences(source) {
+  const references = new Set()
+  const patterns = [
+    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+    /\b(?:import|export)\s+(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g,
+  ]
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) references.add(match[1])
+  }
+  return [...references].sort()
+}
+
+function resolveJavaScriptReference(outputRoot, ownerFile, reference) {
+  const normalized = normalizeReference(reference)
+  if (!normalized || !normalized.endsWith(".js")) return null
+  const candidate = normalized.startsWith("/")
+    ? path.join(outputRoot, normalized.slice(1))
+    : path.resolve(path.dirname(ownerFile), normalized)
+  const relative = path.relative(outputRoot, candidate)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return null
+  return candidate
+}
+
+export async function maxInitialJavaScriptBytes(outputRoot, htmlFiles) {
+  const dependencies = new Map()
+  const sizes = new Map()
+
+  async function moduleDependencies(moduleFile) {
+    if (dependencies.has(moduleFile)) return dependencies.get(moduleFile)
+    let source
+    try {
+      source = await fs.readFile(moduleFile, "utf8")
+      sizes.set(moduleFile, (await fs.stat(moduleFile)).size)
+    } catch {
+      dependencies.set(moduleFile, [])
+      return []
+    }
+    const resolved = literalModuleReferences(source)
+      .map((reference) => resolveJavaScriptReference(outputRoot, moduleFile, reference))
+      .filter(Boolean)
+    dependencies.set(moduleFile, resolved)
+    return resolved
+  }
+
+  let maximum = 0
+  for (const htmlFile of htmlFiles) {
+    const source = await fs.readFile(htmlFile, "utf8")
+    const entries = inspectHtml(source)
+      .references.map((reference) => resolveJavaScriptReference(outputRoot, htmlFile, reference))
+      .filter(Boolean)
+    const visited = new Set()
+    const queue = [...entries]
+    while (queue.length > 0) {
+      const moduleFile = queue.pop()
+      if (!moduleFile || visited.has(moduleFile)) continue
+      visited.add(moduleFile)
+      queue.push(...(await moduleDependencies(moduleFile)))
+    }
+    const bytes = [...visited].reduce((total, file) => total + (sizes.get(file) ?? 0), 0)
+    maximum = Math.max(maximum, bytes)
+  }
+  return maximum
+}
+
 export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline = true } = {}) {
   const failures = []
   const budgets = await readJson(root, "quality/budgets.json")
@@ -156,11 +220,17 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
     const jsFiles = await listFiles(outputRoot, ".js")
     const cssBytes = await sumFileSizes(cssFiles)
     const jsBytes = await sumFileSizes(jsFiles)
+    const initialJsBytes = await maxInitialJavaScriptBytes(outputRoot, htmlFiles)
     if (cssBytes > output.maxTotalCssBytes) {
       failures.push(`${output.id} CSS budget exceeded: ${cssBytes} > ${output.maxTotalCssBytes}`)
     }
     if (jsBytes > output.maxTotalJsBytes) {
       failures.push(`${output.id} JS budget exceeded: ${jsBytes} > ${output.maxTotalJsBytes}`)
+    }
+    if (initialJsBytes > output.maxInitialJsBytes) {
+      failures.push(
+        `${output.id} initial JS budget exceeded: ${initialJsBytes} > ${output.maxInitialJsBytes}`,
+      )
     }
 
     const indexFile = path.join(outputRoot, "index.html")

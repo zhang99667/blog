@@ -2,7 +2,8 @@ import { FilePath, QUARTZ, joinSegments } from "../../util/path"
 import { QuartzEmitterPlugin } from "../types"
 import fs from "fs"
 import { glob } from "../../util/glob"
-import { dirname } from "path"
+import { dirname, resolve } from "path"
+import { photoSwipeAssetFile, photoSwipeSourcePath } from "../../components/imageLightboxAssets"
 
 export const Static: QuartzEmitterPlugin = () => ({
   name: "Static",
@@ -18,6 +19,12 @@ export const Static: QuartzEmitterPlugin = () => ({
       await fs.promises.copyFile(src, dest)
       yield dest
     }
+
+    const photoSwipeSource = resolve(QUARTZ, "..", photoSwipeSourcePath)
+    const photoSwipeDestination = joinSegments(outputStaticPath, photoSwipeAssetFile) as FilePath
+    await fs.promises.mkdir(dirname(photoSwipeDestination), { recursive: true })
+    await fs.promises.copyFile(photoSwipeSource, photoSwipeDestination)
+    yield photoSwipeDestination
   },
   async *partialEmit() {},
 })

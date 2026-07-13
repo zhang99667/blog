@@ -1,7 +1,15 @@
 import assert from "node:assert/strict"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { inspectHtml, referenceCandidates, validateHtmlMetadata } from "./check-build.mjs"
+import {
+  inspectHtml,
+  literalModuleReferences,
+  maxInitialJavaScriptBytes,
+  referenceCandidates,
+  validateHtmlMetadata,
+} from "./check-build.mjs"
 
 test("HTML inspection uses structured document data", () => {
   const facts = inspectHtml(
@@ -54,4 +62,26 @@ test("dots in clean URL slugs do not suppress HTML candidates", () => {
     "./view.post(runnable)",
   )
   assert.equal(candidates[1], path.resolve("/tmp/public/android/view.post(runnable).html"))
+})
+
+test("initial JS budget follows literal imports but excludes variable on-demand imports", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "markz-js-budget-"))
+  const html = path.join(root, "index.html")
+  const entry = 'await import("./eager.js"); const load = () => import(assetUrl)'
+  const eager = "export const ready = true"
+
+  try {
+    await writeFile(html, '<script type="module" src="./entry.js"></script>')
+    await writeFile(path.join(root, "entry.js"), entry)
+    await writeFile(path.join(root, "eager.js"), eager)
+    await writeFile(path.join(root, "on-demand.js"), "x".repeat(1000))
+
+    assert.deepEqual(literalModuleReferences(entry), ["./eager.js"])
+    assert.equal(
+      await maxInitialJavaScriptBytes(root, [html]),
+      Buffer.byteLength(entry) + Buffer.byteLength(eager),
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

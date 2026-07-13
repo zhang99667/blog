@@ -5,7 +5,8 @@
       "id": "blog",
       "root": "public",
       "maxTotalCssBytes": 250000,
-      "maxTotalJsBytes": 450000,
+      "maxInitialJsBytes": 200000,
+      "maxTotalJsBytes": 485000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": ["/zhangjihao/"]
     },
@@ -13,7 +14,8 @@
       "id": "notes",
       "root": "public-notes",
       "maxTotalCssBytes": 125000,
-      "maxTotalJsBytes": 225000,
+      "maxInitialJsBytes": 200000,
+      "maxTotalJsBytes": 245000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": []
     }

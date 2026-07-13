@@ -1,5 +1,5 @@
 import { render } from "preact-render-to-string"
-import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
+import { QuartzComponent, QuartzComponentProps } from "./types"
 import BodyConstructor from "./Body"
 import {
   CSSResource,
@@ -16,7 +16,6 @@ import { styleText } from "util"
 import { resolveFrame } from "./frames"
 import type { TreeTransform } from "../plugins/types"
 import type { BuildCtx } from "../util/ctx"
-import { componentRegistry } from "./registry"
 
 interface RenderComponents {
   head: QuartzComponent
@@ -28,17 +27,6 @@ interface RenderComponents {
   right: QuartzComponent[]
   footer: QuartzComponent
   frame?: string
-}
-
-function getImageLightbox(): QuartzComponent | undefined {
-  const registered = componentRegistry.get("ImageLightbox")
-  if (!registered) return
-
-  if (typeof registered.component === "function" && !("displayName" in registered.component)) {
-    return componentRegistry.instantiate(registered.component as QuartzComponentConstructor)
-  }
-
-  return registered.component as QuartzComponent
 }
 
 export function enhanceContentAccessibility(root: Root) {
@@ -361,7 +349,6 @@ export function renderPage(
     frame: frameName,
   } = components
   const Body = BodyConstructor()
-  const Lightbox = getImageLightbox()
   const frame = resolveFrame(frameName)
 
   const lang = componentData.fileData.frontmatter?.lang ?? cfg.locale?.split("-")[0] ?? "en"
@@ -394,7 +381,6 @@ export function renderPage(
             ]}
           </Body>
         </div>
-        {Lightbox && <Lightbox {...componentData} />}
       </body>
       {pageResources.js
         .filter((resource) => resource.loadTime === "afterDOMReady")

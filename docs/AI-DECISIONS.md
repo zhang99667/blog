@@ -73,3 +73,12 @@
 - 反例：直接用 `window.location.pathname` 的百分号编码值扩展局部图，或在 `.quartz/plugins/graph` 里做一次性修改。
 - 边界：外部 URL 不进入图谱；无内链且无反链的笔记可以合理地显示单点。
 - 锁定证据：`quartz/components/GraphCompatibility.ts`、`GraphCompatibility.test.ts`、中文路由浏览器图谱用例和生产 `contentIndex.json` smoke。
+
+## D-009 图片预览交互使用成熟组件
+
+- 日期：2026-07-13
+- 触发：用户指出自研图片缩放容易产生交互和兼容性问题，要求确认并改用成熟组件。
+- 决策：博客和笔记站统一固定使用 `PhotoSwipe 5.4.4`。仓库适配层只负责筛选文章图片、补充尺寸与语义、接入 Quartz SPA 生命周期和映射品牌令牌；缩放、拖拽、触控、图库导航、焦点圈定与焦点恢复由 PhotoSwipe 提供。PhotoSwipe 核心从本站版本化静态资源按第一次打开图片加载，不进入页面初始模块图。
+- 反例：重新实现缩放比例、触摸手势、拖拽边界、焦点圈定或自制弹层工具栏，或者使用浮动版本导致交互在无人复核时改变。
+- 边界：链接图片和图谱、Mermaid、Canvas、Excalidraw 等交互内容不接管；升级 PhotoSwipe 主版本前必须重新通过浏览器矩阵和无障碍检查。
+- 锁定证据：精确依赖版本、`ImageLightbox.test.ts`、初始与总 JS 双预算、博客和笔记的 320/390/1440 浅深色浏览器用例、SPA 与同文图库导航用例。

@@ -203,32 +203,44 @@ test.describe("image lightbox", () => {
           await source.scrollIntoViewIfNeeded()
           await source.click()
 
-          const dialog = page.locator("#image-lightbox")
-          const preview = dialog.locator(".image-lightbox__preview")
-          const viewportElement = dialog.locator(".image-lightbox__viewport")
-          const reset = dialog.locator('[data-image-action="reset"]')
+          const dialog = page.locator("#image-lightbox.markz-image-lightbox")
+          const preview = dialog.locator(
+            '.pswp__item[aria-hidden="false"] .pswp__img:not(.pswp__img--placeholder)',
+          )
           await expect(dialog).toBeVisible()
-          await expect(dialog).toHaveAttribute("open", "")
-          await expect(dialog).toHaveAttribute("data-ready", "true")
+          await expect(dialog).toHaveAttribute("role", "dialog")
+          await expect(dialog).toHaveAttribute("aria-label", "图片预览")
           await expect(preview).toBeVisible()
-          await expect(reset).toHaveText("100%")
-          await expect(dialog.locator('[data-image-action="close"]')).toBeFocused()
+          await expect
+            .poll(() => preview.evaluate((image) => image.complete && image.naturalWidth > 0))
+            .toBe(true)
+          await preview.evaluate(async (image) => {
+            await image.decode()
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            )
+          })
+          await page.waitForTimeout(250)
+          await expect
+            .poll(() => dialog.evaluate((root) => root.contains(document.activeElement)))
+            .toBe(true)
 
           const opened = await page.evaluate(() => {
-            const dialog = document.querySelector<HTMLDialogElement>("#image-lightbox")!
-            const preview = dialog.querySelector<HTMLImageElement>(".image-lightbox__preview")!
-            const toolbar = dialog.querySelector<HTMLElement>(".image-lightbox__toolbar")!
+            const dialog = document.querySelector<HTMLElement>("#image-lightbox")!
+            const preview = dialog.querySelector<HTMLImageElement>(
+              '.pswp__item[aria-hidden="false"] .pswp__img:not(.pswp__img--placeholder)',
+            )!
             const bounds = dialog.getBoundingClientRect()
             const imageBounds = preview.getBoundingClientRect()
-            const toolbarBounds = toolbar.getBoundingClientRect()
+            const controls = [...dialog.querySelectorAll<HTMLElement>(".pswp__button")]
+              .map((control) => control.getBoundingClientRect())
+              .filter((control) => control.width > 0 && control.height > 0)
             return {
               dialogWidth: bounds.width,
               dialogHeight: bounds.height,
               imageWidth: imageBounds.width,
-              toolbarTop: toolbarBounds.top,
-              toolbarRight: toolbarBounds.right,
-              toolbarBottom: toolbarBounds.bottom,
-              toolbarLeft: toolbarBounds.left,
+              imageHeight: imageBounds.height,
+              controls,
               documentWidth: document.documentElement.scrollWidth,
               clientWidth: document.documentElement.clientWidth,
             }
@@ -236,10 +248,16 @@ test.describe("image lightbox", () => {
           expect(opened.dialogWidth).toBeCloseTo(viewport.width, 0)
           expect(opened.dialogHeight).toBeCloseTo(viewport.height, 0)
           expect(opened.imageWidth).toBeLessThanOrEqual(viewport.width + 1)
-          expect(opened.toolbarTop).toBeGreaterThanOrEqual(0)
-          expect(opened.toolbarRight).toBeLessThanOrEqual(viewport.width)
-          expect(opened.toolbarBottom).toBeLessThanOrEqual(viewport.height)
-          expect(opened.toolbarLeft).toBeGreaterThanOrEqual(0)
+          expect(opened.imageHeight).toBeLessThanOrEqual(viewport.height + 1)
+          expect(opened.controls.length).toBeGreaterThanOrEqual(2)
+          for (const control of opened.controls) {
+            expect(control.width).toBeGreaterThanOrEqual(44)
+            expect(control.height).toBeGreaterThanOrEqual(44)
+            expect(control.top).toBeGreaterThanOrEqual(0)
+            expect(control.right).toBeLessThanOrEqual(viewport.width)
+            expect(control.bottom).toBeLessThanOrEqual(viewport.height)
+            expect(control.left).toBeGreaterThanOrEqual(0)
+          }
           expect(opened.documentWidth).toBeLessThanOrEqual(opened.clientWidth + 1)
 
           const accessibility = await new AxeBuilder({ page })
@@ -254,42 +272,37 @@ test.describe("image lightbox", () => {
           ).toEqual([])
 
           await testInfo.attach(`${target.id}-lightbox-${viewport.name}-${theme}`, {
-            body: await dialog.screenshot(),
+            body: await page.screenshot({ fullPage: false }),
             contentType: "image/png",
           })
 
           const initialWidth = await preview.evaluate(
             (image) => image.getBoundingClientRect().width,
           )
-          await dialog.locator('[data-image-action="zoom-in"]').click()
-          await expect(reset).toHaveText("150%")
+          const zoom = dialog.locator(".pswp__button--zoom")
+          await expect(zoom).toBeVisible()
+          await zoom.click()
+          await expect(dialog).toHaveClass(/pswp--zoomed-in/)
           await expect
             .poll(() => preview.evaluate((image) => image.getBoundingClientRect().width))
-            .toBeGreaterThan(initialWidth * 1.4)
-          await preview.evaluate(async (image) => {
-            await image.decode()
-            await new Promise<void>((resolve) =>
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-            )
-          })
-          expect(
-            await viewportElement.evaluate((element) => element.scrollWidth > element.clientWidth),
-          ).toBe(true)
+            .toBeGreaterThan(initialWidth * 1.15)
+          if (viewport.name === "desktop" && theme === "light") {
+            await testInfo.attach(`${target.id}-lightbox-zoomed`, {
+              body: await page.screenshot({ fullPage: false }),
+              contentType: "image/png",
+            })
+          }
 
-          await reset.click()
-          await expect(reset).toHaveText("100%")
-          const viewportBounds = await viewportElement.boundingBox()
-          expect(viewportBounds).not.toBeNull()
-          await viewportElement.click({
-            position: { x: 4, y: Math.max(4, viewportBounds!.height - 4) },
-          })
-          await expect(dialog).toBeHidden()
+          await zoom.click()
+          await expect(dialog).not.toHaveClass(/pswp--zoomed-in/)
+          await page.mouse.click(4, viewport.height - 4)
+          await expect(dialog).toHaveCount(0)
           expect(await source.evaluate((image) => document.activeElement === image)).toBe(true)
 
           await source.press("Enter")
-          await expect(dialog).toBeVisible()
+          await expect(page.locator("#image-lightbox.markz-image-lightbox")).toBeVisible()
           await page.keyboard.press("Escape")
-          await expect(dialog).toBeHidden()
+          await expect(page.locator("#image-lightbox")).toHaveCount(0)
           expect(await source.evaluate((image) => document.activeElement === image)).toBe(true)
         })
       }
@@ -307,15 +320,48 @@ test.describe("image lightbox", () => {
       window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
     )
     await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
-    await expect(page.locator("#image-lightbox")).toHaveCount(1)
+    await expect(page.locator("#image-lightbox")).toHaveCount(0)
     const navigatedImage = page.locator("article img[data-image-lightbox]").first()
     await expect(navigatedImage).toBeVisible()
     await navigatedImage.click()
     const dialog = page.locator("#image-lightbox")
-    const preview = dialog.locator(".image-lightbox__preview")
-    await expect(dialog).toHaveAttribute("data-ready", "true")
-    await expect(preview).toHaveAttribute("data-vector", "false")
+    const preview = dialog.locator(
+      '.pswp__item[aria-hidden="false"] .pswp__img:not(.pswp__img--placeholder)',
+    )
+    await expect(dialog).toBeVisible()
     await expect(preview).toHaveAttribute("src", /macos-network-automount-layers\.png/)
+    await expect(preview).not.toHaveAttribute("data-vector", "true")
+    await dialog.locator(".pswp__button--close").click()
+    await expect(dialog).toHaveCount(0)
+  })
+
+  test("notes images form a keyboard-navigable PhotoSwipe gallery", async ({ page }) => {
+    test.skip(
+      !existsSync(path.join(root, "public-notes", `${linkedGraphSlug}.html`)),
+      "The private note fixture is only available in publishing builds",
+    )
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`http://127.0.0.1:4174${linkedGraphRoute}`, {
+      waitUntil: "domcontentloaded",
+    })
+
+    const sources = page.locator("article img[data-image-lightbox]")
+    expect(await sources.count()).toBeGreaterThan(1)
+    await sources.first().scrollIntoViewIfNeeded()
+    await sources.first().click()
+
+    const dialog = page.locator("#image-lightbox")
+    const current = dialog.locator(
+      '.pswp__item[aria-hidden="false"] .pswp__img:not(.pswp__img--placeholder)',
+    )
+    await expect(current).toBeVisible()
+    const firstSource = await current.getAttribute("src")
+    await page.keyboard.press("ArrowRight")
+    await expect.poll(() => current.getAttribute("src")).not.toBe(firstSource)
+    await expect(dialog.locator(".pswp__counter")).toContainText("2 /")
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
   })
 })
 
