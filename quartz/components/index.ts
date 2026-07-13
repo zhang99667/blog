@@ -6,6 +6,7 @@ import MobileOnly from "./MobileOnly"
 import Flex from "./Flex"
 import ConditionalRender from "./ConditionalRender"
 import { BrandMark, BrandPageTitle } from "./BrandMark"
+import { ImageLightbox } from "./ImageLightbox"
 
 export { componentRegistry, defineComponent } from "./registry"
 export { External } from "./external"
@@ -22,4 +23,5 @@ export {
   ConditionalRender,
   BrandMark,
   BrandPageTitle,
+  ImageLightbox,
 }

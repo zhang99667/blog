@@ -7,7 +7,11 @@ const root = process.cwd()
 const tokens = JSON.parse(readFileSync(path.join(root, "design-system/tokens.json"), "utf8"))
 const manifest = JSON.parse(readFileSync(path.join(root, "design-system/manifest.json"), "utf8"))
 
-function firstArticle(outputRoot: string, ignoredPrefixes: string[]) {
+function firstArticle(
+  outputRoot: string,
+  ignoredPrefixes: string[],
+  accept: (html: string) => boolean = () => true,
+) {
   const candidates: string[] = []
   function visit(directory: string) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -23,7 +27,10 @@ function firstArticle(outputRoot: string, ignoredPrefixes: string[]) {
       (file) => file !== "index.html" && !ignoredPrefixes.some((prefix) => file.startsWith(prefix)),
     )
     // Linux also emits case-preserving SEO redirects; browser checks need a rendered article.
-    .filter((file) => readFileSync(path.join(outputRoot, file), "utf8").includes("<article"))
+    .filter((file) => {
+      const html = readFileSync(path.join(outputRoot, file), "utf8")
+      return html.includes("<article") && accept(html)
+    })
     .sort()[0]
   if (!selected) throw new Error(`No article page found in ${outputRoot}`)
   return `/${selected.replace(/\.html$/, "")}`
@@ -41,6 +48,24 @@ const pages = [
     id: "notes-article",
     baseUrl: "http://127.0.0.1:4174",
     path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"]),
+  },
+]
+
+const hasArticleImage = (html: string) => /<article\b[\s\S]*?<img\b/.test(html)
+const imagePages = [
+  {
+    id: "blog-image",
+    baseUrl: "http://127.0.0.1:4173",
+    path: `/blog${firstArticle(path.join(root, "public/blog"), [], hasArticleImage)}`,
+  },
+  {
+    id: "notes-image",
+    baseUrl: "http://127.0.0.1:4174",
+    path: firstArticle(
+      path.join(root, "public-notes"),
+      ["404", "tags/", "all-tags"],
+      hasArticleImage,
+    ),
   },
 ]
 
@@ -153,6 +178,146 @@ for (const target of pages) {
     }
   }
 }
+
+test.describe("image lightbox", () => {
+  test.describe.configure({ mode: "serial" })
+
+  for (const target of imagePages) {
+    for (const viewport of manifest.requiredViewports) {
+      for (const theme of manifest.requiredThemes) {
+        test(`${target.id} lightbox ${viewport.name} ${theme}`, async ({ page }, testInfo) => {
+          await page.setViewportSize({ width: viewport.width, height: viewport.height })
+          await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+          await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
+
+          const source = page.locator("article img[data-image-lightbox]").first()
+          await expect(source).toBeVisible()
+          await expect(source).toHaveAttribute("role", "button")
+          await expect(source).toHaveAttribute("tabindex", "0")
+          await expect(source).toHaveAttribute("aria-controls", "image-lightbox")
+          expect(await source.evaluate((image) => image.closest("a") === null)).toBe(true)
+          await expect
+            .poll(() => source.evaluate((image) => image.complete && image.naturalWidth > 0))
+            .toBe(true)
+
+          await source.scrollIntoViewIfNeeded()
+          await source.click()
+
+          const dialog = page.locator("#image-lightbox")
+          const preview = dialog.locator(".image-lightbox__preview")
+          const viewportElement = dialog.locator(".image-lightbox__viewport")
+          const reset = dialog.locator('[data-image-action="reset"]')
+          await expect(dialog).toBeVisible()
+          await expect(dialog).toHaveAttribute("open", "")
+          await expect(dialog).toHaveAttribute("data-ready", "true")
+          await expect(preview).toBeVisible()
+          await expect(reset).toHaveText("100%")
+          await expect(dialog.locator('[data-image-action="close"]')).toBeFocused()
+
+          const opened = await page.evaluate(() => {
+            const dialog = document.querySelector<HTMLDialogElement>("#image-lightbox")!
+            const preview = dialog.querySelector<HTMLImageElement>(".image-lightbox__preview")!
+            const toolbar = dialog.querySelector<HTMLElement>(".image-lightbox__toolbar")!
+            const bounds = dialog.getBoundingClientRect()
+            const imageBounds = preview.getBoundingClientRect()
+            const toolbarBounds = toolbar.getBoundingClientRect()
+            return {
+              dialogWidth: bounds.width,
+              dialogHeight: bounds.height,
+              imageWidth: imageBounds.width,
+              toolbarTop: toolbarBounds.top,
+              toolbarRight: toolbarBounds.right,
+              toolbarBottom: toolbarBounds.bottom,
+              toolbarLeft: toolbarBounds.left,
+              documentWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+            }
+          })
+          expect(opened.dialogWidth).toBeCloseTo(viewport.width, 0)
+          expect(opened.dialogHeight).toBeCloseTo(viewport.height, 0)
+          expect(opened.imageWidth).toBeLessThanOrEqual(viewport.width + 1)
+          expect(opened.toolbarTop).toBeGreaterThanOrEqual(0)
+          expect(opened.toolbarRight).toBeLessThanOrEqual(viewport.width)
+          expect(opened.toolbarBottom).toBeLessThanOrEqual(viewport.height)
+          expect(opened.toolbarLeft).toBeGreaterThanOrEqual(0)
+          expect(opened.documentWidth).toBeLessThanOrEqual(opened.clientWidth + 1)
+
+          const accessibility = await new AxeBuilder({ page })
+            .include("#image-lightbox")
+            .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+            .analyze()
+          expect(
+            accessibility.violations.map((violation) => ({
+              id: violation.id,
+              nodes: violation.nodes.length,
+            })),
+          ).toEqual([])
+
+          await testInfo.attach(`${target.id}-lightbox-${viewport.name}-${theme}`, {
+            body: await dialog.screenshot(),
+            contentType: "image/png",
+          })
+
+          const initialWidth = await preview.evaluate(
+            (image) => image.getBoundingClientRect().width,
+          )
+          await dialog.locator('[data-image-action="zoom-in"]').click()
+          await expect(reset).toHaveText("150%")
+          await expect
+            .poll(() => preview.evaluate((image) => image.getBoundingClientRect().width))
+            .toBeGreaterThan(initialWidth * 1.4)
+          await preview.evaluate(async (image) => {
+            await image.decode()
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            )
+          })
+          expect(
+            await viewportElement.evaluate((element) => element.scrollWidth > element.clientWidth),
+          ).toBe(true)
+
+          await reset.click()
+          await expect(reset).toHaveText("100%")
+          const viewportBounds = await viewportElement.boundingBox()
+          expect(viewportBounds).not.toBeNull()
+          await viewportElement.click({
+            position: { x: 4, y: Math.max(4, viewportBounds!.height - 4) },
+          })
+          await expect(dialog).toBeHidden()
+          expect(await source.evaluate((image) => document.activeElement === image)).toBe(true)
+
+          await source.press("Enter")
+          await expect(dialog).toBeVisible()
+          await page.keyboard.press("Escape")
+          await expect(dialog).toBeHidden()
+          expect(await source.evaluate((image) => document.activeElement === image)).toBe(true)
+        })
+      }
+    }
+  }
+
+  test("blog image lightbox survives SPA navigation", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${imagePages[0].baseUrl}${imagePages[0].path}`, {
+      waitUntil: "domcontentloaded",
+    })
+    await expect(page.locator("article img[data-image-lightbox]").first()).toBeVisible()
+
+    await page.evaluate(() =>
+      window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
+    )
+    await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
+    await expect(page.locator("#image-lightbox")).toHaveCount(1)
+    const navigatedImage = page.locator("article img[data-image-lightbox]").first()
+    await expect(navigatedImage).toBeVisible()
+    await navigatedImage.click()
+    const dialog = page.locator("#image-lightbox")
+    const preview = dialog.locator(".image-lightbox__preview")
+    await expect(dialog).toHaveAttribute("data-ready", "true")
+    await expect(preview).toHaveAttribute("data-vector", "false")
+    await expect(preview).toHaveAttribute("src", /macos-network-automount-layers\.png/)
+  })
+})
 
 for (const viewport of manifest.requiredViewports) {
   for (const theme of manifest.requiredThemes) {
