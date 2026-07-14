@@ -57,6 +57,8 @@ GitHub 仓库需要以下 Actions 配置：
 2. 运行 `npm run smoke:production`。
 3. 远端确认 `markz-edge` 独占 `80/443`，JSONUtils 容器端口绑定为空。
 
+部署脚本同步 reactions 服务代码后必须使用 `--force-recreate --wait reactions` 重建进程，再校验 Nginx 并重建 edge。仅更新 bind mount 文件不会让已运行的 Node 进程加载新代码。
+
 浏览器报告和截图保存在 `playwright-report/` 与 `test-results/`，CI 保留 14 天。上线结论必须来自完整矩阵，不能用单个页面或单一主题代替。
 
 本地部署默认读取 `~/.ssh/id_ed25519`，也可通过 `BLOG_SSH_KEY` 和 `BLOG_SSH_HOST` 覆盖。密钥不进入仓库；禁止在文档、脚本和 CI 配置中写入私钥或 API key。
@@ -82,6 +84,12 @@ GitHub 仓库需要以下 Actions 配置：
 2. 检查公开标记、排除规则与 slug 冲突。
 3. 检查 `.cache/publish-manifest.json`，不要手改生成 Markdown。
 4. 在 GitHub Actions 中确认 `MarkZ Publish` 最近一次运行成功，私有 note 签出使用的是只读 deploy key。
+
+### 新 reactions 接口返回 404
+
+1. 先确认 `/api/reactions/health` 正常，区分边缘路由故障和旧服务进程。
+2. 在远端执行 `docker compose up -d --force-recreate --wait reactions`，确保同步后的 `server.mjs` 被新 Node 进程加载。
+3. 重新运行 `npm run smoke:production`，不能只检查健康接口；健康接口在旧版本中也可能存在。
 
 ### 笔记日期全部变成同步当天
 

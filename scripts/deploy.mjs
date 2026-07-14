@@ -72,7 +72,7 @@ run("rsync", [
 run(ssh[0], [
   ...ssh.slice(1),
   host,
-  `cd ${remoteEdgeDir} && docker compose config >/dev/null && docker compose up -d --wait reactions && docker compose run --rm --no-deps edge nginx -t`,
+  `cd ${remoteEdgeDir} && docker compose config >/dev/null && docker compose up -d --force-recreate --wait reactions && docker compose run --rm --no-deps edge nginx -t`,
 ])
 run(ssh[0], [
   ...ssh.slice(1),

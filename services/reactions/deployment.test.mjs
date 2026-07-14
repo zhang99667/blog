@@ -69,7 +69,7 @@ describe("reactions deployment boundary", () => {
   })
 
   test("deploys and checks reactions before replacing the edge container", () => {
-    const startIndex = deploy.indexOf("docker compose up -d --wait reactions")
+    const startIndex = deploy.indexOf("docker compose up -d --force-recreate --wait reactions")
     const nginxTestIndex = deploy.indexOf("docker compose run --rm --no-deps edge nginx -t")
     const edgeIndex = deploy.indexOf("docker compose up -d --force-recreate edge")
     assert.ok(startIndex > 0)
