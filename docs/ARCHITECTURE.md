@@ -9,7 +9,7 @@
 | Obsidian 源仓库 | 私有写作与公开标记                   | `zhang99667/note`                   | 同步输入                          |
 | 发布编排        | 定时触发、私有签出、校验与部署       | `markz-publish.yaml`                | 可审计的发布记录                  |
 | 内容同步        | 筛选、复制、生成首页和文章元数据     | `scripts/sync-notes.mjs`            | `content/site/`、`content/notes/` |
-| 设计系统        | 品牌、主题、排版、布局和无障碍基础   | `design-system/tokens.json`         | TS、SCSS、favicon、分享图         |
+| 设计系统        | 品牌、主题、排版、布局和无障碍基础   | `design-system/tokens.json`         | TS、SCSS、favicon、分享图规则     |
 | Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml`   | `public/`、`public-notes/`        |
 | 发现与分发      | canonical、结构化数据、RSS、robots   | `Head.tsx`、`build-site-extras.mjs` | HTML 元数据与站点发现文件         |
 | 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`               | SQLite 数据文件                   |
@@ -24,7 +24,7 @@
 private zhang99667/note
   -> blog repository GitHub Action
   -> sync-notes.mjs
-  -> content/site + content/notes
+  -> content/site + content/notes + content-addressed article social cards
   -> Quartz builds
   -> canonical + JSON-LD + RSS + robots
   -> public + public-notes
@@ -75,6 +75,12 @@ tokens.json
   -> generate.mjs
   -> brand.generated.ts + _brand.generated.scss + PNG assets
   -> blog + notes builds
+
+tokens.json + pinned Noto Sans SC WOFF + synchronized article frontmatter
+  -> article-social-images.mjs
+  -> .cache/social-images/social/articles/<slug>-<hash>.png
+  -> blog /static/social/articles/
+  -> Open Graph + Twitter + BlogPosting image
 ```
 
 成熟度演进走一条只读审计优先的控制链：
@@ -108,6 +114,7 @@ ai/evolution.json
 - 品牌值归 `design-system/tokens.json`。
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
 - canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
+- 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
 - 成熟度能力、评分和风险边界归 `ai/evolution.json`；探针只报告可观察事实，定时工作流不能直接修改代码、部署或处理密钥。
 - 生成目录没有编辑权。
@@ -134,16 +141,19 @@ ai/evolution.json
 
 博客成稿同步时同时生成静态“继续阅读”。关系计算只读取同一次同步中的公开记录，不请求外部推荐服务，也不在浏览器端重排，因此构建可复现、链接可检查、无额外隐私数据。
 
+同一次同步还为每篇博客成稿写入 `socialImage` frontmatter，并从设计令牌、文章标题、编辑日期、分类、固定渲染器版本和字体校验和计算 URL。生成器只重画哈希变化的图片并删除陈旧文件；字体是仓库内固定的构建输入，不依赖操作系统或远程字体服务，也不发送给浏览器。构建门禁逐篇验证 1200x630 PNG、唯一 URL、字节预算以及 Open Graph、Twitter、JSON-LD 一致性。
+
 生成内容虽然被 Git 忽略，项目构建脚本会显式设置 `QUARTZ_INCLUDE_GITIGNORED=1` 让 Quartz 读取它们；Quartz 的默认 gitignore 行为保持不变。构建和质量门禁每次从受控输入重新执行，避免复用不完整的远端状态。周期同步不需要 note Action；若需要推送后即时发布，note Action 只负责调用 blog 的 `repository_dispatch`，不接触服务器。
 
 ## 变更影响面
 
-| 变更        | 最小影响面             | 必须扩大的验证                        |
-| ----------- | ---------------------- | ------------------------------------- |
-| 设计令牌    | 博客、笔记、品牌图片   | 主题、三个视口、无障碍                |
-| 同步筛选    | 内容目录、索引、链接   | 公开范围、构建、断链                  |
-| Quartz 组件 | 对应 frame 或页面类型  | 真实构建页面、SPA 导航                |
-| 发现元数据  | 博客、笔记、回退入口   | canonical、JSON-LD、RSS、robots、断链 |
-| 演进模型    | AI 报告、CI 和改进队列 | schema、探针、eval、风险边界          |
-| edge 配置   | 所有公网域名           | Nginx 测试、端口所有权、生产 smoke    |
-| AI 规则     | Agent 行为与 CI        | manifest、eval runner、资产注册表     |
+| 变更        | 最小影响面             | 必须扩大的验证                           |
+| ----------- | ---------------------- | ---------------------------------------- |
+| 设计令牌    | 博客、笔记、品牌图片   | 主题、三个视口、无障碍                   |
+| 同步筛选    | 内容目录、索引、链接   | 公开范围、构建、断链                     |
+| Quartz 组件 | 对应 frame 或页面类型  | 真实构建页面、SPA 导航                   |
+| 发现元数据  | 博客、笔记、回退入口   | canonical、JSON-LD、RSS、robots、断链    |
+| 文章分享图  | 博客成稿与社交元数据   | 字体校验和、尺寸、体积、唯一性、三处 URL |
+| 演进模型    | AI 报告、CI 和改进队列 | schema、探针、eval、风险边界             |
+| edge 配置   | 所有公网域名           | Nginx 测试、端口所有权、生产 smoke       |
+| AI 规则     | Agent 行为与 CI        | manifest、eval runner、资产注册表        |

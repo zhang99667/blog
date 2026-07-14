@@ -13,6 +13,11 @@ design-system/tokens.json
   -> quartz/styles/_brand.generated.scss
   -> BrandMark / Quartz theme / favicon / social card
   -> blog + notes
+
+synchronized article frontmatter + design tokens + pinned build fonts
+  -> scripts/design-system/article-social-images.mjs
+  -> content-addressed 1200x630 article cards
+  -> blog social metadata
 ```
 
 规则：
@@ -106,8 +111,11 @@ design-system/tokens.json
 
 ### 图片与品牌资产
 
-- favicon 和分享图由 `npm run design:generate` 生成。
-- 修改字标、颜色或分享图后递增 `brand.assetRevision`，避免旧缓存继续生效。
+- favicon 和普通页面使用的通用分享图由 `npm run design:generate` 生成。
+- 每篇博客成稿使用自己的 1200x630 分享图：左上角是紧凑 `MarkZ.`，主体只突出文章标题，分类、日期和域名保持次要；使用分隔线建立编辑感，不增加渐变、插画、卡片边框或装饰背景。
+- 文章分享图从设计令牌和 frontmatter 生成，最多三行标题并动态选择离散字号。文件名必须包含内容哈希；标题、颜色、字体或渲染器变化时生成新 URL，未变化时复用缓存。
+- 分享图构建固定使用仓库内已校验的 Noto Sans SC WOFF，不从系统字体或远程字体服务取字。字体是构建输入，不作为页面资源发布。
+- 修改字标或通用品牌图后递增 `brand.assetRevision`；修改文章卡片布局时递增文章渲染器版本，避免旧缓存继续生效。
 - 产品截图必须展示真实界面，不使用模糊的氛围图代替产品状态。
 
 ### 无障碍与阅读
@@ -131,7 +139,7 @@ design-system/tokens.json
 | 笔记首页 | 必须    | 必须    | 必须     | 必须 | 必须 |
 | 笔记正文 | 必须    | 必须    | 必须     | 必须 | 必须 |
 
-同时运行 WCAG 2.2 A/AA 自动审计，并检查 favicon、分享图 URL、键盘焦点、长中文标题和主导航不重叠。自动审计不能替代人工阅读与交互检查。
+同时运行 WCAG 2.2 A/AA 自动审计，并检查 favicon、分享图 URL、键盘焦点、长中文标题和主导航不重叠。文章分享图还要抽查最短、最长和中英混排标题，确认没有缺字、越界或错误截断。自动审计不能替代人工阅读与交互检查。
 
 ## 8. 变更协议
 
@@ -146,6 +154,7 @@ design-system/tokens.json
 ## 9. 禁止事项
 
 - 不直接编辑生成的主题、SCSS 或 PNG。
+- 不手改内容寻址的文章分享图，也不让其依赖机器上恰好安装的字体或构建时网络请求。
 - 不在业务 SCSS 中新增十六进制、RGB 或 RGBA 字面颜色。
 - 不复制一份新的 MarkZ 字标结构。
 - 不把笔记站重新命名为 `MarkZ Notes`。

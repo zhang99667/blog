@@ -39,18 +39,19 @@
 
 ## 修改入口
 
-| 需求                       | 修改入口                                            | 不要修改                |
-| -------------------------- | --------------------------------------------------- | ----------------------- |
-| 品牌颜色、字体、圆角、宽度 | `design-system/tokens.json`                         | 生成 SCSS、生成 TS      |
-| 字标结构                   | `quartz/components/BrandMark.tsx`                   | 各页面复制 HTML         |
-| 博客首页文案和结构         | `scripts/sync-notes.mjs`                            | `content/site/index.md` |
-| 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs` | `public-notes/`         |
-| 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                   | JSONUtils override      |
-| favicon、分享图            | 设计令牌和生成脚本                                  | PNG 二进制              |
-| canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`              | 生成 HTML               |
-| RSS、robots                | `scripts/build-site-extras.mjs`                     | `public/` 发现文件      |
-| 文章继续阅读               | `scripts/sync-notes.mjs`                            | 生成文章 Markdown       |
-| 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`        | GitHub issue 正文       |
+| 需求                       | 修改入口                                                | 不要修改                |
+| -------------------------- | ------------------------------------------------------- | ----------------------- |
+| 品牌颜色、字体、圆角、宽度 | `design-system/tokens.json`                             | 生成 SCSS、生成 TS      |
+| 字标结构                   | `quartz/components/BrandMark.tsx`                       | 各页面复制 HTML         |
+| 博客首页文案和结构         | `scripts/sync-notes.mjs`                                | `content/site/index.md` |
+| 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs`     | `public-notes/`         |
+| 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                       | JSONUtils override      |
+| favicon、通用分享图        | 设计令牌和 `generate.mjs`                               | 版本化 PNG              |
+| 文章级分享图               | 设计令牌、文章 frontmatter、`article-social-images.mjs` | `.cache/social-images/` |
+| canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`                  | 生成 HTML               |
+| RSS、robots                | `scripts/build-site-extras.mjs`                         | `public/` 发现文件      |
+| 文章继续阅读               | `scripts/sync-notes.mjs`                                | 生成文章 Markdown       |
+| 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`            | GitHub issue 正文       |
 
 ## 验证矩阵
 

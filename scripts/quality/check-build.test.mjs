@@ -9,6 +9,7 @@ import {
   literalModuleReferences,
   maxInitialJavaScriptBytes,
   referenceCandidates,
+  validateArticleSocialMetadata,
   validateHtmlMetadata,
   validateSeoMetadata,
 } from "./check-build.mjs"
@@ -83,6 +84,45 @@ test("article SEO contract requires canonical discovery, dates, JSON-LD, and one
     }),
     [],
   )
+})
+
+test("article social metadata uses one manifest-backed image across every discovery format", () => {
+  const image = "https://markz.fun/static/social/articles/agent-mcp-a1b2c3d4e5f6.png"
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <meta property="og:image" content="${image}">
+    <meta property="og:image:url" content="${image}">
+    <meta property="og:image:secure_url" content="${image}">
+    <meta property="og:image:alt" content="Agent MCP 完全指南">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:image" content="${image}">
+    <script type="application/ld+json">{"@graph":[{"@type":"BlogPosting","image":["${image}"]}]}</script>
+  </head></html>`)
+
+  assert.deepEqual(
+    validateArticleSocialMetadata("public/blog/agent-mcp.html", facts, {
+      path: "social/articles/agent-mcp-a1b2c3d4e5f6.png",
+      title: "Agent MCP 完全指南",
+    }),
+    [],
+  )
+})
+
+test("article social metadata rejects a generic or split-brain image", () => {
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <meta property="og:image" content="https://markz.fun/static/markz-card-v2.png">
+    <meta name="twitter:image" content="https://markz.fun/static/other.png">
+    <script type="application/ld+json">{"@graph":[{"@type":"BlogPosting","image":["https://markz.fun/static/other.png"]}]}</script>
+  </head></html>`)
+  const failures = validateArticleSocialMetadata("public/blog/agent-mcp.html", facts, {
+    path: "social/articles/agent-mcp-a1b2c3d4e5f6.png",
+    title: "Agent MCP 完全指南",
+  })
+
+  assert.ok(failures.some((failure) => failure.includes("twitter:image")))
+  assert.ok(failures.some((failure) => failure.includes("BlogPosting")))
+  assert.ok(failures.some((failure) => failure.includes("1200x630")))
 })
 
 test("SEO contract rejects duplicate ungoverned font stylesheets", () => {

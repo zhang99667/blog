@@ -50,6 +50,22 @@ export function isNotesFallback(baseUrl: string): boolean {
   return baseUrl === NOTES_FALLBACK_BASE_URL
 }
 
+export function socialImageUrl(
+  baseUrl: string,
+  socialImage: unknown,
+  fallbackAsset: string,
+): string {
+  const root = siteRoot(baseUrl)
+  if (typeof socialImage !== "string" || socialImage.trim() === "") {
+    return new URL(`static/${fallbackAsset}`, root).toString()
+  }
+
+  const value = socialImage.trim()
+  if (/^https:\/\//i.test(value)) return new URL(value).toString()
+  const relativePath = value.replace(/^\/+/, "").replace(/^static\//, "")
+  return new URL(`static/${relativePath}`, root).toString()
+}
+
 export function createStructuredData({
   canonicalUrl,
   title,

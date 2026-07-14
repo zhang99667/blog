@@ -171,10 +171,50 @@ async function articleSocialImages(root) {
   const emitter = (config.plugins ?? []).find(
     (plugin) => plugin.source === "github:quartz-community/og-image",
   )
-  return probe(
-    emitter?.enabled === true,
+  const contract = await sourceContract(
+    root,
+    {
+      "scripts/design-system/article-social-images.mjs": [
+        "articleSocialImageContract",
+        "renderArticleSocialCardSvg",
+        "checksum mismatch",
+      ],
+      "scripts/sync-notes.mjs": ["generateArticleSocialImages", "socialImage:"],
+      "quartz/components/Head.tsx": ["socialImageUrl", 'property="og:image:secure_url"'],
+      "quartz/plugins/emitters/static.ts": ["social-images", 'QUARTZ_SITE ?? "blog"'],
+      "scripts/quality/check-build.mjs": [
+        "validateArticleSocialMetadata",
+        "maxTotalSocialImageBytes",
+      ],
+      "scripts/quality/smoke-production.mjs": [
+        "validateArticleSocialMetadata",
+        "production article social image",
+      ],
+      "quality/budgets.json": ["maxSocialImageBytes", "maxTotalSocialImageBytes"],
+    },
     "Articles generate title-specific governed social cards.",
-    [`custom OG image emitter enabled=${String(emitter?.enabled)}`],
+  )
+  const missingFonts = []
+  for (const font of [
+    "design-system/fonts/noto-sans-sc-chinese-simplified-800-normal.woff",
+    "design-system/fonts/noto-sans-sc-latin-800-normal.woff",
+  ]) {
+    if (!(await fileExists(root, font))) missingFonts.push(`${font} is missing`)
+  }
+  const evidence = [...contract.evidence, ...missingFonts]
+  if (emitter?.enabled !== false) {
+    evidence.push(`generic remote-font OG emitter enabled=${String(emitter?.enabled)}`)
+  }
+  return probe(
+    contract.passed && missingFonts.length === 0 && emitter?.enabled === false,
+    "Articles generate title-specific governed social cards.",
+    contract.passed && missingFonts.length === 0 && emitter?.enabled === false
+      ? [
+          "content-addressed local card generator",
+          "frontmatter metadata contract",
+          "1200x630 asset and byte budgets",
+        ]
+      : evidence,
   )
 }
 

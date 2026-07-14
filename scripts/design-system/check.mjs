@@ -310,6 +310,35 @@ export async function collectDesignSystemFailures(root = defaultRoot) {
   const sync = await readText(root, "scripts/sync-notes.mjs")
   requireSnippet(sync, "scripts/sync-notes.mjs", "design-system/tokens.json", failures)
   requireSnippet(sync, "scripts/sync-notes.mjs", "data-brand-version", failures)
+  requireSnippet(sync, "scripts/sync-notes.mjs", "articleSocialImageDescriptor", failures)
+
+  const articleSocialImages = await readText(
+    root,
+    "scripts/design-system/article-social-images.mjs",
+  )
+  for (const snippet of [
+    "articleSocialImageContract",
+    "tokens.fixedColors",
+    "tokens.brand.domain",
+    "checksum mismatch",
+  ]) {
+    requireSnippet(
+      articleSocialImages,
+      "scripts/design-system/article-social-images.mjs",
+      snippet,
+      failures,
+    )
+  }
+  for (const font of [
+    "design-system/fonts/noto-sans-sc-chinese-simplified-800-normal.woff",
+    "design-system/fonts/noto-sans-sc-latin-800-normal.woff",
+  ]) {
+    try {
+      await fs.access(path.join(root, font))
+    } catch {
+      failures.push(`${font} is missing`)
+    }
+  }
 
   const yaml = await readText(root, "quartz.config.yaml")
   if (/^\s{2}theme:/m.test(yaml)) {

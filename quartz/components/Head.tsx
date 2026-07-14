@@ -8,12 +8,12 @@ import { CustomOgImagesEmitterName } from "../../.quartz/plugins"
 import { brandIdentity } from "../brand.generated"
 import {
   canonicalPageUrl,
-  canonicalSiteRootUrl,
   createStructuredData,
   isEditorialArticle,
   isNotesFallback,
   rssFeedUrl,
   serializeStructuredData,
+  socialImageUrl,
 } from "./seo"
 // @ts-ignore - inline script import handled by the Quartz bundler
 import accessibilityScript from "./scripts/accessibility.inline"
@@ -54,18 +54,20 @@ export default (() => {
     const usesCustomOgImage = ctx.cfg.plugins.emitters.some(
       (e) => e.name === CustomOgImagesEmitterName,
     )
-    const ogImageDefaultPath = new URL(
-      `static/${brandIdentity.assets.socialCard}`,
-      canonicalSiteRootUrl(cfg.baseUrl ?? "example.com"),
-    ).toString()
-    const ogImageExtension = getFileExtension(ogImageDefaultPath)?.replace(/^\./, "") ?? "png"
+    const ogImagePath = socialImageUrl(
+      cfg.baseUrl ?? "example.com",
+      fileData.frontmatter?.socialImage,
+      brandIdentity.assets.socialCard,
+    )
+    const ogImageExtension =
+      getFileExtension(new URL(ogImagePath).pathname)?.replace(/^\./, "") ?? "png"
     const publishedAt = fileData.dates?.created?.toISOString()
     const modifiedAt = fileData.dates?.modified?.toISOString()
     const structuredData = createStructuredData({
       canonicalUrl,
       title: pageTitle,
       description,
-      imageUrl: ogImageDefaultPath,
+      imageUrl: ogImagePath,
       isArticle,
       publishedAt,
       modifiedAt,
@@ -119,13 +121,14 @@ export default (() => {
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
         <meta property="og:description" content={description} />
-        <meta property="og:image:alt" content={description} />
+        <meta property="og:image:alt" content={pageTitle} />
 
         {!usesCustomOgImage && (
           <>
-            <meta property="og:image" content={ogImageDefaultPath} />
-            <meta property="og:image:url" content={ogImageDefaultPath} />
-            <meta name="twitter:image" content={ogImageDefaultPath} />
+            <meta property="og:image" content={ogImagePath} />
+            <meta property="og:image:url" content={ogImagePath} />
+            <meta property="og:image:secure_url" content={ogImagePath} />
+            <meta name="twitter:image" content={ogImagePath} />
             <meta property="og:image:type" content={`image/${ogImageExtension}`} />
             <meta property="og:image:width" content="1200" />
             <meta property="og:image:height" content="630" />

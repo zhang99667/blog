@@ -8,6 +8,8 @@
       "maxInitialJsBytes": 200000,
       "maxTotalJsBytes": 1150000,
       "maxHtmlBytes": 500000,
+      "maxSocialImageBytes": 180000,
+      "maxTotalSocialImageBytes": 1200000,
       "allowedExternalRoutes": ["/zhangjihao/"]
     },
     {

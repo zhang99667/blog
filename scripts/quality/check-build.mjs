@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse } from "parse5"
+import sharp from "sharp"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultRoot = path.resolve(scriptDir, "../..")
@@ -104,13 +105,50 @@ export function expectedCanonicalUrl(outputId, relativePath) {
   return new URL(htmlRoute(publicPath), origin).toString()
 }
 
+function structuredDataNodes(payloads) {
+  return payloads.flatMap((payload) => [
+    payload,
+    ...(Array.isArray(payload?.["@graph"]) ? payload["@graph"] : []),
+  ])
+}
+
 function hasStructuredType(payloads, type) {
-  return payloads.some((payload) => {
-    if (payload?.["@type"] === type) return true
-    return Array.isArray(payload?.["@graph"])
-      ? payload["@graph"].some((node) => node?.["@type"] === type)
-      : false
-  })
+  return structuredDataNodes(payloads).some((node) => node?.["@type"] === type)
+}
+
+export function validateArticleSocialMetadata(relativePath, facts, manifestEntry) {
+  const failures = []
+  const image = facts.meta.get("og:image") ?? ""
+  if (!manifestEntry) {
+    failures.push(`${relativePath} article social image is missing from its manifest`)
+    return failures
+  }
+
+  const expected = `https://markz.fun/static/${manifestEntry.path}`
+  for (const key of ["og:image", "og:image:url", "og:image:secure_url", "twitter:image"]) {
+    if (facts.meta.get(key) !== expected) {
+      failures.push(`${relativePath} ${key} must be ${expected}`)
+    }
+  }
+  if (image !== expected) failures.push(`${relativePath} has an unexpected article social image`)
+  if (facts.meta.get("og:image:alt") !== manifestEntry.title) {
+    failures.push(`${relativePath} social image alt must match the article title`)
+  }
+  if (facts.meta.get("og:image:type") !== "image/png") {
+    failures.push(`${relativePath} article social image must declare image/png`)
+  }
+  if (facts.meta.get("og:image:width") !== "1200" || facts.meta.get("og:image:height") !== "630") {
+    failures.push(`${relativePath} article social image must declare 1200x630`)
+  }
+
+  const article = structuredDataNodes(facts.structuredData).find(
+    (node) => node?.["@type"] === "BlogPosting",
+  )
+  const structuredImages = Array.isArray(article?.image) ? article.image : [article?.image]
+  if (!structuredImages.includes(expected)) {
+    failures.push(`${relativePath} BlogPosting must use the same article social image`)
+  }
+  return failures
 }
 
 export function validateSeoMetadata(relativePath, facts, options) {
@@ -408,6 +446,40 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       if (!indexSource.includes(snippet)) failures.push(`${output.id} index is missing ${snippet}`)
     }
 
+    const articleSocialEntries = new Map()
+    const observedArticleSocialPaths = new Set()
+    let articleSocialBytes = 0
+    if (output.id === "blog") {
+      try {
+        const manifest = JSON.parse(
+          await fs.readFile(path.join(outputRoot, "static/social/articles/manifest.json"), "utf8"),
+        )
+        if (manifest.width !== 1200 || manifest.height !== 630) {
+          failures.push("article social image manifest must declare 1200x630")
+        }
+        if (!Array.isArray(manifest.entries) || manifest.entries.length === 0) {
+          failures.push("article social image manifest must contain editorial articles")
+        }
+        for (const entry of manifest.entries ?? []) {
+          if (!/^social\/articles\/[a-z0-9-]+-[a-f0-9]{12}\.png$/.test(entry.path ?? "")) {
+            failures.push(
+              `article social image has an invalid content-addressed path: ${entry.path}`,
+            )
+            continue
+          }
+          if (!entry.title || !entry.hash || !entry.slug) {
+            failures.push(`article social image manifest entry is incomplete: ${entry.path}`)
+          }
+          if (articleSocialEntries.has(entry.path)) {
+            failures.push(`article social image manifest contains duplicate path ${entry.path}`)
+          }
+          articleSocialEntries.set(entry.path, entry)
+        }
+      } catch {
+        failures.push("blog output is missing a valid article social image manifest")
+      }
+    }
+
     for (const htmlFile of htmlFiles) {
       const source = await fs.readFile(htmlFile, "utf8")
       const relativePath = path.relative(root, htmlFile)
@@ -440,6 +512,49 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
               noindex: isFallback,
             }),
           )
+          if (article) {
+            let socialPath = ""
+            try {
+              const imageUrl = new URL(facts.meta.get("og:image") ?? "")
+              if (imageUrl.origin !== "https://markz.fun") {
+                failures.push(`${relativePath} article social image must use the blog origin`)
+              }
+              socialPath = imageUrl.pathname.replace(/^\/static\//, "")
+              if (!/^social\/articles\/[a-z0-9-]+-[a-f0-9]{12}\.png$/.test(socialPath)) {
+                failures.push(`${relativePath} must use a content-addressed article social image`)
+              }
+            } catch {
+              failures.push(`${relativePath} has an invalid article social image URL`)
+            }
+
+            const manifestEntry = articleSocialEntries.get(socialPath)
+            failures.push(...validateArticleSocialMetadata(relativePath, facts, manifestEntry))
+            if (manifestEntry && !observedArticleSocialPaths.has(socialPath)) {
+              observedArticleSocialPaths.add(socialPath)
+              const imageFile = path.join(outputRoot, "static", socialPath)
+              try {
+                const [stat, metadata] = await Promise.all([
+                  fs.stat(imageFile),
+                  sharp(imageFile).metadata(),
+                ])
+                articleSocialBytes += stat.size
+                if (stat.size > output.maxSocialImageBytes) {
+                  failures.push(
+                    `${relativePath} social image budget exceeded: ${stat.size} > ${output.maxSocialImageBytes}`,
+                  )
+                }
+                if (
+                  metadata.format !== "png" ||
+                  metadata.width !== 1200 ||
+                  metadata.height !== 630
+                ) {
+                  failures.push(`${relativePath} social image file must be a 1200x630 PNG`)
+                }
+              } catch {
+                failures.push(`${relativePath} article social image file is missing or unreadable`)
+              }
+            }
+          }
         }
       }
       if (facts.meta.get("og:image:type") === "image/.png") {
@@ -463,6 +578,40 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
             failures.push(`${relativePath} has a new broken local reference: ${reference}`)
           }
         }
+      }
+    }
+
+    if (output.id === "blog") {
+      for (const socialPath of articleSocialEntries.keys()) {
+        if (!observedArticleSocialPaths.has(socialPath)) {
+          failures.push(`article social image is not used by an editorial article: ${socialPath}`)
+        }
+      }
+      if (articleSocialBytes > output.maxTotalSocialImageBytes) {
+        failures.push(
+          `blog social image budget exceeded: ${articleSocialBytes} > ${output.maxTotalSocialImageBytes}`,
+        )
+      }
+      try {
+        const socialImageRoot = path.join(outputRoot, "static/social/articles")
+        const imageFiles = await listFiles(socialImageRoot, ".png")
+        const expectedFiles = new Set(
+          [...articleSocialEntries.keys()].map((socialPath) =>
+            path.join(outputRoot, "static", socialPath),
+          ),
+        )
+        for (const imageFile of imageFiles) {
+          if (!expectedFiles.has(imageFile)) {
+            failures.push(`blog output contains a stale article social image: ${imageFile}`)
+          }
+        }
+        if (imageFiles.length !== expectedFiles.size) {
+          failures.push(
+            `blog output must contain one unique social image per article: ${imageFiles.length} files for ${expectedFiles.size} entries`,
+          )
+        }
+      } catch {
+        failures.push("blog output is missing article social image files")
       }
     }
   }

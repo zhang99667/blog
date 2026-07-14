@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { parse as parseYaml } from "yaml"
 import { collectDesignSystemFailures } from "../design-system/check.mjs"
 import { collectAiInfraFailures } from "./check-ai-infra.mjs"
 
@@ -174,6 +176,68 @@ export async function collectGraphRuntimeBoundaryFailures(root = defaultRoot) {
   return failures
 }
 
+export async function collectArticleSocialImageFailures(root = defaultRoot) {
+  const failures = []
+  const generator = await readText(root, "scripts/design-system/article-social-images.mjs")
+  const sync = await readText(root, "scripts/sync-notes.mjs")
+  const head = await readText(root, "quartz/components/Head.tsx")
+  const staticEmitter = await readText(root, "quartz/plugins/emitters/static.ts")
+  const quality = await readText(root, "scripts/quality/check-build.mjs")
+  const productionSmoke = await readText(root, "scripts/quality/smoke-production.mjs")
+  const budgets = await readJson(root, "quality/budgets.json")
+  const config = parseYaml(await readText(root, "quartz.config.yaml"))
+
+  for (const [source, snippets] of [
+    [
+      generator,
+      ["articleSocialImageDescriptor", "renderArticleSocialCardSvg", "checksum mismatch"],
+    ],
+    [sync, ["generateArticleSocialImages", "socialImage:"]],
+    [head, ["socialImageUrl", "og:image:secure_url"]],
+    [staticEmitter, ["social-images", 'QUARTZ_SITE ?? "blog"']],
+    [quality, ["validateArticleSocialMetadata", "maxTotalSocialImageBytes"]],
+    [productionSmoke, ["validateArticleSocialMetadata", "production article social image"]],
+  ]) {
+    for (const snippet of snippets) {
+      if (!source.includes(snippet))
+        failures.push(`article social image contract is missing ${snippet}`)
+    }
+  }
+
+  const genericEmitter = (config.plugins ?? []).find(
+    (plugin) => plugin.source === "github:quartz-community/og-image",
+  )
+  if (genericEmitter?.enabled !== false) {
+    failures.push("generic remote-font OG emitter must remain disabled")
+  }
+
+  const blogBudget = budgets.outputs?.find((output) => output.id === "blog")
+  if (!blogBudget?.maxSocialImageBytes || !blogBudget?.maxTotalSocialImageBytes) {
+    failures.push("article social images need per-file and total byte budgets")
+  }
+
+  for (const [file, expected] of [
+    [
+      "design-system/fonts/noto-sans-sc-chinese-simplified-800-normal.woff",
+      "dcb2e590d4ec4d6dee1004fcd333990ae5941511459c4d2a3238706689844826",
+    ],
+    [
+      "design-system/fonts/noto-sans-sc-latin-800-normal.woff",
+      "6c462a676276dfb8987aaa9c6c332e58dbdd1b4e7d8fda9761e6a3a0adcc1865",
+    ],
+  ]) {
+    try {
+      const actual = createHash("sha256")
+        .update(await fs.readFile(path.join(root, file)))
+        .digest("hex")
+      if (actual !== expected) failures.push(`${file} checksum must update through the contract`)
+    } catch {
+      failures.push(`${file} is missing`)
+    }
+  }
+  return failures
+}
+
 const providers = {
   "design-contract": collectDesignSystemFailures,
   "ai-contract": collectAiInfraFailures,
@@ -182,6 +246,7 @@ const providers = {
   "browser-contract": collectBrowserContractFailures,
   "runtime-backup-boundary": collectRuntimeBackupBoundaryFailures,
   "graph-runtime-boundary": collectGraphRuntimeBoundaryFailures,
+  "article-social-image-boundary": collectArticleSocialImageFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {

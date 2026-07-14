@@ -8,6 +8,7 @@ import {
   isNotesFallback,
   rssFeedUrl,
   serializeStructuredData,
+  socialImageUrl,
 } from "./seo"
 
 test("SEO URLs use public clean routes and collapse index slugs", () => {
@@ -41,6 +42,21 @@ test("only canonical blog post routes are classified as editorial articles", () 
   assert.equal(isEditorialArticle("markz.fun", "blog/index"), false)
   assert.equal(isEditorialArticle("markz.fun/notes", "blog/agent-mcp"), false)
   assert.equal(isEditorialArticle("note.markz.fun", "ai/agent-mcp"), false)
+})
+
+test("social images use article assets when present and preserve canonical host boundaries", () => {
+  assert.equal(
+    socialImageUrl("markz.fun", "social/articles/agent-mcp-a1b2c3d4e5f6.png", "fallback.png"),
+    "https://markz.fun/static/social/articles/agent-mcp-a1b2c3d4e5f6.png",
+  )
+  assert.equal(
+    socialImageUrl("markz.fun/notes", undefined, "markz-card-v2.png"),
+    "https://note.markz.fun/static/markz-card-v2.png",
+  )
+  assert.equal(
+    socialImageUrl("markz.fun", "https://images.example.com/card.png", "fallback.png"),
+    "https://images.example.com/card.png",
+  )
 })
 
 test("structured data connects a BlogPosting to its page, author, and website", () => {

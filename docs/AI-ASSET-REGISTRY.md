@@ -37,7 +37,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-11 |
 | `playwright.config.ts`                         | 浏览器质量运行配置             | 权威       | `npm run quality:web`               | 2026-07-11 |
 | `tests/quality/`                               | 布局、主题和 WCAG 真实页面门禁 | 权威       | `npm run quality:web`               | 2026-07-11 |
-| `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-10 |
+| `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `evals/design-system/outcomes.jsonl`           | 真实执行结果账本               | 追加式证据 | `npm run ai:check`                  | 2026-07-10 |
 
 新增、移动或删除 AI 协作资产时，必须同步更新本表和治理脚本。

@@ -5,6 +5,10 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml"
 import { blogConfig } from "./blog.config.mjs"
+import {
+  articleSocialImageDescriptor,
+  generateArticleSocialImages,
+} from "./design-system/article-social-images.mjs"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const designTokens = JSON.parse(
@@ -671,7 +675,11 @@ async function writeGeneratedPages(records, posts, manifest, assetLookup) {
   await writeHome(posts)
   await writeBlogIndex(posts, manifest)
   await writeBlogPosts(posts, records, assetLookup)
+  const socialImages = await generateArticleSocialImages(posts, { root, tokens: designTokens })
   await writeNotesIndex(records, manifest)
+  console.log(
+    `Article social cards: ${socialImages.generated} generated, ${socialImages.reused} reused, ${socialImages.removed} removed.`,
+  )
 }
 
 async function writeHome(posts) {
@@ -760,6 +768,7 @@ async function writeBlogPosts(posts, records, assetLookup) {
   await fs.mkdir(blogDir, { recursive: true })
 
   for (const post of posts) {
+    const socialImage = articleSocialImageDescriptor(post, designTokens)
     const fm = [
       "---",
       `title: ${JSON.stringify(post.title)}`,
@@ -767,6 +776,7 @@ async function writeBlogPosts(posts, records, assetLookup) {
       `date: ${JSON.stringify(post.date)}`,
       `created: ${JSON.stringify(post.createdAt)}`,
       `modified: ${JSON.stringify(post.updatedAt)}`,
+      `socialImage: ${JSON.stringify(socialImage.path)}`,
       `sourceNote: ${JSON.stringify(`${noteOrigin}${post.url}`)}`,
       post.tags.length > 0 ? "tags:" : "tags: []",
       ...post.tags.map((tag) => `  - ${JSON.stringify(tag)}`),

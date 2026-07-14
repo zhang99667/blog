@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process"
 import os from "node:os"
 import path from "node:path"
 import { promises as fs } from "node:fs"
+import sharp from "sharp"
+import { inspectHtml, validateArticleSocialMetadata } from "./check-build.mjs"
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..")
 const sshHost = process.env.BLOG_SSH_HOST ?? "markz@39.97.237.248"
@@ -47,6 +49,44 @@ await Promise.all(
     }
   }),
 )
+
+try {
+  const [socialManifest, budgets] = await Promise.all([
+    fs
+      .readFile(path.join(root, ".cache/social-images/social/articles/manifest.json"), "utf8")
+      .then(JSON.parse),
+    fs.readFile(path.join(root, "quality/budgets.json"), "utf8").then(JSON.parse),
+  ])
+  const entry = socialManifest.entries?.find((item) => item.slug === "agent-mcp")
+  if (!entry) throw new Error("agent-mcp is missing from the social image manifest")
+
+  const articleResponse = await fetch("https://markz.fun/blog/agent-mcp", {
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!articleResponse.ok) throw new Error(`article returned ${articleResponse.status}`)
+  const facts = inspectHtml(await articleResponse.text())
+  failures.push(...validateArticleSocialMetadata("production agent-mcp", facts, entry))
+
+  const imageUrl = `https://markz.fun/static/${entry.path}`
+  const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
+  if (!imageResponse.ok) throw new Error(`social image returned ${imageResponse.status}`)
+  if (imageResponse.headers.get("content-type")?.split(";")[0] !== "image/png") {
+    failures.push("production article social image must return image/png")
+  }
+  const image = Buffer.from(await imageResponse.arrayBuffer())
+  const metadata = await sharp(image).metadata()
+  if (metadata.format !== "png" || metadata.width !== 1200 || metadata.height !== 630) {
+    failures.push("production article social image must decode as a 1200x630 PNG")
+  }
+  const blogBudget = budgets.outputs?.find((output) => output.id === "blog")
+  if (image.length > blogBudget?.maxSocialImageBytes) {
+    failures.push(
+      `production article social image budget exceeded: ${image.length} > ${blogBudget?.maxSocialImageBytes}`,
+    )
+  }
+} catch (error) {
+  failures.push(`production article social image failed: ${error.message}`)
+}
 
 try {
   const response = await fetch("https://note.markz.fun/static/contentIndex.json", {
@@ -143,6 +183,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

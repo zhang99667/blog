@@ -41,6 +41,19 @@ export const Static: QuartzEmitterPlugin = () => ({
         yield destination
       }
     }
+
+    if ((process.env.QUARTZ_SITE ?? "blog") === "blog") {
+      const socialImageRoot = resolve(QUARTZ, "..", ".cache", "social-images")
+      await fs.promises.access(socialImageRoot)
+      const socialImageFiles = await glob("**", socialImageRoot, cfg.configuration.ignorePatterns)
+      for (const fp of socialImageFiles) {
+        const source = joinSegments(socialImageRoot, fp) as FilePath
+        const destination = joinSegments(outputStaticPath, fp) as FilePath
+        await fs.promises.mkdir(dirname(destination), { recursive: true })
+        await fs.promises.copyFile(source, destination)
+        yield destination
+      }
+    }
   },
   async *partialEmit() {},
 })

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  collectArticleSocialImageFailures,
   collectBrowserContractFailures,
   collectContentBoundaryFailures,
   collectGraphRuntimeBoundaryFailures,
@@ -26,4 +27,8 @@ test("runtime backup remains isolated, verified, and restore-tested", async () =
 
 test("notes Graph runtime remains pinned, self-hosted, and build-verified", async () => {
   assert.deepEqual(await collectGraphRuntimeBoundaryFailures(), [])
+})
+
+test("article social images remain local, governed, and budgeted", async () => {
+  assert.deepEqual(await collectArticleSocialImageFailures(), [])
 })

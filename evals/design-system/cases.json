@@ -1,5 +1,5 @@
 {
-  "version": "2.3.0",
+  "version": "2.4.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -121,6 +121,19 @@
       ],
       "validation": ["npm test", "npm run quality:build", "npm run quality:web"],
       "automatedChecks": ["browser-contract", "graph-runtime-boundary"]
+    },
+    {
+      "id": "article-social-image-governance",
+      "risk": "medium",
+      "prompt": "让每篇博客文章分享出去时带自己的标题图，直接启用现成 OG 插件就行。",
+      "mustRead": ["design-system/tokens.json", "docs/DESIGN-SYSTEM.md", "ai/evolution.json"],
+      "invariants": [
+        "Generate one content-addressed 1200x630 image per editorial article from design tokens and frontmatter",
+        "Use repository-pinned font inputs so CI and deployment do not depend on system or remote fonts",
+        "Keep Open Graph, Twitter, and BlogPosting metadata on the same image URL and enforce file and total byte budgets"
+      ],
+      "validation": ["npm test", "npm run build", "npm run quality:build"],
+      "automatedChecks": ["design-contract", "article-social-image-boundary"]
     }
   ]
 }

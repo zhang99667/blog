@@ -533,6 +533,46 @@ test("blog listing and article display the same editorial date", async ({ page }
   expect(articleDate?.slice(0, 10)).toBe(listedDate)
 })
 
+test("editorial articles expose one decodable title-specific social image", async ({ page }) => {
+  await mockReactions(page)
+  await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
+
+  const ogImage = await page.locator('meta[property="og:image"]').getAttribute("content")
+  expect(ogImage).toMatch(
+    /^https:\/\/markz\.fun\/static\/social\/articles\/[a-z0-9-]+-[a-f0-9]{12}\.png$/,
+  )
+  await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute("content", ogImage!)
+  await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute("content", "1200")
+  await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute("content", "630")
+
+  const structuredData = JSON.parse(
+    (await page.locator('script[type="application/ld+json"]').textContent()) ?? "{}",
+  )
+  const article = structuredData["@graph"].find(
+    (node: { "@type"?: string }) => node["@type"] === "BlogPosting",
+  )
+  expect(article.image).toEqual([ogImage])
+
+  const localImageUrl = `${pages[1].baseUrl}${new URL(ogImage!).pathname}`
+  const dimensions = await page.evaluate(
+    (src) =>
+      new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
+        image.onerror = () => reject(new Error(`Unable to decode ${src}`))
+        image.src = src
+      }),
+    localImageUrl,
+  )
+  expect(dimensions).toEqual({ width: 1200, height: 630 })
+
+  await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded" })
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+    "content",
+    `https://markz.fun/static/markz-card-${tokens.brand.assetRevision}.png`,
+  )
+})
+
 test.describe("article reactions", () => {
   test("likes survive reload while unique views and SPA page keys stay separate", async ({
     page,
