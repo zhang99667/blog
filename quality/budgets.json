@@ -6,7 +6,7 @@
       "root": "public",
       "maxTotalCssBytes": 250000,
       "maxInitialJsBytes": 200000,
-      "maxTotalJsBytes": 490000,
+      "maxTotalJsBytes": 1150000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": ["/zhangjihao/"]
     },
@@ -15,7 +15,7 @@
       "root": "public-notes",
       "maxTotalCssBytes": 125000,
       "maxInitialJsBytes": 200000,
-      "maxTotalJsBytes": 245000,
+      "maxTotalJsBytes": 900000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": []
     }

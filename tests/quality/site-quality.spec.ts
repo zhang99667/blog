@@ -851,4 +851,37 @@ test.describe("notes linked graph", () => {
       })
     }
   }
+
+  test("fallback route loads the scoped self-hosted runtime", async ({ page }) => {
+    test.skip(
+      !existsSync(path.join(root, "public", "notes", `${linkedGraphSlug}.html`)),
+      "The private note fixture is only available in publishing builds",
+    )
+
+    const runtimeRequests: string[] = []
+    page.on("request", (request) => {
+      if (/\/notes\/static\/vendor\/(?:d3|pixi)-graph-/.test(request.url())) {
+        runtimeRequests.push(new URL(request.url()).pathname)
+      }
+    })
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`http://127.0.0.1:4173/notes${linkedGraphRoute}`, {
+      waitUntil: "domcontentloaded",
+    })
+
+    await expect(page.locator("body")).toHaveAttribute("data-basepath", "/notes")
+    const graphCanvas = page.locator(".graph-container canvas")
+    await expect(graphCanvas).toHaveCount(1, { timeout: 20_000 })
+    await expect(graphCanvas).toBeVisible()
+    expect(new Set(runtimeRequests)).toEqual(
+      new Set([
+        "/notes/static/vendor/d3-graph-7.9.0.iife.min.js",
+        "/notes/static/vendor/pixi-graph-8.19.0.iife.min.js",
+      ]),
+    )
+
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent("prenav")))
+    await expect(graphCanvas).toHaveCount(0)
+  })
 })

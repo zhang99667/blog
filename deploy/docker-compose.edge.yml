@@ -66,6 +66,48 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  reactions-backup:
+    image: node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+    container_name: markz-reactions-backup
+    init: true
+    user: "${REACTIONS_UID:-1002}:${REACTIONS_GID:-1002}"
+    working_dir: /app
+    command: ["node", "/app/backup.mjs", "daemon"]
+    depends_on:
+      reactions:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      REACTIONS_DB_PATH: /data/reactions.sqlite
+      REACTIONS_BACKUP_DIR: /backups
+      BACKUP_INTERVAL_MS: "21600000"
+      BACKUP_MAX_AGE_MS: "43200000"
+      BACKUP_RETENTION_COUNT: "32"
+      BACKUP_RETRY_MS: "60000"
+      TMPDIR: /tmp
+    volumes:
+      - ${REACTIONS_APP_DIR:-/home/markz/apps/blog/reactions}:/app:ro
+      - ${REACTIONS_DATA_DIR:-/home/markz/apps/blog/reactions-data}:/data:ro
+      - ${REACTIONS_BACKUP_DIR:-/home/markz/apps/blog/reactions-backups}:/backups
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 384m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "node", "/app/backup.mjs", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
 networks:
   jsonutils:
     external: true

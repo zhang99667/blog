@@ -1,11 +1,26 @@
 import type { StringResource } from "../util/resources"
 import { componentRegistry } from "./registry"
 import type { QuartzComponent, QuartzComponentConstructor } from "./types"
+import {
+  d3GraphRuntimeAsset,
+  isGraphRuntimeSite,
+  pixiGraphRuntimeAsset,
+} from "./graphRuntimeAssets"
 
 const upstreamGraphKey = "graph/Graph"
 const graphPathExpression = "window.location.pathname"
 const decodedGraphPathExpression = "decodeURI(window.location.pathname)"
 const graphFetchMarker = "await fetchData;"
+const graphRuntimeSources = [
+  {
+    remote: '"https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"',
+    local: d3GraphRuntimeAsset.path,
+  },
+  {
+    remote: '"https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.js"',
+    local: pixiGraphRuntimeAsset.path,
+  },
+] as const
 const identifierPattern = "[A-Za-z_$][\\w$]*"
 const graphStaleGenerationPattern = new RegExp(
   `(${identifierPattern})!==void 0&&\\1!==(${identifierPattern})`,
@@ -19,6 +34,32 @@ const overrideSource = "local:markz-graph-compatibility"
 type GraphConstructor = QuartzComponentConstructor<Record<string, unknown> | undefined>
 
 let upstreamGraph: GraphConstructor | undefined
+
+export function patchGraphRuntimeSources(resource: StringResource): StringResource {
+  const scripts = Array.isArray(resource) ? resource : resource ? [resource] : []
+  const matches = new Map(graphRuntimeSources.map(({ remote }) => [remote, 0]))
+  const patched = scripts.map((script) => {
+    let result = script
+    for (const { remote, local } of graphRuntimeSources) {
+      const count = result.split(remote).length - 1
+      matches.set(remote, (matches.get(remote) ?? 0) + count)
+      const localExpression = `((document.body&&document.body.dataset.basepath)||"")+"/${local}"`
+      result = result.replaceAll(remote, localExpression)
+    }
+    return result
+  })
+
+  const invalid = [...matches.entries()].filter(([, count]) => count !== 1)
+  if (invalid.length > 0) {
+    throw new Error(
+      `Expected one Graph runtime URL for each dependency, found ${invalid
+        .map(([remote, count]) => `${remote}=${count}`)
+        .join(" ")}`,
+    )
+  }
+
+  return Array.isArray(resource) ? patched : patched[0]
+}
 
 export function patchGraphPathDecoding(resource: StringResource): StringResource {
   const scripts = Array.isArray(resource) ? resource : resource ? [resource] : []
@@ -89,7 +130,11 @@ const GraphWithCanonicalSlug: GraphConstructor = (options) => {
   const graph = ((props) => original(props)) as QuartzComponent
 
   Object.assign(graph, original)
-  graph.afterDOMLoaded = patchGraphRenderGeneration(patchGraphPathDecoding(original.afterDOMLoaded))
+  graph.afterDOMLoaded = isGraphRuntimeSite()
+    ? patchGraphRenderGeneration(
+        patchGraphPathDecoding(patchGraphRuntimeSources(original.afterDOMLoaded)),
+      )
+    : undefined
   return graph
 }
 

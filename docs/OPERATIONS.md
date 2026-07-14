@@ -15,7 +15,7 @@ npm run build
 
 广义成熟度迭代先运行 `npm run evolve:report`。报告按 `ai/evolution.json` 的固定评分公式列出已具备能力、证据不足项和下一优先项；实现完成后运行 `npm run evolve:check` 和 `npm run evolve:report`，确认探针状态已改变。
 
-`quality/link-baseline.json` 只记录迁移自 Obsidian 的历史断链债务。`quality:build` 会拒绝新增断链和已修复但未清理的陈旧基线；只有在人工确认债务变化后才运行 `node scripts/quality/check-build.mjs --update-link-baseline`。
+`quality/link-baseline.json` 的公开断链债务必须保持为零。同步器只为本轮确认公开的笔记生成链接，私有或缺失目标降级成普通文字；`quality:build` 会拒绝任何新增断链。只有修复权威源并确认完整构建结果后，才运行 `node scripts/quality/check-build.mjs --update-link-baseline`，不能把新断链登记成“已知问题”绕过门禁。
 
 本地调试互动 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions`、`/api/reactions/view` 和博客专属 `/api/visitors`。
 
@@ -39,16 +39,26 @@ npm run build
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
 
-部署会先同步 `services/reactions/`，启动并等待 `markz-reactions` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，不会被静态站差量同步删除。
+部署会先同步 `services/reactions/`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数。
 
 ### 互动数据维护
 
 - 健康检查：`curl -fsS https://markz.fun/api/reactions/health`。
 - 访客只读汇总：`curl -fsS https://markz.fun/api/visitors`；该请求不登记访客，可用于生产 smoke。
-- 容器状态：`docker inspect -f '{{.State.Health.Status}}' markz-reactions`。
-- 备份时先短暂停止 reactions，复制整个 `reactions-data` 目录后再启动，确保数据库、WAL 和共享内存文件属于同一时点。
+- 容器状态：`docker inspect -f '{{.Name}} {{.State.Health.Status}}' markz-reactions markz-reactions-backup`。
+- 备份健康：`docker exec markz-reactions-backup node /app/backup.mjs health`。
+- 恢复演练：`docker exec markz-reactions-backup node /app/backup.mjs drill`。
+- 立即生成一份在线快照：`docker exec markz-reactions-backup node /app/backup.mjs once`。不要直接复制正在使用 WAL 的 `.sqlite` 单文件。
+- 自动策略固定为每 6 小时一次、最多 32 份；在线副本先转成不依赖 WAL/SHM 的 `DELETE` journal 单文件快照，再通过 SQLite `integrity_check`、`foreign_key_check`、SHA-256 和表行数清单，之后才能成为 `latest.json`。备份目录不得残留快照 sidecar 或 `.partial` 文件。
 - 不要使用 `docker compose down -v` 代替普通重建；虽然当前数据库是 bind mount，运维习惯仍应保护持久化目录。
-- 恢复时保持目录属主为服务器 `markz` 用户，并在恢复后先检查健康接口，再重建 edge。
+- 本机快照与数据库在同一服务器上，只是快速恢复层，不是异地灾备。未配置专用加密密钥前，禁止把含匿名哈希的明文 SQLite 上传到公开仓库或 Actions artifact。
+
+恢复生产数据时先把快照恢复到新文件，不原地覆盖：
+
+1. 运行 `backup.mjs verify /backups/<snapshot>.sqlite`，再运行 `backup.mjs restore /backups/<snapshot>.sqlite /backups/recovered.sqlite`。
+2. 停止 `reactions` 与 `reactions-backup`，保留当前 `reactions.sqlite`、`-wal`、`-shm` 作为同一时点的回退副本。
+3. 把已验证的 `recovered.sqlite` 安装到数据目录，权限设为 `0600`，属主保持服务器 `markz` 用户；不要把旧 WAL/SHM 配到新主文件。
+4. 使用 `docker compose up -d --force-recreate --wait reactions reactions-backup` 重启，依次检查 API 健康、备份健康和恢复演练，再重建 edge。
 
 匿名点赞、文章浏览和博客访客只用于轻量反馈，不是账号级统计或风控。`reactions`、`views` 分别阻止同一浏览器 ID 对同一文章重复累计；`visitors` 阻止累计访客重复，`daily_visitors` 保存北京时间当天稳定序号。Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次计入，这是当前产品边界。
 
@@ -70,7 +80,7 @@ GitHub 仓库需要以下 Actions 配置：
 2. 运行 `npm run smoke:production`。
 3. 远端确认 `markz-edge` 独占 `80/443`，JSONUtils 容器端口绑定为空。
 
-部署脚本同步 reactions 服务代码后必须使用 `--force-recreate --wait reactions` 重建进程，再校验 Nginx 并重建 edge。仅更新 bind mount 文件不会让已运行的 Node 进程加载新代码。
+部署脚本同步 reactions 服务代码后必须使用 `--force-recreate --wait reactions reactions-backup` 重建两个进程，再校验 Nginx 并重建 edge。仅更新 bind mount 文件不会让已运行的 Node 进程加载新代码。
 
 浏览器报告和截图保存在 `playwright-report/` 与 `test-results/`，CI 保留 14 天。上线结论必须来自完整矩阵，不能用单个页面或单一主题代替。
 
@@ -101,8 +111,16 @@ GitHub 仓库需要以下 Actions 配置：
 ### 新互动或访客接口返回 404
 
 1. 先确认 `/api/reactions/health` 正常，区分边缘路由故障和旧服务进程。
-2. 在远端执行 `docker compose up -d --force-recreate --wait reactions`，确保同步后的 `server.mjs` 被新 Node 进程加载。
+2. 在远端执行 `docker compose up -d --force-recreate --wait reactions reactions-backup`，确保同步后的服务与备份代码被新 Node 进程加载。
 3. 重新运行 `npm run smoke:production`，确认 `/api/visitors` 只读汇总和文章互动都可用；旧版本健康接口返回 200 不能证明新路由已加载。
+
+### reactions-backup 不健康
+
+1. 运行 `docker logs --tail 100 markz-reactions-backup`，区分源数据库不可读、快照校验失败、目录权限和过期快照。
+2. 检查 `/home/markz/apps/blog/reactions-backups` 权限为 `0700`，快照与清单为 `0600`；不要通过放宽到全局可读解决权限问题。
+3. 运行 `docker exec markz-reactions-backup node /app/backup.mjs once`；随后分别执行 `health` 和 `drill`。
+4. 若校验失败，保留失败文件与日志用于分析，不手改 `latest.json` 冒充健康；从最近一份通过校验的快照恢复。
+5. 若整台服务器或磁盘不可用，本机快照也会同时丢失。当前必须明确报告“无异地副本”，不能把本机 32 份保留描述成完整灾备。
 
 ### 笔记日期全部变成同步当天
 

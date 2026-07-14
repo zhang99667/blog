@@ -221,6 +221,39 @@ async function sumFileSizes(files) {
   return sizes.reduce((total, size) => total + size, 0)
 }
 
+async function validateGraphRuntime(root, outputRoot, outputId, jsFiles, failures) {
+  const packageJson = await readJson(root, "package.json")
+  const versions = {
+    d3: packageJson.dependencies?.d3,
+    pixi: packageJson.dependencies?.["pixi.js"],
+  }
+  const assetRoot = path.join(
+    outputRoot,
+    ...(outputId === "blog" ? ["notes", "static", "vendor"] : ["static", "vendor"]),
+  )
+  const assets = [`d3-graph-${versions.d3}.iife.min.js`, `pixi-graph-${versions.pixi}.iife.min.js`]
+
+  for (const asset of assets) {
+    try {
+      await fs.access(path.join(assetRoot, asset))
+    } catch {
+      failures.push(`${outputId} output is missing self-hosted Graph runtime ${asset}`)
+    }
+  }
+
+  const javascript = (
+    await Promise.all(jsFiles.map(async (file) => fs.readFile(file, "utf8")))
+  ).join("\n")
+  if (/cdn\.jsdelivr\.net\/npm\/(?:d3|pixi\.js)@/i.test(javascript)) {
+    failures.push(`${outputId} Graph runtime must not depend on jsDelivr`)
+  }
+  for (const asset of assets) {
+    if (!javascript.includes(`static/vendor/${asset}`)) {
+      failures.push(`${outputId} Graph loader is missing ${asset}`)
+    }
+  }
+}
+
 async function validateDiscoveryFiles(outputRoot, outputId, failures) {
   const host = outputId === "notes" ? "note.markz.fun" : "markz.fun"
   try {
@@ -357,6 +390,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
         `${output.id} initial JS budget exceeded: ${initialJsBytes} > ${output.maxInitialJsBytes}`,
       )
     }
+    await validateGraphRuntime(root, outputRoot, output.id, jsFiles, failures)
     await validateDiscoveryFiles(outputRoot, output.id, failures)
 
     const indexFile = path.join(outputRoot, "index.html")

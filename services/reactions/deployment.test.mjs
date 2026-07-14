@@ -12,6 +12,7 @@ const nginx = readFileSync(path.join(root, "deploy/nginx.conf"), "utf8")
 const deploy = readFileSync(path.join(root, "scripts/deploy.mjs"), "utf8")
 const smoke = readFileSync(path.join(root, "scripts/quality/smoke-production.mjs"), "utf8")
 const server = readFileSync(path.join(root, "services/reactions/server.mjs"), "utf8")
+const backup = readFileSync(path.join(root, "services/reactions/backup.mjs"), "utf8")
 
 function serverBlock(serverName) {
   const marker = `server_name ${serverName};`
@@ -74,16 +75,43 @@ describe("reactions deployment boundary", () => {
   })
 
   test("deploys and checks reactions before replacing the edge container", () => {
-    const startIndex = deploy.indexOf("docker compose up -d --force-recreate --wait reactions")
+    const startIndex = deploy.indexOf(
+      "docker compose up -d --force-recreate --wait reactions reactions-backup",
+    )
     const nginxTestIndex = deploy.indexOf("docker compose run --rm --no-deps edge nginx -t")
     const edgeIndex = deploy.indexOf("docker compose up -d --force-recreate edge")
     assert.ok(startIndex > 0)
     assert.ok(nginxTestIndex > startIndex)
     assert.ok(edgeIndex > nginxTestIndex)
     assert.match(deploy, /reactionsDir/)
+    assert.match(deploy, /remoteReactionsBackupDir/)
     assert.match(smoke, /markz-reactions/)
+    assert.match(smoke, /markz-reactions-backup/)
+    assert.match(smoke, /backup\.mjs drill/)
     assert.match(smoke, /blog\/__reaction-smoke__/)
     assert.match(smoke, /\/api\/visitors/)
+  })
+
+  test("backs up through an isolated sidecar with bounded retention and restore evidence", () => {
+    const service = compose.services["reactions-backup"]
+    assert.equal(service.container_name, "markz-reactions-backup")
+    assert.equal(service.network_mode, "none")
+    assert.equal(service.read_only, true)
+    assert.deepEqual(service.cap_drop, ["ALL"])
+    assert.ok(service.security_opt.includes("no-new-privileges:true"))
+    assert.equal(service.depends_on.reactions.condition, "service_healthy")
+    assert.ok(service.volumes.some((volume) => volume.endsWith(":/data:ro")))
+    assert.ok(service.volumes.some((volume) => volume.endsWith(":/backups")))
+    assert.equal(service.environment.BACKUP_INTERVAL_MS, "21600000")
+    assert.equal(service.environment.BACKUP_MAX_AGE_MS, "43200000")
+    assert.equal(service.environment.BACKUP_RETENTION_COUNT, "32")
+    assert.equal(service.environment.BACKUP_RETRY_MS, "60000")
+    assert.deepEqual(service.healthcheck.test, ["CMD", "node", "/app/backup.mjs", "health"])
+    assert.match(backup, /await backup\(source, temporarySnapshot/)
+    assert.match(backup, /PRAGMA integrity_check/)
+    assert.match(backup, /PRAGMA foreign_key_check/)
+    assert.match(backup, /PRAGMA journal_mode = DELETE/)
+    assert.match(backup, /runRestoreDrill/)
   })
 
   test("stores anonymous identifiers as hashes and never consumes forwarded IP data", () => {

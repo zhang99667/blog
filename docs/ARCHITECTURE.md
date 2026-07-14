@@ -13,6 +13,7 @@
 | Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml`   | `public/`、`public-notes/`        |
 | 发现与分发      | canonical、结构化数据、RSS、robots   | `Head.tsx`、`build-site-extras.mjs` | HTML 元数据与站点发现文件         |
 | 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`               | SQLite 数据文件                   |
+| 运行时本机备份  | 在线一致快照、校验、保留与恢复演练   | `services/reactions/backup.mjs`     | 加密前的本机私有快照              |
 | AI 演进控制面   | 能力盘点、证据探针、排序和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
 | 边缘路由        | TLS、域名分流和 API 代理             | `deploy/nginx.conf`                 | `markz-edge`                      |
 | 独立工具        | JSONUtils、装箱单                    | 各自仓库                            | 独立产品界面                      |
@@ -52,6 +53,21 @@ blog visitor counter
   -> SQLite visitors + daily_visitors
 ```
 
+互动数据库的本机恢复链路独立于请求服务：
+
+```text
+live reactions.sqlite (WAL remains writable by markz-reactions)
+  -> markz-reactions-backup reads /data read-only
+  -> Node SQLite online backup API
+  -> standalone DELETE-journal snapshot (no WAL/SHM dependency)
+  -> integrity_check + foreign_key_check + SHA-256 + row-count manifest
+  -> /home/markz/apps/blog/reactions-backups (0600 files, 0700 directory)
+  -> 32 snapshots / roughly 8 days at a 6-hour interval
+  -> production restore drill into an isolated temporary database
+```
+
+这条链只能覆盖误操作、坏快照和数据库级恢复，不能覆盖整台服务器或磁盘丢失。加密异地副本仍是独立能力，在外部存储与专用加密密钥确认前不得标记为灾备完成。
+
 设计数据走单独的生成链：
 
 ```text
@@ -82,6 +98,7 @@ ai/evolution.json
 - `zhangjihao.markz.fun`：装箱单产品。
 - 只有 `markz-edge` 可以绑定宿主机 `80/443`。
 - `markz-reactions` 只加入 edge 内部网络，不发布宿主机端口，也不加入 JSONUtils 网络。
+- `markz-reactions-backup` 不加入任何 Docker 网络，只读挂载运行时数据库目录；它只能写独立备份目录，也不发布宿主机端口。
 
 ## 所有权规则
 
@@ -96,6 +113,7 @@ ai/evolution.json
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
 - 点赞、文章浏览和博客访客数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
+- 运行时快照归 `backup.mjs`；Compose 只规定本机调度与隔离，生产 smoke 必须验证最新快照并完成一次真实恢复。异地复制不得上传明文数据库，也不得复用个人 SSH 私钥充当加密密钥。
 - 用户纠偏归 `docs/AI-DECISIONS.md`，可判定规则必须进入自动门禁。
 - 第三方组件的兼容修复归本仓库源码和浏览器门禁，不能依赖 `.quartz/` 插件缓存中的手工改动。
 
@@ -109,6 +127,10 @@ ai/evolution.json
 2. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物。
 
 公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。同步器把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。列表和正文头部统一显示作者指定的 `date/created` 编辑日期，`modified` 保留用于更新元数据，不能悄悄替换公开显示日期。
+
+公开链接使用两阶段生成：第一阶段先确定全部可公开记录，第二阶段才重写正文。目标已公开时输出带完整公开路径的 Quartz 双链，保留关系图谱和回链；目标私有、被过滤或不存在时只保留可读标题，不生成假链接。代码块、外部 URL 和真实公开资产不参与降级。
+
+关系图谱继续使用上游 D3 + Pixi 渲染器，但运行时由项目锁定版本并在构建期裁剪成两个本域静态文件。`notes` 从 `/static/vendor/` 加载，`notes-fallback` 根据 `data-basepath` 从 `/notes/static/vendor/` 加载；没有图谱布局的博客构建不发射也不执行这段运行时。构建质量门禁拒绝重新出现 jsDelivr 依赖，并要求两个入口的资产与加载器同时存在。
 
 博客成稿同步时同时生成静态“继续阅读”。关系计算只读取同一次同步中的公开记录，不请求外部推荐服务，也不在浏览器端重排，因此构建可复现、链接可检查、无额外隐私数据。
 

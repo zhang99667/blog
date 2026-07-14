@@ -4,6 +4,11 @@ import fs from "fs"
 import { glob } from "../../util/glob"
 import { dirname, resolve } from "path"
 import { photoSwipeAssetFile, photoSwipeSourcePath } from "../../components/imageLightboxAssets"
+import {
+  bundleGraphRuntimeAsset,
+  graphRuntimeAssets,
+  isGraphRuntimeSite,
+} from "../../components/graphRuntimeAssets"
 
 export const Static: QuartzEmitterPlugin = () => ({
   name: "Static",
@@ -25,6 +30,17 @@ export const Static: QuartzEmitterPlugin = () => ({
     await fs.promises.mkdir(dirname(photoSwipeDestination), { recursive: true })
     await fs.promises.copyFile(photoSwipeSource, photoSwipeDestination)
     yield photoSwipeDestination
+
+    if (isGraphRuntimeSite()) {
+      const projectRoot = resolve(QUARTZ, "..")
+      for (const asset of graphRuntimeAssets) {
+        const destination = joinSegments(outputStaticPath, asset.file) as FilePath
+        const content = await bundleGraphRuntimeAsset(asset, projectRoot)
+        await fs.promises.mkdir(dirname(destination), { recursive: true })
+        await fs.promises.writeFile(destination, content)
+        yield destination
+      }
+    }
   },
   async *partialEmit() {},
 })

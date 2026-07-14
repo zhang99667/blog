@@ -320,6 +320,7 @@ async function syncContent() {
   let skippedPrivate = 0
   let skippedFolderIndex = 0
   const inputs = []
+  const pendingNotes = []
 
   for (const collection of includeCollections) {
     const sourceRoot = path.join(noteDir, collection.source)
@@ -348,12 +349,9 @@ async function syncContent() {
   for (const input of inputs) {
     const { collection, sourceFile, srcRel, destRel, ext } = input
     const sourceData = await fs.readFile(sourceFile)
-    let outputData = sourceData
-    let sourceText
-    let sourceDates
 
     if (ext === ".md") {
-      sourceText = sourceData.toString("utf8")
+      const sourceText = sourceData.toString("utf8")
       const { data: fm } = splitFrontmatter(sourceText)
       if (isPrivateFrontmatter(fm)) {
         skippedPrivate += 1
@@ -365,18 +363,21 @@ async function syncContent() {
       }
 
       const stat = await fs.stat(sourceFile)
-      sourceDates = resolveSourceDates(fm, gitDates.get(srcRel), stat)
-      const rewritten = rewriteNoteAssetTargets(sourceText, input, assetLookup)
-      outputData = Buffer.from(withStableDates(rewritten, sourceDates), "utf8")
+      const sourceDates = resolveSourceDates(fm, gitDates.get(srcRel), stat)
+      const record = buildRecord(destRel, srcRel, collection, sourceText, sourceDates, "")
+      records.push(record)
+      pendingNotes.push({ input, sourceText, sourceDates, record })
+      continue
     }
 
+    const outputData = sourceData
     const destFile = path.join(notesContentDir, destRel)
     const hash = hashBuffer(outputData)
     files[destRel] = {
       source: srcRel,
       hash,
       size: outputData.length,
-      type: ext === ".md" ? "note" : "asset",
+      type: "asset",
     }
 
     if (oldManifest.files?.[destRel]?.hash === hash && (await pathExists(destFile))) {
@@ -386,9 +387,28 @@ async function syncContent() {
       await fs.writeFile(destFile, outputData)
       copied += 1
     }
+  }
 
-    if (ext === ".md") {
-      records.push(buildRecord(destRel, srcRel, collection, sourceText, sourceDates, hash))
+  const noteLookup = createNoteLookup(records)
+  for (const { input, sourceText, sourceDates, record } of pendingNotes) {
+    const rewritten = rewritePublicNoteMarkdown(sourceText, input, noteLookup, assetLookup)
+    const outputData = Buffer.from(withStableDates(rewritten, sourceDates), "utf8")
+    const hash = hashBuffer(outputData)
+    const destFile = path.join(notesContentDir, input.destRel)
+    files[input.destRel] = {
+      source: input.srcRel,
+      hash,
+      size: outputData.length,
+      type: "note",
+    }
+    record.hash = hash
+
+    if (oldManifest.files?.[input.destRel]?.hash === hash && (await pathExists(destFile))) {
+      unchanged += 1
+    } else {
+      await fs.mkdir(path.dirname(destFile), { recursive: true })
+      await fs.writeFile(destFile, outputData)
+      copied += 1
     }
   }
 
@@ -915,19 +935,19 @@ function rewriteNoteAssetTargets(markdown, input, assetLookup) {
         /!\[\[([^|\]#]+)(#[^|\]]+)?(\|[^\]]+)?\]\]/g,
         (match, target, anchor = "", options = "") => {
           const asset = resolveAssetTarget(target, input, assetLookup)
-          if (!asset) return match
+          if (!asset) return shouldRewriteAssetTarget(target) ? "" : match
           return renderImage(asset, "", options)
         },
       )
       .replace(/!\[([^\]]*)]\((?!https?:|mailto:|#|\/)([^)]+)\)/g, (match, alt, target) => {
         const asset = resolveAssetTarget(target, input, assetLookup)
-        if (!asset) return match
+        if (!asset) return alt.trim() ? htmlEscape(alt.trim()) : ""
         return renderImage(asset, alt)
       }),
   )
 }
 
-function createNoteLookup(records) {
+export function createNoteLookup(records) {
   const lookup = new Map()
   for (const record of records) {
     const keys = [
@@ -946,6 +966,120 @@ function createNoteLookup(records) {
     }
   }
   return lookup
+}
+
+function createFolderLookup(records) {
+  const lookup = new Map()
+  for (const record of records) {
+    const sourceParts = record.sourcePath.replace(/\.md$/i, "").split("/")
+    const destinationParts = record.id.split("/")
+    const depth = Math.min(sourceParts.length, destinationParts.length)
+    for (let index = 1; index < depth; index += 1) {
+      const sourceFolder = sourceParts.slice(0, index).join("/")
+      const destinationFolder = destinationParts.slice(0, index).join("/")
+      const folder = {
+        id: destinationFolder,
+        title: destinationParts[index - 1],
+        url: `/${encodeURI(destinationFolder)}`,
+        folder: true,
+      }
+      for (const key of [
+        sourceFolder,
+        `${sourceFolder}/index`,
+        destinationFolder,
+        `${destinationFolder}/index`,
+      ]) {
+        lookup.set(normalizeLookupKey(key), folder)
+      }
+    }
+  }
+  return lookup
+}
+
+function decodeNoteTarget(target) {
+  const clean = target.trim().split("?")[0]
+  try {
+    return decodeURI(clean)
+  } catch {
+    return clean
+  }
+}
+
+function resolvePublishedTarget(target, input, noteLookup, folderLookup) {
+  const clean = decodeNoteTarget(target).replace(/^\/+|\/+$/g, "")
+  const candidates = [
+    clean,
+    path.posix.join(path.posix.dirname(input.srcRel), clean),
+    path.posix.join(input.collection.source, clean),
+    path.posix.join(path.posix.dirname(input.destRel), clean),
+    path.posix.join(input.collection.slug, clean),
+  ]
+  for (const candidate of candidates) {
+    const key = normalizeLookupKey(path.posix.normalize(candidate))
+    const record = noteLookup.get(key)
+    if (record) return record
+    const folder = folderLookup.get(key)
+    if (folder) return folder
+  }
+  return undefined
+}
+
+function publicWikiLink(target, label, anchor = "") {
+  const cleanLabel = label.replace(/[\n\r|\]]/g, " ").trim()
+  const cleanAnchor = anchor.replace(/^#/, "").trim()
+  const fragment = cleanAnchor ? `#${cleanAnchor}` : ""
+  return `[[${target.id}${fragment}|${cleanLabel || target.title}]]`
+}
+
+function localMarkdownTarget(target) {
+  const clean = target.trim().replace(/^<|>$/g, "")
+  if (/^(?:[a-z][a-z\d+.-]*:|#|\/\/|\/)/i.test(clean)) return undefined
+  const hashIndex = clean.indexOf("#")
+  return {
+    target: hashIndex === -1 ? clean : clean.slice(0, hashIndex),
+    anchor: hashIndex === -1 ? "" : clean.slice(hashIndex + 1),
+  }
+}
+
+export function rewritePublicNoteMarkdown(markdown, input, noteLookup, assetLookup) {
+  const folderLookup = createFolderLookup([...new Set(noteLookup.values())])
+  const withAssets = rewriteNoteAssetTargets(markdown, input, assetLookup)
+
+  return rewriteOutsideCode(withAssets, (text) =>
+    text
+      .replace(
+        /!\[\[([^|\]#]+)(?:#([^|\]]+))?(?:\|([^\]]+))?\]\]/g,
+        (match, target, anchor = "", options = "") => {
+          const published = resolvePublishedTarget(target, input, noteLookup, folderLookup)
+          if (!published) return ""
+          const fragment = anchor.trim() ? `#${anchor.trim()}` : ""
+          const suffix = options.trim() ? `|${options.trim()}` : ""
+          return `![[${published.id}${fragment}${suffix}]]`
+        },
+      )
+      .replace(
+        /(?<!!)\[\[([^|\]#]+)(?:#([^|\]]+))?(?:\|([^\]]+))?\]\]/g,
+        (match, target, anchor = "", alias = "") => {
+          const published = resolvePublishedTarget(target, input, noteLookup, folderLookup)
+          const label = (alias || published?.title || target).trim()
+          return published ? publicWikiLink(published, label, anchor) : label
+        },
+      )
+      .replace(/(?<!!)\[([^\]]+)]\(([^)]+)\)/g, (match, label, rawTarget) => {
+        const local = localMarkdownTarget(rawTarget)
+        if (!local) return match
+
+        const asset = resolveAssetTarget(local.target, input, assetLookup)
+        if (asset) {
+          const relative = path.posix.relative(path.posix.dirname(input.destRel), asset.destRel)
+          const fragment = local.anchor ? `#${local.anchor}` : ""
+          return `[${label}](${encodeURI(relative)}${fragment})`
+        }
+
+        const published = resolvePublishedTarget(local.target, input, noteLookup, folderLookup)
+        return published ? publicWikiLink(published, label, local.anchor) : label
+      }),
+  )
 }
 
 function normalizeLookupKey(value) {

@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { parse as parseYaml } from "yaml"
 import {
+  createNoteLookup,
   parseGitDateLog,
   rankRelatedPosts,
   resolveSourceDates,
+  rewritePublicNoteMarkdown,
   withStableDates,
 } from "./sync-notes.mjs"
 
@@ -128,4 +130,71 @@ test("related posts favor real links and never include notes-only content", () =
     related.some(({ post: relatedPost }) => relatedPost.id === "note-only"),
     false,
   )
+})
+
+test("public note sync keeps resolvable links and deactivates private or missing targets", () => {
+  const collection = { source: "Android", slug: "android", title: "Android" }
+  const webView = {
+    id: "android/Android基础/组件/WebView/WebView",
+    sourcePath: "Android/Android基础/组件/WebView/WebView.md",
+    title: "WebView",
+    collection,
+  }
+  const input = {
+    srcRel: "Android/方案/示例.md",
+    destRel: "android/方案/示例.md",
+    collection,
+  }
+  const markdown = [
+    "关联 [[WebView]]、[[私有笔记|内部资料]]。",
+    "[继续阅读](../Android基础/组件/WebView/WebView.md)",
+    "![[img/未发布截图]]",
+    "[原始报告](../img/未发布.html)",
+  ].join("\n")
+
+  const rewritten = rewritePublicNoteMarkdown(markdown, input, createNoteLookup([webView]), {
+    bySource: new Map(),
+    byDest: new Map(),
+    byBasename: new Map(),
+  })
+
+  assert.match(rewritten, /\[\[android\/Android基础\/组件\/WebView\/WebView\|WebView]]/)
+  assert.match(rewritten, /\[\[android\/Android基础\/组件\/WebView\/WebView\|继续阅读]]/)
+  assert.match(rewritten, /内部资料/)
+  assert.match(rewritten, /原始报告/)
+  assert.doesNotMatch(rewritten, /私有笔记|未发布截图|未发布\.html/)
+})
+
+test("public note sync preserves valid folders, external links, and code examples", () => {
+  const collection = { source: "Android", slug: "android", title: "Android" }
+  const record = {
+    id: "android/架构/设计模式/责任链模式",
+    sourcePath: "Android/架构/设计模式/责任链模式.md",
+    title: "责任链模式",
+    collection,
+  }
+  const input = {
+    srcRel: "Android/index.md",
+    destRel: "android/index.md",
+    collection,
+  }
+  const markdown = [
+    "[架构](架构/) 与 [空目录](空目录/)",
+    "[官网](https://example.com/docs)",
+    "```md",
+    "[[私有笔记]]",
+    "```",
+  ].join("\n")
+
+  const rewritten = rewritePublicNoteMarkdown(markdown, input, createNoteLookup([record]), {
+    bySource: new Map(),
+    byDest: new Map(),
+    byBasename: new Map(),
+  })
+
+  assert.match(rewritten, /\[\[android\/架构\|架构]]/)
+  assert.match(rewritten, /空目录/)
+  assert.doesNotMatch(rewritten, /\]\(空目录\//)
+  assert.match(rewritten, /\[官网]\(https:\/\/example\.com\/docs\)/)
+  assert.match(rewritten, /```md\n\[\[私有笔记]]\n```/)
 })

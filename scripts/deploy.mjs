@@ -20,6 +20,8 @@ const remoteEdgeDir = process.env.BLOG_EDGE_DIR ?? "/home/markz/apps/markz-edge"
 const remoteReactionsDir = process.env.REACTIONS_APP_DIR ?? "/home/markz/apps/blog/reactions"
 const remoteReactionsDataDir =
   process.env.REACTIONS_DATA_DIR ?? "/home/markz/apps/blog/reactions-data"
+const remoteReactionsBackupDir =
+  process.env.REACTIONS_BACKUP_DIR ?? "/home/markz/apps/blog/reactions-backups"
 const ssh = ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
 
 function run(command, args) {
@@ -42,7 +44,7 @@ if (!existsSync(nginxConfig) || !existsSync(edgeCompose) || !existsSync(reaction
 run(ssh[0], [
   ...ssh.slice(1),
   host,
-  `mkdir -p ${remoteDir} ${remoteNotesDir} ${remoteAppDir} ${remoteAcmeDir} ${remoteEdgeDir} ${remoteReactionsDir} ${remoteReactionsDataDir} && chmod 700 ${remoteReactionsDataDir}`,
+  `mkdir -p ${remoteDir} ${remoteNotesDir} ${remoteAppDir} ${remoteAcmeDir} ${remoteEdgeDir} ${remoteReactionsDir} ${remoteReactionsDataDir} ${remoteReactionsBackupDir} && chmod 700 ${remoteReactionsDataDir} ${remoteReactionsBackupDir}`,
 ])
 run("rsync", ["-az", "--delete", "-e", ssh.join(" "), `${publicDir}/`, `${host}:${remoteDir}/`])
 run("rsync", [
@@ -72,7 +74,7 @@ run("rsync", [
 run(ssh[0], [
   ...ssh.slice(1),
   host,
-  `cd ${remoteEdgeDir} && docker compose config >/dev/null && docker compose up -d --force-recreate --wait reactions && docker compose run --rm --no-deps edge nginx -t`,
+  `cd ${remoteEdgeDir} && docker compose config >/dev/null && docker compose up -d --force-recreate --wait reactions reactions-backup && docker compose run --rm --no-deps edge nginx -t`,
 ])
 run(ssh[0], [
   ...ssh.slice(1),
@@ -80,4 +82,4 @@ run(ssh[0], [
   `cd ${remoteEdgeDir} && docker compose up -d --force-recreate edge`,
 ])
 
-console.log(`Deployed blog, notes, reactions, and edge routing to ${host}.`)
+console.log(`Deployed blog, notes, reactions, verified backups, and edge routing to ${host}.`)

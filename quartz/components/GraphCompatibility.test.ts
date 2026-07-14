@@ -1,6 +1,34 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
-import { patchGraphPathDecoding, patchGraphRenderGeneration } from "./GraphCompatibility"
+import {
+  patchGraphPathDecoding,
+  patchGraphRenderGeneration,
+  patchGraphRuntimeSources,
+} from "./GraphCompatibility"
+import { d3GraphRuntimeAsset, pixiGraphRuntimeAsset } from "./graphRuntimeAssets"
+
+describe("Graph runtime compatibility", () => {
+  const source = `Promise.all([
+    loadScript("https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"),
+    loadScript("https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.js"),
+  ])`
+
+  test("loads pinned Graph libraries from the active site base path", () => {
+    const patched = patchGraphRuntimeSources(source)
+    if (typeof patched !== "string") assert.fail("Expected a patched Graph script")
+
+    assert.doesNotMatch(patched, /cdn\.jsdelivr\.net/)
+    assert.match(patched, new RegExp(d3GraphRuntimeAsset.path.replaceAll(".", "\\.")))
+    assert.match(patched, new RegExp(pixiGraphRuntimeAsset.path.replaceAll(".", "\\.")))
+    assert.match(patched, /document\.body\.dataset\.basepath/)
+  })
+
+  test("rejects upstream runtime URL drift", () => {
+    assert.throws(() => patchGraphRuntimeSources('loadScript("https://example.com/d3.js")'), {
+      message: /Expected one Graph runtime URL for each dependency/,
+    })
+  })
+})
 
 describe("Graph URL compatibility", () => {
   test("decodes an encoded browser pathname before graph lookup", () => {

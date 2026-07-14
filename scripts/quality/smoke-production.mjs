@@ -112,7 +112,7 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
         "-o",
         "ConnectTimeout=10",
         sshHost,
-        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" markz-edge markz-reactions jsonutil-app-frontend-1 jsonutil-app-backend-1',
+        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" markz-edge markz-reactions markz-reactions-backup jsonutil-app-frontend-1 jsonutil-app-backend-1 && docker exec markz-reactions-backup node /app/backup.mjs drill',
       ],
       { encoding: "utf8" },
     )
@@ -127,6 +127,12 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
     if (!/markz-reactions \{\} healthy/.test(output)) {
       failures.push("markz-reactions is unhealthy or unexpectedly binds a host port")
     }
+    if (!/markz-reactions-backup \{\} healthy/.test(output)) {
+      failures.push("markz-reactions-backup is unhealthy or unexpectedly binds a host port")
+    }
+    if (!/Reactions restore drill passed/.test(output)) {
+      failures.push("production reactions backup did not pass a restore drill")
+    }
   } catch (error) {
     failures.push(`remote port ownership check failed: ${error.message}`)
   }
@@ -137,6 +143,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, brand assets, notes graph index, visitor metrics, reactions, API health, and port ownership are correct.",
+    "Production routes, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

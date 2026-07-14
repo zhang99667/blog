@@ -85,12 +85,103 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
   return failures
 }
 
+export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
+  const failures = []
+  const backup = await readText(root, "services/reactions/backup.mjs")
+  const compose = await readText(root, "deploy/docker-compose.edge.yml")
+  const smoke = await readText(root, "scripts/quality/smoke-production.mjs")
+  for (const snippet of [
+    "await backup(source, temporarySnapshot",
+    "PRAGMA integrity_check",
+    "PRAGMA foreign_key_check",
+    "PRAGMA journal_mode = DELETE",
+    "Restore destination already exists",
+  ]) {
+    if (!backup.includes(snippet)) failures.push(`backup implementation is missing ${snippet}`)
+  }
+  for (const snippet of [
+    "container_name: markz-reactions-backup",
+    "network_mode: none",
+    ":/data:ro",
+    'BACKUP_RETENTION_COUNT: "32"',
+  ]) {
+    if (!compose.includes(snippet)) failures.push(`backup sidecar is missing ${snippet}`)
+  }
+  if (!smoke.includes("backup.mjs drill")) {
+    failures.push("production smoke must perform a reactions restore drill")
+  }
+
+  const workflowPath = path.join(root, ".github/workflows/markz-backup.yaml")
+  try {
+    const workflow = await fs.readFile(workflowPath, "utf8")
+    if (
+      workflow.includes("upload-artifact") &&
+      /\.sqlite\b/.test(workflow) &&
+      !/(?:age|gpg|openssl|encrypt)/i.test(workflow)
+    ) {
+      failures.push("off-host workflow must not upload a plaintext SQLite snapshot")
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
+  }
+  return failures
+}
+
+export async function collectGraphRuntimeBoundaryFailures(root = defaultRoot) {
+  const failures = []
+  const packageJson = await readJson(root, "package.json")
+  const assets = await readText(root, "quartz/components/graphRuntimeAssets.ts")
+  const compatibility = await readText(root, "quartz/components/GraphCompatibility.ts")
+  const staticEmitter = await readText(root, "quartz/plugins/emitters/static.ts")
+  const qualityCheck = await readText(root, "scripts/quality/check-build.mjs")
+  const budgets = await readJson(root, "quality/budgets.json")
+
+  for (const [dependency, version] of [
+    ["d3", "7.9.0"],
+    ["pixi.js", "8.19.0"],
+  ]) {
+    if (packageJson.dependencies?.[dependency] !== version) {
+      failures.push(`Graph dependency ${dependency} must be pinned to ${version}`)
+    }
+  }
+  for (const snippet of [
+    "bundleGraphRuntimeAsset",
+    "treeShaking: true",
+    'site === "notes" || site === "notes-fallback"',
+  ]) {
+    if (!assets.includes(snippet)) failures.push(`Graph runtime assets are missing ${snippet}`)
+  }
+  for (const snippet of [
+    "patchGraphRuntimeSources",
+    "document.body.dataset.basepath",
+    "isGraphRuntimeSite()",
+  ]) {
+    if (!compatibility.includes(snippet)) {
+      failures.push(`Graph compatibility boundary is missing ${snippet}`)
+    }
+  }
+  if (!staticEmitter.includes("bundleGraphRuntimeAsset(asset, projectRoot)")) {
+    failures.push("static emitter must publish the self-hosted Graph runtimes")
+  }
+  if (!qualityCheck.includes("Graph runtime must not depend on jsDelivr")) {
+    failures.push("build quality must reject an external Graph runtime")
+  }
+  for (const output of budgets.outputs ?? []) {
+    if (output.maxInitialJsBytes > 200000) {
+      failures.push(`${output.id} initial JS budget must not be relaxed for Graph dependencies`)
+    }
+  }
+  return failures
+}
+
 const providers = {
   "design-contract": collectDesignSystemFailures,
   "ai-contract": collectAiInfraFailures,
   "routing-contract": collectRoutingContractFailures,
   "content-boundary": collectContentBoundaryFailures,
   "browser-contract": collectBrowserContractFailures,
+  "runtime-backup-boundary": collectRuntimeBackupBoundaryFailures,
+  "graph-runtime-boundary": collectGraphRuntimeBoundaryFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {
