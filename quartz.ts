@@ -12,6 +12,10 @@ import {
   finalizeGraphCompatibilityOverride,
   registerGraphCompatibilityOverride,
 } from "./quartz/components/GraphCompatibility"
+import {
+  finalizeExplorerCompatibilityOverride,
+  registerExplorerCompatibilityOverride,
+} from "./quartz/components/ExplorerCompatibility"
 
 const site = process.env.QUARTZ_SITE ?? "blog"
 const isNotes = site === "notes" || site === "notes-fallback"
@@ -39,6 +43,7 @@ if (!isNotes) {
   )
 }
 registerGraphCompatibilityOverride()
+registerExplorerCompatibilityOverride()
 
 const config = await loadQuartzConfig(
   {
@@ -55,5 +60,6 @@ const config = await loadQuartzConfig(
   layoutOverrides,
 )
 finalizeGraphCompatibilityOverride()
+finalizeExplorerCompatibilityOverride()
 export default config
 export const layout = await loadQuartzLayout(layoutOverrides)

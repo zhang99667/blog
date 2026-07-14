@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { parse as parseYaml } from "yaml"
 import {
   collectCiActionLifecycleFailures,
+  collectContentSecurityPolicyFailures,
   collectSecurityHeaderPolicyFailures,
   runEvalCases,
 } from "./run-evals.mjs"
@@ -308,15 +309,17 @@ async function securityHeaderPolicy(root) {
 }
 
 async function contentSecurityPolicy(root) {
-  return sourceContract(
-    root,
-    {
-      "deploy/security-headers.inc": ["add_header Content-Security-Policy"],
-      "scripts/quality/check-build.mjs": ["validateContentSecurityPolicy"],
-      "tests/quality/site-quality.spec.ts": ["securitypolicyviolation"],
-      "scripts/quality/smoke-production.mjs": ['"content-security-policy"'],
-    },
+  const failures = await collectContentSecurityPolicyFailures(root)
+  return probe(
+    failures.length === 0,
     "Blog and notes enforce a tested Content Security Policy without runtime violations.",
+    failures.length === 0
+      ? [
+          "host-scoped edge policy with independent product boundaries",
+          "zero inline executable scripts and self-hosted dynamic runtimes",
+          "build, browser violation, and exact production header enforcement",
+        ]
+      : failures,
   )
 }
 

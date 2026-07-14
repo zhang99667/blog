@@ -50,6 +50,7 @@ export const pixiGraphRuntimeAsset: GraphRuntimeAsset = {
   file: `vendor/pixi-graph-${graphRuntimeVersions.pixi}.iife.min.js`,
   path: `static/vendor/pixi-graph-${graphRuntimeVersions.pixi}.iife.min.js`,
   source: `
+    import "pixi.js/unsafe-eval"
     import { Application, Container, Graphics, Text } from "pixi.js"
     globalThis.PIXI = { Application, Container, Graphics, Text }
   `,

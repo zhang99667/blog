@@ -10,9 +10,14 @@ import {
   maxInitialJavaScriptBytes,
   referenceCandidates,
   validateArticleSocialMetadata,
+  validateContentSecurityPolicy,
   validateHtmlMetadata,
   validateSeoMetadata,
 } from "./check-build.mjs"
+import {
+  loadContentSecurityPolicy,
+  parseContentSecurityPolicy,
+} from "./content-security-policy.mjs"
 
 test("HTML inspection uses structured document data", () => {
   const facts = inspectHtml(
@@ -180,4 +185,54 @@ test("initial JS budget follows literal imports but excludes variable on-demand 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test("CSP validation accepts governed local, font, note-image, and structured-data resources", async () => {
+  const policy = await loadContentSecurityPolicy()
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
+    <script src="/prescript.js"></script>
+    <script type="application/ld+json">{"@type":"WebPage"}</script>
+  </head><body style="color: black">
+    <img src="data:image/png;base64,AA==">
+    <img src="https://note.markz.fun/images/diagram.png">
+  </body></html>`)
+
+  assert.deepEqual(
+    validateContentSecurityPolicy("public/index.html", facts, policy, "https://markz.fun"),
+    [],
+  )
+})
+
+test("CSP validation rejects inline execution and ungoverned origins", async () => {
+  const policy = await loadContentSecurityPolicy()
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <script>window.inline = true</script>
+    <script src="https://example.com/app.js"></script>
+  </head><body onclick="alert(1)"><a href="javascript:alert(1)">Bad</a></body></html>`)
+  const failures = validateContentSecurityPolicy(
+    "public/unsafe.html",
+    facts,
+    policy,
+    "https://markz.fun",
+  )
+
+  assert.ok(failures.some((failure) => failure.includes("inline executable script")))
+  assert.ok(failures.some((failure) => failure.includes("inline event handlers")))
+  assert.ok(failures.some((failure) => failure.includes("javascript URLs")))
+  assert.ok(failures.some((failure) => failure.includes("blocked by script-src")))
+})
+
+test("CSP validation rejects unsafe script policy drift", () => {
+  const value =
+    "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; frame-src 'self'; img-src 'self'; manifest-src 'self'; media-src 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src-attr 'none'; style-src 'self'; style-src-attr 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; worker-src 'self'"
+  const failures = validateContentSecurityPolicy(
+    "policy",
+    inspectHtml("<!doctype html><html></html>"),
+    { value, directives: parseContentSecurityPolicy(value) },
+    "https://markz.fun",
+  )
+
+  assert.ok(failures.some((failure) => failure.includes("script-src must not allow")))
+  assert.ok(failures.some((failure) => failure.includes("must not allow unsafe eval")))
 })

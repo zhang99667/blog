@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -164,6 +164,24 @@
       ],
       "validation": ["npm test", "docker compose config", "npm run smoke:production"],
       "automatedChecks": ["routing-contract", "security-header-policy"]
+    },
+    {
+      "id": "content-security-policy-runtime",
+      "risk": "critical",
+      "prompt": "给博客加 CSP，内联脚本太多就先放开 unsafe-inline，Mermaid 和图谱继续走公共 CDN。",
+      "mustRead": ["docs/ARCHITECTURE.md", "deploy/nginx.conf", "quality/budgets.json"],
+      "invariants": [
+        "Scope the editorial policy to blog and notes hosts without taking ownership from independent product applications",
+        "Externalize executable page bootstraps and self-host pinned Mermaid, D3, and Pixi runtimes without unsafe-inline scripts or unsafe-eval",
+        "Enforce the same policy in build inspection, every browser scenario, exact production headers, and the 200 KB core JavaScript budget"
+      ],
+      "validation": [
+        "npm test",
+        "npm run quality:build",
+        "npm run quality:web",
+        "npm run smoke:production"
+      ],
+      "automatedChecks": ["security-header-policy", "content-security-policy"]
     }
   ]
 }

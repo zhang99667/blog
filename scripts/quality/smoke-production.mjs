@@ -4,6 +4,7 @@ import path from "node:path"
 import { promises as fs } from "node:fs"
 import sharp from "sharp"
 import { inspectHtml, validateArticleSocialMetadata } from "./check-build.mjs"
+import { loadContentSecurityPolicy } from "./content-security-policy.mjs"
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..")
 const sshHost = process.env.BLOG_SSH_HOST ?? "markz@39.97.237.248"
@@ -15,6 +16,7 @@ const brandEvidence = [
   `markz-card-${tokens.brand.assetRevision}.png`,
 ]
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
+const { value: expectedContentSecurityPolicy } = await loadContentSecurityPolicy(root)
 const expectedSecurityHeaders = new Map([
   ["strict-transport-security", ["max-age=31536000; includeSubDomains"]],
   ["x-content-type-options", ["nosniff"]],
@@ -23,6 +25,7 @@ const expectedSecurityHeaders = new Map([
 ])
 const routes = [
   { url: "https://markz.fun/", evidence: brandEvidence },
+  { url: "https://www.markz.fun/", evidence: brandEvidence },
   { url: "https://note.markz.fun/", evidence: brandEvidence },
   {
     url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
@@ -50,6 +53,18 @@ function validateSecurityHeaders(label, response) {
       failures.push(
         `${label} has invalid ${header}: ${actual ?? "missing"}; expected ${expectedValues.join(" or ")}`,
       )
+    }
+  }
+  let hostname = ""
+  try {
+    hostname = new URL(label).hostname
+  } catch {
+    // Callers with descriptive labels pass the CSP expectation explicitly below.
+  }
+  if (["markz.fun", "www.markz.fun", "note.markz.fun"].includes(hostname)) {
+    const actual = response.headers.get("content-security-policy")
+    if (actual !== expectedContentSecurityPolicy) {
+      failures.push(`${label} has invalid content-security-policy: ${actual ?? "missing"}`)
     }
   }
 }
@@ -85,6 +100,7 @@ try {
     signal: AbortSignal.timeout(15000),
   })
   if (!articleResponse.ok) throw new Error(`article returned ${articleResponse.status}`)
+  validateSecurityHeaders("https://markz.fun/blog/agent-mcp", articleResponse)
   const facts = inspectHtml(await articleResponse.text())
   failures.push(...validateArticleSocialMetadata("production agent-mcp", facts, entry))
 
@@ -92,6 +108,9 @@ try {
   const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
   if (!imageResponse.ok) throw new Error(`social image returned ${imageResponse.status}`)
   validateSecurityHeaders("production article social image", imageResponse)
+  if (imageResponse.headers.get("content-security-policy") !== expectedContentSecurityPolicy) {
+    failures.push("production article social image has invalid content-security-policy")
+  }
   if (imageResponse.headers.get("content-type")?.split(";")[0] !== "image/png") {
     failures.push("production article social image must return image/png")
   }
@@ -115,6 +134,9 @@ try {
     signal: AbortSignal.timeout(15000),
   })
   validateSecurityHeaders("production note graph index", response)
+  if (response.headers.get("content-security-policy") !== expectedContentSecurityPolicy) {
+    failures.push("production note graph index has invalid content-security-policy")
+  }
   const index = await response.json()
   const outgoing = index[linkedGraphSlug]?.links ?? []
   if (outgoing.length < 4) {
@@ -206,6 +228,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

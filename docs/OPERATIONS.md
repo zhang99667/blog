@@ -25,7 +25,7 @@ npm run build
 
 该工作流只做审计和排队，不提交代码、不触发部署、不读取生产 SSH 密钥。`critical` 路由、隐私、破坏性操作、外部密钥和任何证据不足的能力都必须由人工选择任务后走标准开发、验证和发布流程。若报告与仓库事实不符，先修探针或模型，不能手工改 issue 文案冒充能力完成。
 
-发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 会校验这些契约及单一字体样式表。
+发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 还会解析每个 HTML，拒绝可执行内联脚本、事件属性、JavaScript URL、未获策略许可的资源源站，以及 Mermaid/Explorer 运行时回退到外部执行。
 
 ## 发布流程
 
@@ -39,7 +39,7 @@ npm run build
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
 
-部署会先同步 `services/reactions/`、`nginx.conf` 和集中式 `security-headers.inc`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，并检查页面、API、静态资源和 404 都保留安全响应头。
+部署会先同步 `services/reactions/`、`nginx.conf` 和集中式 `security-headers.inc`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，检查页面、API、静态资源和 404 的安全响应头，并精确比较博客与笔记 CSP；独立工具只检查公共安全基线，不强行继承编辑站 CSP。
 
 ### 互动数据维护
 
@@ -102,6 +102,15 @@ GitHub 仓库需要以下 Actions 配置：
 3. 不在各 location 复制四项具体值；确认 server 和该 location 都引用 `/etc/nginx/conf.d/security-headers.inc`。
 4. 代理 API 若自行输出同名头，由集中 include 的 `proxy_hide_header` 统一收口；不要删除 Referrer map，它负责保留上游更严格策略。
 5. 运行演进探针、远端 `nginx -t` 和完整生产 smoke，验证正常响应、静态资源与 404，并确认每项安全头只有一个有效值。
+
+### 页面出现 CSP 拦截或功能空白
+
+1. 在浏览器控制台读取 `securitypolicyviolation` 的 `effectiveDirective` 与 `blockedURI`，不要先加入 `unsafe-inline`、`unsafe-eval` 或通配源。
+2. 运行 `npm run build` 和 `npm run quality:build`，确认最终 HTML 没有可执行内联脚本；JSON-LD 是允许的数据脚本，不能误删。
+3. Mermaid 空白时确认请求指向 `/static/vendor/mermaid-tiny-11.16.0.esm.min.js`；图谱空白时确认 D3/Pixi 来自对应 notes 路径。不要恢复 cdnjs 或 jsDelivr。
+4. Explorer 若需要自定义排序或过滤，先增加声明式选项和兼容测试；不要恢复序列化函数与 `new Function`。
+5. CSP 值只在 `deploy/nginx.conf` host map 修改；`security-headers.inc` 只发射映射值。默认值必须为空，避免接管 JSONUtils 和装箱单策略。
+6. 运行完整浏览器矩阵、远端 `nginx -t` 和生产 smoke；一次无报错刷新不能证明 SPA、404、图谱和双主题都合规。
 
 ### note.markz.fun 返回 421
 

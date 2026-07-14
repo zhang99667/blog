@@ -3,6 +3,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse } from "parse5"
 import sharp from "sharp"
+import { loadContentSecurityPolicy } from "./content-security-policy.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultRoot = path.resolve(scriptDir, "../..")
@@ -30,6 +31,13 @@ function attributes(node) {
   )
 }
 
+function srcsetReferences(value) {
+  return value
+    .split(",")
+    .map((candidate) => candidate.trim().split(/\s+/, 1)[0])
+    .filter(Boolean)
+}
+
 export function inspectHtml(source) {
   const document = parse(source)
   const facts = {
@@ -43,9 +51,19 @@ export function inspectHtml(source) {
     structuredDataErrors: [],
     fontStylesheets: [],
     refresh: "",
+    cspReferences: [],
+    inlineExecutableScripts: [],
+    inlineEventHandlers: [],
+    javascriptUrls: [],
+    inlineStyleAttributes: 0,
+    inlineStyleElements: 0,
   }
 
-  function visit(node) {
+  function addCspReference(directive, value, nodeName, attribute) {
+    if (value) facts.cspReferences.push({ directive, value, nodeName, attribute })
+  }
+
+  function visit(node, parentNodeName = "") {
     const attrs = attributes(node)
     if (node.nodeName === "html") facts.lang = attrs.lang ?? ""
     if (node.nodeName === "title") {
@@ -70,23 +88,198 @@ export function inspectHtml(source) {
       if (relations.has("stylesheet") && attrs.href?.startsWith("https://fonts.googleapis.com/")) {
         facts.fontStylesheets.push(attrs.href)
       }
-    }
-    if (node.nodeName === "script" && attrs.type?.toLowerCase() === "application/ld+json") {
-      const body = (node.childNodes ?? []).map((child) => child.value ?? "").join("")
-      try {
-        facts.structuredData.push(JSON.parse(body))
-      } catch (error) {
-        facts.structuredDataErrors.push(error.message)
+      if (relations.has("stylesheet")) addCspReference("style-src-elem", attrs.href, "link", "href")
+      if (relations.has("preconnect")) addCspReference("connect-src", attrs.href, "link", "href")
+      if (relations.has("manifest")) addCspReference("manifest-src", attrs.href, "link", "href")
+      if (relations.has("icon")) addCspReference("img-src", attrs.href, "link", "href")
+      if (relations.has("preload")) {
+        const preloadDirectives = {
+          script: "script-src",
+          style: "style-src-elem",
+          font: "font-src",
+          image: "img-src",
+          fetch: "connect-src",
+        }
+        const directive = preloadDirectives[attrs.as]
+        if (directive) addCspReference(directive, attrs.href, "link", "href")
       }
     }
+    if (node.nodeName === "script") {
+      const scriptType = attrs.type?.toLowerCase() ?? ""
+      if (attrs.src) {
+        addCspReference("script-src", attrs.src, "script", "src")
+      } else if (["application/ld+json", "application/json"].includes(scriptType)) {
+        if (scriptType === "application/ld+json") {
+          const body = (node.childNodes ?? []).map((child) => child.value ?? "").join("")
+          try {
+            facts.structuredData.push(JSON.parse(body))
+          } catch (error) {
+            facts.structuredDataErrors.push(error.message)
+          }
+        }
+      } else {
+        facts.inlineExecutableScripts.push(scriptType || "text/javascript")
+      }
+    }
+    if (node.nodeName === "style") {
+      const body = (node.childNodes ?? []).map((child) => child.value ?? "").join("")
+      if (body.trim()) facts.inlineStyleElements += 1
+    }
+    if (node.nodeName === "img") {
+      addCspReference("img-src", attrs.src, "img", "src")
+      for (const reference of srcsetReferences(attrs.srcset ?? "")) {
+        addCspReference("img-src", reference, "img", "srcset")
+      }
+    }
+    if (node.nodeName === "iframe") addCspReference("frame-src", attrs.src, "iframe", "src")
+    if (node.nodeName === "video") {
+      addCspReference("media-src", attrs.src, "video", "src")
+      addCspReference("img-src", attrs.poster, "video", "poster")
+    }
+    if (node.nodeName === "audio") addCspReference("media-src", attrs.src, "audio", "src")
+    if (node.nodeName === "source") {
+      const directive = parentNodeName === "picture" ? "img-src" : "media-src"
+      addCspReference(directive, attrs.src, "source", "src")
+      for (const reference of srcsetReferences(attrs.srcset ?? "")) {
+        addCspReference(directive, reference, "source", "srcset")
+      }
+    }
+    if (node.nodeName === "object") addCspReference("object-src", attrs.data, "object", "data")
+    if (node.nodeName === "form") addCspReference("form-action", attrs.action, "form", "action")
+
+    for (const [name, value] of Object.entries(attrs)) {
+      if (/^on/i.test(name) && value) facts.inlineEventHandlers.push(`${node.nodeName}.${name}`)
+      if (["href", "src", "action", "formaction"].includes(name) && /^javascript:/i.test(value)) {
+        facts.javascriptUrls.push(`${node.nodeName}.${name}`)
+      }
+    }
+    if (attrs.style) facts.inlineStyleAttributes += 1
     for (const name of ["href", "src"]) {
       if (attrs[name]) facts.references.push(attrs[name])
     }
-    for (const child of node.childNodes ?? []) visit(child)
+    for (const child of node.childNodes ?? []) visit(child, node.nodeName)
   }
 
   visit(document)
   return facts
+}
+
+function policySources(policy, directive) {
+  return policy.directives.get(directive) ?? policy.directives.get("default-src") ?? []
+}
+
+function referenceAllowed(reference, documentOrigin, sources) {
+  if (!reference || reference.startsWith("#")) return true
+  if (/^(?:about:blank|mailto:|tel:)/i.test(reference)) return true
+
+  let url
+  try {
+    url = new URL(reference, documentOrigin)
+  } catch {
+    return false
+  }
+
+  for (const source of sources) {
+    if (source === "*") return true
+    if (source === "'self'" && url.origin === documentOrigin) return true
+    if (source === `${url.protocol}`) return true
+    if (/^https?:\/\//i.test(source)) {
+      try {
+        const allowed = new URL(source)
+        if (allowed.origin === url.origin && url.pathname.startsWith(allowed.pathname)) return true
+      } catch {
+        // Invalid policy source; the policy contract will reject the reference.
+      }
+    }
+  }
+  return false
+}
+
+export function validateContentSecurityPolicy(
+  relativePath,
+  facts,
+  policy,
+  documentOrigin,
+  { validatePolicyContract = true } = {},
+) {
+  const failures = []
+  const required = [
+    "default-src",
+    "base-uri",
+    "connect-src",
+    "font-src",
+    "form-action",
+    "frame-ancestors",
+    "frame-src",
+    "img-src",
+    "manifest-src",
+    "media-src",
+    "object-src",
+    "script-src",
+    "script-src-attr",
+    "style-src",
+    "style-src-attr",
+    "style-src-elem",
+    "worker-src",
+  ]
+
+  if (validatePolicyContract) {
+    for (const directive of required) {
+      if (!policy.directives.has(directive)) failures.push(`CSP is missing ${directive}`)
+    }
+    for (const directive of ["base-uri", "frame-ancestors", "object-src", "script-src-attr"]) {
+      if (policySources(policy, directive).join(" ") !== "'none'") {
+        failures.push(`CSP ${directive} must be 'none'`)
+      }
+    }
+    const scriptSources = policySources(policy, "script-src")
+    if (!scriptSources.includes("'self'")) failures.push("CSP script-src must allow 'self'")
+    if (scriptSources.some((source) => ["'unsafe-inline'", "'unsafe-eval'"].includes(source))) {
+      failures.push("CSP script-src must not allow unsafe inline scripts or eval")
+    }
+    if (policy.value.includes("'unsafe-eval'")) failures.push("CSP must not allow unsafe eval")
+    for (const directive of ["style-src", "style-src-attr", "style-src-elem"]) {
+      if (!policySources(policy, directive).includes("'unsafe-inline'")) {
+        failures.push(`CSP ${directive} must cover generated and legacy presentation styles`)
+      }
+    }
+  }
+
+  if (facts.inlineExecutableScripts.length > 0) {
+    failures.push(
+      `${relativePath} has ${facts.inlineExecutableScripts.length} inline executable script(s)`,
+    )
+  }
+  if (facts.inlineEventHandlers.length > 0) {
+    failures.push(
+      `${relativePath} has inline event handlers: ${facts.inlineEventHandlers.join(", ")}`,
+    )
+  }
+  if (facts.javascriptUrls.length > 0) {
+    failures.push(`${relativePath} has javascript URLs: ${facts.javascriptUrls.join(", ")}`)
+  }
+  if (
+    facts.inlineStyleAttributes > 0 &&
+    !policySources(policy, "style-src-attr").includes("'unsafe-inline'")
+  ) {
+    failures.push(`${relativePath} has inline style attributes not covered by CSP`)
+  }
+  if (
+    facts.inlineStyleElements > 0 &&
+    !policySources(policy, "style-src-elem").includes("'unsafe-inline'")
+  ) {
+    failures.push(`${relativePath} has inline style elements not covered by CSP`)
+  }
+
+  for (const resource of facts.cspReferences) {
+    const sources = policySources(policy, resource.directive)
+    if (!referenceAllowed(resource.value, documentOrigin, sources)) {
+      failures.push(
+        `${relativePath} ${resource.nodeName}.${resource.attribute} is blocked by ${resource.directive}: ${resource.value}`,
+      )
+    }
+  }
+  return failures
 }
 
 function htmlRoute(relativePath) {
@@ -292,6 +485,40 @@ async function validateGraphRuntime(root, outputRoot, outputId, jsFiles, failure
   }
 }
 
+async function validateContentSecurityRuntime(root, outputRoot, outputId, jsFiles, failures) {
+  const packageJson = await readJson(root, "package.json")
+  const version = packageJson.dependencies?.["@mermaid-js/tiny"]
+  const asset = `mermaid-tiny-${version}.esm.min.js`
+  const assetPath = path.join(outputRoot, "static", "vendor", asset)
+  try {
+    const source = await fs.readFile(assetPath, "utf8")
+    if (!source.includes("export { mermaid as default }")) {
+      failures.push(`${outputId} Mermaid runtime must expose a local ESM default export`)
+    }
+  } catch {
+    failures.push(`${outputId} output is missing self-hosted Mermaid runtime ${asset}`)
+  }
+
+  const javascriptEntries = await Promise.all(
+    jsFiles.map(async (file) => ({ file, source: await fs.readFile(file, "utf8") })),
+  )
+  const javascript = javascriptEntries.map(({ source }) => source).join("\n")
+  if (/cdnjs\.cloudflare\.com\/ajax\/libs\/mermaid/i.test(javascript)) {
+    failures.push(`${outputId} Mermaid runtime must not depend on cdnjs`)
+  }
+  if (!javascript.includes(`/static/vendor/${asset}`)) {
+    failures.push(`${outputId} Mermaid loader is missing ${asset}`)
+  }
+  for (const { file, source } of javascriptEntries) {
+    const relative = path.relative(outputRoot, file).replaceAll(path.sep, "/")
+    if (!relative.includes("static/vendor/") && /\bnew Function\s*\(/.test(source)) {
+      failures.push(
+        `${outputId} executable runtime uses dynamic function construction: ${relative}`,
+      )
+    }
+  }
+}
+
 async function validateDiscoveryFiles(outputRoot, outputId, failures) {
   const host = outputId === "notes" ? "note.markz.fun" : "markz.fun"
   try {
@@ -397,6 +624,15 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
   const failures = []
   const budgets = await readJson(root, "quality/budgets.json")
   const tokens = await readJson(root, "design-system/tokens.json")
+  const contentSecurityPolicy = await loadContentSecurityPolicy(root)
+  failures.push(
+    ...validateContentSecurityPolicy(
+      "editorial CSP",
+      inspectHtml("<!doctype html><html></html>"),
+      contentSecurityPolicy,
+      "https://markz.fun",
+    ),
+  )
   const baselinePath = path.join(root, "quality/link-baseline.json")
   let knownBroken = []
   try {
@@ -429,6 +665,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       )
     }
     await validateGraphRuntime(root, outputRoot, output.id, jsFiles, failures)
+    await validateContentSecurityRuntime(root, outputRoot, output.id, jsFiles, failures)
     await validateDiscoveryFiles(outputRoot, output.id, failures)
 
     const indexFile = path.join(outputRoot, "index.html")
@@ -488,6 +725,15 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       }
       const facts = inspectHtml(source)
       failures.push(...validateHtmlMetadata(relativePath, facts))
+      failures.push(
+        ...validateContentSecurityPolicy(
+          relativePath,
+          facts,
+          contentSecurityPolicy,
+          output.id === "notes" ? "https://note.markz.fun" : "https://markz.fun",
+          { validatePolicyContract: false },
+        ),
+      )
       const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
       if (!facts.refresh) {
         const isNotFound = /(?:^|\/)404\.html$/i.test(outputRelativePath)
@@ -650,6 +896,6 @@ if (isCli) {
     for (const failure of failures) console.error(`- ${failure}`)
     process.exitCode = 1
   } else {
-    console.log("Built pages satisfy metadata, link, brand, and asset budgets.")
+    console.log("Built pages satisfy metadata, links, CSP, brand, runtime, and asset budgets.")
   }
 }

@@ -47,6 +47,7 @@
 | 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs`     | `public-notes/`         |
 | 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                       | JSONUtils override      |
 | 安全响应头                 | `deploy/security-headers.inc`、`deploy/nginx.conf`      | 各 location 复制具体值  |
+| 博客与笔记 CSP             | `deploy/nginx.conf` host map、CSP 兼容组件              | 给工具域名套编辑站策略  |
 | favicon、通用分享图        | 设计令牌和 `generate.mjs`                               | 版本化 PNG              |
 | 文章级分享图               | 设计令牌、文章 frontmatter、`article-social-images.mjs` | `.cache/social-images/` |
 | canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`                  | 生成 HTML               |
@@ -57,15 +58,16 @@
 
 ## 验证矩阵
 
-| 变更                           | 必须运行                                              |
-| ------------------------------ | ----------------------------------------------------- |
-| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build`   |
-| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                        |
-| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`         |
-| GitHub Action 与依赖策略       | `npm run ai:check`、`npm run evals:check`、`npm test` |
-| 同步逻辑、内容选择             | `npm test`、`npm run build`                           |
-| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke       |
-| 上线前完整验证                 | `npm run verify`                                      |
+| 变更                           | 必须运行                                                   |
+| ------------------------------ | ---------------------------------------------------------- |
+| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build`        |
+| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                             |
+| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`              |
+| GitHub Action 与依赖策略       | `npm run ai:check`、`npm run evals:check`、`npm test`      |
+| 同步逻辑、内容选择             | `npm test`、`npm run build`                                |
+| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke            |
+| CSP、脚本或第三方运行时        | `npm run quality:build`、`npm run quality:web`、公网 smoke |
+| 上线前完整验证                 | `npm run verify`                                           |
 
 浏览器、生产和安全补充门禁：
 

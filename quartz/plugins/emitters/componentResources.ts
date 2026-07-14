@@ -22,6 +22,15 @@ import {
 import { Features, transform } from "lightningcss"
 import { transform as transpile } from "esbuild"
 import { write } from "./helpers"
+import { patchMermaidRuntimeSource } from "../../components/MermaidCompatibility"
+
+export const contentIndexBootstrapScript = `
+  const currentScript = document.currentScript
+  if (!(currentScript instanceof HTMLScriptElement)) {
+    throw new Error("Unable to resolve the content index from the prescript URL")
+  }
+  globalThis.fetchData = fetch(new URL("static/contentIndex.json", currentScript.src)).then((data) => data.json())
+`
 
 function hashContent(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 8)
@@ -279,6 +288,7 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
       const cfg = ctx.cfg.configuration
       // component specific scripts and styles
       const componentResources = getComponentResources(ctx)
+      componentResources.beforeDOMLoaded.unshift(contentIndexBootstrapScript)
       let googleFontsStyleSheet = ""
       if (cfg.theme.fontOrigin === "local") {
         // let the user do it themselves in css
@@ -468,7 +478,8 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
       for (const jsResource of resources.js) {
         if (jsResource.contentType !== "inline") continue
 
-        const minified = await joinScripts([jsResource.script])
+        const source = patchMermaidRuntimeSource(jsResource.script)
+        const minified = await joinScripts([source])
         const hash = hashContent(minified)
         const loadTimePrefix = jsResource.loadTime === "beforeDOMReady" ? "before" : "after"
         const slug = `static/resource-${loadTimePrefix}-${hash}`

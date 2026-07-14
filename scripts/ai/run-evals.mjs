@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse as parseYaml, parseDocument, visit } from "yaml"
 import { collectDesignSystemFailures } from "../design-system/check.mjs"
+import { loadContentSecurityPolicy } from "../quality/content-security-policy.mjs"
 import { collectAiInfraFailures } from "./check-ai-infra.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -217,6 +218,137 @@ export async function collectSecurityHeaderPolicyFailures(root = defaultRoot) {
     [smoke, "__security-header-smoke__.png", "production 404 smoke"],
   ]) {
     if (!source.includes(snippet)) failures.push(`${label} is missing ${snippet}`)
+  }
+  return failures
+}
+
+export async function collectContentSecurityPolicyFailures(root = defaultRoot) {
+  const failures = []
+  let policy
+  try {
+    policy = await loadContentSecurityPolicy(root)
+  } catch (error) {
+    return [`content security policy is invalid: ${error.message}`]
+  }
+
+  for (const [directive, expected] of [
+    ["default-src", ["'self'"]],
+    ["base-uri", ["'none'"]],
+    ["frame-ancestors", ["'none'"]],
+    ["object-src", ["'none'"]],
+    ["script-src", ["'self'"]],
+    ["script-src-attr", ["'none'"]],
+  ]) {
+    const actual = policy.directives.get(directive) ?? []
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      failures.push(`CSP ${directive} must be ${expected.join(" ")}`)
+    }
+  }
+  if (policy.value.includes("'unsafe-eval'")) failures.push("CSP must reject unsafe eval")
+  for (const directive of ["style-src", "style-src-attr", "style-src-elem"]) {
+    if (!policy.directives.get(directive)?.includes("'unsafe-inline'")) {
+      failures.push(`CSP ${directive} must cover generated and legacy presentation styles`)
+    }
+  }
+
+  const [
+    securityHeaders,
+    componentResources,
+    renderPage,
+    notFound,
+    explorer,
+    graphAssets,
+    mermaidCompatibility,
+    mermaidAssets,
+    head,
+    staticEmitter,
+    quality,
+    localServer,
+    browser,
+    smoke,
+    packageJson,
+    budgets,
+  ] = await Promise.all([
+    readText(root, "deploy/security-headers.inc"),
+    readText(root, "quartz/plugins/emitters/componentResources.ts"),
+    readText(root, "quartz/components/renderPage.tsx"),
+    readText(root, "quartz/components/pages/404.tsx"),
+    readText(root, "quartz/components/ExplorerCompatibility.ts"),
+    readText(root, "quartz/components/graphRuntimeAssets.ts"),
+    readText(root, "quartz/components/MermaidCompatibility.ts"),
+    readText(root, "quartz/components/mermaidRuntimeAssets.ts"),
+    readText(root, "quartz/components/Head.tsx"),
+    readText(root, "quartz/plugins/emitters/static.ts"),
+    readText(root, "scripts/quality/check-build.mjs"),
+    readText(root, "scripts/quality/serve-static.mjs"),
+    readText(root, "tests/quality/site-quality.spec.ts"),
+    readText(root, "scripts/quality/smoke-production.mjs"),
+    readJson(root, "package.json"),
+    readJson(root, "quality/budgets.json"),
+  ])
+
+  for (const snippet of [
+    "add_header Content-Security-Policy $markz_content_security_policy always;",
+  ]) {
+    if (!securityHeaders.includes(snippet)) failures.push(`CSP edge include is missing ${snippet}`)
+  }
+  if (securityHeaders.includes("proxy_hide_header Content-Security-Policy")) {
+    failures.push("shared edge headers must preserve independent product CSP ownership")
+  }
+  for (const [source, label, snippets] of [
+    [
+      componentResources,
+      "component resources",
+      ["globalThis.fetchData", "document.currentScript", "patchMermaidRuntimeSource"],
+    ],
+    [notFound, "404 component", ["NotFound.afterDOMLoaded = script"]],
+    [explorer, "Explorer compatibility", ["patchExplorerRuntime", "sanitizeExplorerOptions"]],
+    [graphAssets, "Pixi CSP runtime", ['import "pixi.js/unsafe-eval"']],
+    [
+      mermaidCompatibility,
+      "Mermaid compatibility",
+      ["patchMermaidRuntimeSource", "location.origin"],
+    ],
+    [
+      mermaidAssets,
+      "Mermaid runtime asset",
+      ['mermaidRuntimeVersion = "11.16.0"', "buildMermaidRuntimeAsset"],
+    ],
+    [staticEmitter, "static emitter", ["buildMermaidRuntimeAsset", "mermaidRuntimeAsset"]],
+    [
+      quality,
+      "build quality",
+      ["validateContentSecurityPolicy", "inline executable script", "must not depend on cdnjs"],
+    ],
+    [localServer, "local browser server", ['setHeader("Content-Security-Policy"']],
+    [browser, "browser gate", ["securitypolicyviolation", "render Mermaid from the local runtime"]],
+    [
+      smoke,
+      "production smoke",
+      ["expectedContentSecurityPolicy", 'headers.get("content-security-policy")'],
+    ],
+  ]) {
+    for (const snippet of snippets) {
+      if (!source.includes(snippet)) failures.push(`${label} is missing ${snippet}`)
+    }
+  }
+
+  if (renderPage.includes("contentIndexScript") || notFound.includes("dangerouslySetInnerHTML")) {
+    failures.push("page rendering must not restore inline executable bootstrap scripts")
+  }
+  if (explorer.includes("new Function")) {
+    failures.push("Explorer compatibility must not construct executable callbacks")
+  }
+  if (head.includes("cdnjs.cloudflare.com")) {
+    failures.push("page head must not preconnect to the retired Mermaid CDN")
+  }
+  if (packageJson.dependencies?.["@mermaid-js/tiny"] !== "11.16.0") {
+    failures.push("Mermaid runtime dependency must be pinned to 11.16.0")
+  }
+  for (const output of budgets.outputs ?? []) {
+    if (output.maxInitialJsBytes > 200000) {
+      failures.push(`${output.id} initial JS budget must not be relaxed for CSP runtimes`)
+    }
   }
   return failures
 }
@@ -453,6 +585,7 @@ const providers = {
   "article-social-image-boundary": collectArticleSocialImageFailures,
   "ci-action-lifecycle": collectCiActionLifecycleFailures,
   "security-header-policy": collectSecurityHeaderPolicyFailures,
+  "content-security-policy": collectContentSecurityPolicyFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {

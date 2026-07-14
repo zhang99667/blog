@@ -9,6 +9,11 @@ import {
   graphRuntimeAssets,
   isGraphRuntimeSite,
 } from "../../components/graphRuntimeAssets"
+import {
+  buildMermaidRuntimeAsset,
+  isMermaidRuntimeHost,
+  mermaidRuntimeAsset,
+} from "../../components/mermaidRuntimeAssets"
 
 export const Static: QuartzEmitterPlugin = () => ({
   name: "Static",
@@ -40,6 +45,15 @@ export const Static: QuartzEmitterPlugin = () => ({
         await fs.promises.writeFile(destination, content)
         yield destination
       }
+    }
+
+    if (isMermaidRuntimeHost()) {
+      const projectRoot = resolve(QUARTZ, "..")
+      const destination = joinSegments(outputStaticPath, mermaidRuntimeAsset.file) as FilePath
+      const content = await buildMermaidRuntimeAsset(projectRoot)
+      await fs.promises.mkdir(dirname(destination), { recursive: true })
+      await fs.promises.writeFile(destination, content)
+      yield destination
     }
 
     if ((process.env.QUARTZ_SITE ?? "blog") === "blog") {

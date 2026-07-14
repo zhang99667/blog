@@ -18,6 +18,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `.github/pull_request_template.md`             | 证据与 AI 来源审查模板         | 权威       | `npm run ai:check`                  | 2026-07-11 |
 | `.github/dependabot.yml`                       | npm 与 CI Action 依赖更新策略  | 权威       | `npm run evals:check`               | 2026-07-14 |
 | `deploy/security-headers.inc`                  | edge 安全响应头单一权威        | 权威       | `npm run evals:check`               | 2026-07-14 |
+| `deploy/nginx.conf`                            | edge 路由与编辑站 CSP host map | 权威       | `npm run evals:check`、生产 smoke   | 2026-07-14 |
 | `.github/workflows/markz-verify.yaml`          | 公开源码静态门禁               | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-publish.yaml`         | 私有内容同步与生产发布         | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-evolve.yaml`          | 定时刷新唯一成熟度改进任务     | 权威       | `npm run evolve:check`              | 2026-07-14 |
@@ -37,8 +38,9 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/ai/evolve.mjs`                        | 探测、评分和生成实时进化报告   | 权威       | `npm run evolve:check`、`npm test`  | 2026-07-14 |
 | `quality/`                                     | 构建质量与性能预算             | 权威       | `npm run quality:build`             | 2026-07-11 |
 | `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-11 |
+| `scripts/quality/content-security-policy.mjs`  | CSP 解析与单一策略读取         | 权威       | `npm test`、`npm run quality:build` | 2026-07-14 |
 | `playwright.config.ts`                         | 浏览器质量运行配置             | 权威       | `npm run quality:web`               | 2026-07-11 |
-| `tests/quality/`                               | 布局、主题和 WCAG 真实页面门禁 | 权威       | `npm run quality:web`               | 2026-07-11 |
+| `tests/quality/`                               | 布局、主题、WCAG 与 CSP 门禁   | 权威       | `npm run quality:web`               | 2026-07-14 |
 | `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `evals/design-system/outcomes.jsonl`           | 真实执行结果账本               | 追加式证据 | `npm run ai:check`                  | 2026-07-10 |
 

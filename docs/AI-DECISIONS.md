@@ -172,3 +172,12 @@
 - 反例：只给博客首页复制四行；看到文章页正常就宣称全站正常；让 edge 与 API 同时输出相同安全头；用站点默认 Referrer 策略覆盖上游更严格策略；升级 Nginx 来掩盖当前配置错误；删除 `no-store` 或 immutable 缓存策略以恢复继承；只 grep 配置而不读取线上响应头。
 - 边界：本决策统一当前 HSTS、MIME、防嵌入和 Referrer 基线，不顺带改变独立工具权限，也不声称已经具备 Content Security Policy。CSP 需要先外置 Quartz 可执行内联脚本、盘点资源源站并通过浏览器策略违规门禁，作为独立演进能力处理。
 - 锁定证据：Nginx 官方继承规则、集中 include、上游隐藏规则与 Referrer map、Compose 只读挂载、部署同步、上下文解析回归测试、`security-header-inheritance` eval、远端 `nginx -t`，以及博客、笔记、JSONUtils、后台、装箱单、API、静态图片和 404 的生产响应头 smoke。
+
+## D-020 CSP 必须约束真实运行时而不是放宽脚本
+
+- 日期：2026-07-14
+- 触发：成熟度报告把 Content Security Policy 排为最高优先缺口；产物审计发现每页内容索引、404 大小写恢复、Explorer 函数反序列化、Mermaid CDN 和 Pixi 动态函数生成会阻止严格策略。
+- 决策：`deploy/nginx.conf` 只保存一份编辑站 CSP，通过 host map 精确覆盖 `markz.fun`、`www.markz.fun` 和 `note.markz.fun`，默认空值让 JSONUtils、后台与装箱单保留自身 CSP 所有权；集中 include 只负责发射。脚本限定同源，`script-src-attr`、`base-uri`、`object-src` 和 `frame-ancestors` 为 `none`，不允许脚本 `unsafe-inline` 或 `unsafe-eval`。内容索引进入外部 prescript，404 进入组件脚本；Explorer 移除函数反序列化并拒绝未治理自定义回调；Mermaid 11.16.0 Tiny 固定包构建成本地 ESM，Pixi 使用官方 CSP 兼容模块。Shiki 属性样式和 Mermaid 生成样式由 `style-src-attr/style-src-elem` 许可，`style-src` 保留相同内联样式许可作为 Safari 15.6 回退。200 KB 核心 JS 上限不变；2.55 MB 按需 Mermaid 文件计入总 JS，blog/notes 总上限按实测收紧为 3.7/3.5 MB。
+- 反例：用 `script-src 'unsafe-inline'` 或 `'unsafe-eval'` 快速消除报错；给所有域名下发同一 CSP；保留每页内联启动代码；把 Mermaid、D3 或 Pixi 放回公共 CDN；只检查响应头存在而不运行页面；把按需 vendor 从总资源预算中完全排除。
+- 边界：CSP 不替代依赖审计、输入净化或产品权限。Google 字体仍按设计系统决策显式允许；YouTube frame 是已配置能力但当前内容不必加载。未来新增外部图片、连接、frame、Explorer 行为或脚本源，必须先修改权威策略和确定性门禁，不能临时加通配符。`pixi.js/unsafe-eval` 是官方命名的静态兼容模块，不等于策略允许动态求值，最终以浏览器无违规为准。
+- 锁定证据：Nginx host map 解析测试、327 个 HTML 的零可执行内联脚本与资源源站检查、Explorer/Mermaid/Pixi 兼容单测、自托管资产和总量预算、保持 200 KB 的核心脚本预算、所有 52 个 Playwright 场景的 `securitypolicyviolation` 监听、Mermaid/图谱/404 专项交互、`content-security-policy-runtime` eval、生产精确响应头 smoke，以及实现前后 13/15 到 14/15 的演进报告。

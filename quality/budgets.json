@@ -1,12 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "outputs": [
     {
       "id": "blog",
       "root": "public",
       "maxTotalCssBytes": 250000,
       "maxInitialJsBytes": 200000,
-      "maxTotalJsBytes": 1150000,
+      "maxTotalJsBytes": 3700000,
       "maxHtmlBytes": 500000,
       "maxSocialImageBytes": 180000,
       "maxTotalSocialImageBytes": 1200000,
@@ -17,7 +17,7 @@
       "root": "public-notes",
       "maxTotalCssBytes": 125000,
       "maxInitialJsBytes": 200000,
-      "maxTotalJsBytes": 900000,
+      "maxTotalJsBytes": 3500000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": []
     }

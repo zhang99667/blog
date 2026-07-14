@@ -1,6 +1,6 @@
 {
   "$schema": "./manifest.schema.json",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "project": "MarkZ blog and public notes",
   "authorities": [
     { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
@@ -19,6 +19,11 @@
       "id": "edge-security-policy",
       "path": "deploy/security-headers.inc",
       "kind": "runtime-policy"
+    },
+    {
+      "id": "edge-content-security-policy",
+      "path": "deploy/nginx.conf",
+      "kind": "host-scoped-runtime-policy"
     }
   ],
   "instructionLayers": [

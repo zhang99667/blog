@@ -1,6 +1,6 @@
 {
   "$schema": "./evolution.schema.json",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "objective": "持续把 MarkZ 建设成克制、可靠、易发现、愿意继续阅读的成熟个人博客，并让 AI 协作从当前证据自动选择下一项改进。",
   "cadence": {
     "schedule": "weekly and after evolution-source changes",
@@ -91,7 +91,12 @@
       "risk": "high",
       "check": "anonymous-feedback",
       "nextAction": "使用独立 Node 与 SQLite 服务提供幂等匿名反馈，并保持产品域名边界。",
-      "validation": ["npm test", "npm run quality:web", "npm run smoke:production"]
+      "validation": [
+        "npm test",
+        "npm run quality:build",
+        "npm run quality:web",
+        "npm run smoke:production"
+      ]
     },
     {
       "id": "runtime-backup",

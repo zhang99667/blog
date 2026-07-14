@@ -8,11 +8,43 @@ const root = process.cwd()
 const tokens = JSON.parse(readFileSync(path.join(root, "design-system/tokens.json"), "utf8"))
 const manifest = JSON.parse(readFileSync(path.join(root, "design-system/manifest.json"), "utf8"))
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = globalThis as typeof globalThis & {
+      __markzCspViolations?: Array<Record<string, string | number>>
+    }
+    state.__markzCspViolations = []
+    document.addEventListener("securitypolicyviolation", (event) => {
+      state.__markzCspViolations?.push({
+        effectiveDirective: event.effectiveDirective,
+        blockedURI: event.blockedURI,
+        disposition: event.disposition,
+        sourceFile: event.sourceFile,
+        lineNumber: event.lineNumber,
+      })
+    })
+  })
+})
+
 test.afterEach(async ({ page }) => {
   if (page.isClosed()) return
   await page
     .evaluate(() => document.dispatchEvent(new CustomEvent("prenav")))
     .catch(() => undefined)
+  await page.waitForTimeout(50).catch(() => undefined)
+  const violations = await page
+    .evaluate(
+      () =>
+        (
+          globalThis as typeof globalThis & {
+            __markzCspViolations?: Array<Record<string, string | number>>
+          }
+        ).__markzCspViolations ?? [],
+    )
+    .catch(() => [])
+  expect(violations, `Content Security Policy violations: ${JSON.stringify(violations)}`).toEqual(
+    [],
+  )
 })
 
 function firstArticle(
@@ -571,6 +603,41 @@ test("editorial articles expose one decodable title-specific social image", asyn
     "content",
     `https://markz.fun/static/markz-card-${tokens.brand.assetRevision}.png`,
   )
+})
+
+test("editorial pages enforce CSP and render Mermaid from the local runtime", async ({ page }) => {
+  const runtimeRequests: string[] = []
+  const remoteMermaidRequests: string[] = []
+  page.on("request", (request) => {
+    const url = new URL(request.url())
+    if (/\/static\/vendor\/mermaid-tiny-[\d.]+\.esm\.min\.js$/.test(url.pathname)) {
+      runtimeRequests.push(url.pathname)
+    }
+    if (url.hostname === "cdnjs.cloudflare.com") remoteMermaidRequests.push(request.url())
+  })
+
+  const response = await page.goto("http://127.0.0.1:4173/blog/ai-client-request-proxy", {
+    waitUntil: "domcontentloaded",
+  })
+  const policy = response?.headers()["content-security-policy"] ?? ""
+  expect(policy).toContain("script-src 'self'")
+  expect(policy).toContain("script-src-attr 'none'")
+  expect(policy).not.toContain("'unsafe-eval'")
+  expect(policy.match(/script-src[^;]*/)?.[0]).not.toContain("'unsafe-inline'")
+
+  const diagrams = page.locator("code.mermaid svg")
+  await expect(diagrams.first()).toBeVisible({ timeout: 20_000 })
+  expect(await diagrams.count()).toBeGreaterThan(0)
+  expect(runtimeRequests).toHaveLength(1)
+  expect(remoteMermaidRequests).toEqual([])
+})
+
+test("404 canonical-case recovery works with external scripts under CSP", async ({ page }) => {
+  await page.goto("http://127.0.0.1:4173/BLOG/AGENT-SKILLS", {
+    waitUntil: "domcontentloaded",
+  })
+  await expect(page).toHaveURL("http://127.0.0.1:4173/blog/agent-skills")
+  await expect(page.locator('body[data-slug="blog/agent-skills"]')).toHaveCount(1)
 })
 
 test.describe("article reactions", () => {

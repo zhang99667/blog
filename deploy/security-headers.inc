@@ -10,3 +10,4 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" alway
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-Frame-Options "DENY" always;
 add_header Referrer-Policy $markz_referrer_policy always;
+add_header Content-Security-Policy $markz_content_security_policy always;

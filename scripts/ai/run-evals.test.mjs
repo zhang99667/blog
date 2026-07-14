@@ -4,6 +4,7 @@ import {
   collectArticleSocialImageFailures,
   collectBrowserContractFailures,
   collectCiActionLifecycleFailures,
+  collectContentSecurityPolicyFailures,
   collectContentBoundaryFailures,
   collectGraphRuntimeBoundaryFailures,
   collectRoutingContractFailures,
@@ -61,6 +62,10 @@ jobs:
 
 test("security headers remain centralized across every Nginx response context", async () => {
   assert.deepEqual(await collectSecurityHeaderPolicyFailures(), [])
+})
+
+test("editorial CSP remains host-scoped, self-hosted, and runtime-tested", async () => {
+  assert.deepEqual(await collectContentSecurityPolicyFailures(), [])
 })
 
 test("security header context audit catches TLS and cache inheritance gaps", () => {

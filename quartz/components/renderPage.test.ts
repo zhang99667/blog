@@ -331,21 +331,11 @@ describe("pageResources", () => {
     }
   })
 
-  test("contentIndex path reflects baseDir", () => {
-    const withPrefix = pageResources("/quartz" as FullSlug, emptyResources)
-    const inlineJs = withPrefix.js.find((j) => j.contentType === "inline" && "script" in j)
-    assert.ok(inlineJs && "script" in inlineJs)
-    assert.ok(
-      inlineJs.script.includes("/quartz/static/contentIndex.json"),
-      `expected contentIndex fetch to include /quartz/ prefix, got: ${inlineJs.script}`,
-    )
-
-    const withoutPrefix = pageResources("." as FullSlug, emptyResources)
-    const inlineJsServe = withoutPrefix.js.find((j) => j.contentType === "inline" && "script" in j)
-    assert.ok(inlineJsServe && "script" in inlineJsServe)
-    assert.ok(
-      !inlineJsServe.script.includes("/quartz/static/contentIndex.json"),
-      `expected contentIndex fetch without /quartz/ prefix in serve mode, got: ${inlineJsServe.script}`,
+  test("keeps page scripts external for a strict content security policy", () => {
+    const result = pageResources("/quartz" as FullSlug, emptyResources)
+    assert.equal(
+      result.js.some((resource) => resource.contentType === "inline"),
+      false,
     )
   })
 })
