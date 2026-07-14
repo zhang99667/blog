@@ -487,6 +487,50 @@ for (const target of pages) {
             expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
           }
 
+          if (target.id === "notes-article" && viewport.width >= 1200) {
+            const tocClearance = await page.evaluate(async () => {
+              const sidebar = document.querySelector<HTMLElement>(".sidebar.right")
+              const toc = document.querySelector<HTMLElement>("ul.toc-content.overflow")
+              const reaction = document.querySelector<HTMLElement>("[data-article-reaction]")
+              const links = toc
+                ? Array.from(toc.querySelectorAll<HTMLElement>("li:not(.overflow-end) > a"))
+                : []
+              const lastLink = links.at(-1)
+              if (!sidebar || !toc || !reaction || !lastLink) return null
+
+              sidebar.scrollTop = sidebar.scrollHeight
+              toc.scrollTop = toc.scrollHeight
+              await new Promise<void>((resolve) =>
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+              )
+
+              const tocBounds = toc.getBoundingClientRect()
+              const reactionBounds = reaction.getBoundingClientRect()
+              const lastLinkBounds = lastLink.getBoundingClientRect()
+              return {
+                horizontalOverlap:
+                  Math.min(lastLinkBounds.right, reactionBounds.right) -
+                  Math.max(lastLinkBounds.left, reactionBounds.left),
+                lastLinkBottom: lastLinkBounds.bottom,
+                reactionGap: reactionBounds.top - lastLinkBounds.bottom,
+                reactionHeight: reactionBounds.height,
+                tailClearance: tocBounds.bottom - lastLinkBounds.bottom,
+                tocMaxScroll: toc.scrollHeight - toc.clientHeight,
+                tocScrollTop: toc.scrollTop,
+                viewportHeight: document.documentElement.clientHeight,
+              }
+            })
+
+            expect(tocClearance).not.toBeNull()
+            expect(tocClearance!.horizontalOverlap).toBeGreaterThan(0)
+            expect(tocClearance!.tocScrollTop).toBeCloseTo(tocClearance!.tocMaxScroll, 0)
+            expect(tocClearance!.tailClearance).toBeGreaterThanOrEqual(
+              tocClearance!.reactionHeight + 12,
+            )
+            expect(tocClearance!.reactionGap).toBeGreaterThanOrEqual(16)
+            expect(tocClearance!.lastLinkBottom).toBeLessThanOrEqual(tocClearance!.viewportHeight)
+          }
+
           await reactionButton.focus()
           await page.keyboard.press("Enter")
           await expect(reactionButton).toHaveAttribute("aria-pressed", "true")
