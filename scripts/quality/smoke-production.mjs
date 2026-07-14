@@ -24,6 +24,10 @@ const routes = [
   { url: "https://jsonutils.markz.fun/admin" },
   { url: "https://zhangjihao.markz.fun/" },
   { url: "https://jsonutils.markz.fun/api/health" },
+  {
+    url: "https://markz.fun/api/visitors",
+    evidence: ['"todayVisitors":', '"totalVisitors":'],
+  },
   { url: "https://markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
   { url: "https://note.markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
 ]
@@ -133,6 +137,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, brand assets, notes graph index, reactions, API health, and port ownership are correct.",
+    "Production routes, brand assets, notes graph index, visitor metrics, reactions, API health, and port ownership are correct.",
   )
 }

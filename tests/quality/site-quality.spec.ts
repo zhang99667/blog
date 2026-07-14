@@ -8,6 +8,13 @@ const root = process.cwd()
 const tokens = JSON.parse(readFileSync(path.join(root, "design-system/tokens.json"), "utf8"))
 const manifest = JSON.parse(readFileSync(path.join(root, "design-system/manifest.json"), "utf8"))
 
+test.afterEach(async ({ page }) => {
+  if (page.isClosed()) return
+  await page
+    .evaluate(() => document.dispatchEvent(new CustomEvent("prenav")))
+    .catch(() => undefined)
+})
+
 function firstArticle(
   outputRoot: string,
   ignoredPrefixes: string[],
@@ -74,12 +81,53 @@ const linkedGraphSlug = "ai/agent-mcp-完全指南"
 const linkedGraphRoute = "/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 
 async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
+  const initialTodayVisitors = 7
+  const initialTotalVisitors = 127
   const likeCounts = new Map<string, number>()
   const viewCounts = new Map<string, number>()
   const likeVisitors = new Map<string, Set<string>>()
   const viewVisitors = new Map<string, Set<string>>()
   const likeWrites: Array<{ site: string; slug: string; visitor: string }> = []
   const viewWrites: Array<{ site: string; slug: string; visitor: string }> = []
+  const visitorOrdinals = new Map<string, number>()
+  const visitorWrites: Array<{ visitor: string }> = []
+
+  await page.route("**/api/visitors", async (route) => {
+    const request = route.request()
+    if (request.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          date: "2026-07-14",
+          todayVisitors: initialTodayVisitors + visitorOrdinals.size,
+          totalVisitors: initialTotalVisitors + visitorOrdinals.size,
+        }),
+      })
+      return
+    }
+
+    const body = request.postDataJSON() as { visitor: string }
+    let todayOrdinal = visitorOrdinals.get(body.visitor)
+    const added = todayOrdinal === undefined
+    if (added) {
+      todayOrdinal = initialTodayVisitors + visitorOrdinals.size + 1
+      visitorOrdinals.set(body.visitor, todayOrdinal)
+    }
+    visitorWrites.push(body)
+    await route.fulfill({
+      status: added ? 201 : 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: "2026-07-14",
+        todayOrdinal,
+        todayVisitors: initialTodayVisitors + visitorOrdinals.size,
+        totalVisitors: initialTotalVisitors + visitorOrdinals.size,
+        addedToday: added,
+        addedTotal: added,
+      }),
+    })
+  })
 
   await page.route("**/api/reactions**", async (route) => {
     const request = route.request()
@@ -138,7 +186,7 @@ async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
     })
   })
 
-  return { likeCounts, viewCounts, likeWrites, viewWrites }
+  return { likeCounts, viewCounts, likeWrites, viewWrites, visitorWrites }
 }
 
 for (const target of pages) {
@@ -205,6 +253,23 @@ for (const target of pages) {
         })
         expect(brandStyle.family).toContain(tokens.brand.wordmarkFont)
         expect(brandStyle.weight).toBe(String(tokens.brand.wordmarkWeight))
+
+        const visitorCounter = page.locator("[data-blog-visitors]")
+        if (target.id.startsWith("blog-")) {
+          await expect(visitorCounter).toBeVisible()
+          await expect(visitorCounter.locator("[data-blog-visitor-copy]")).toHaveText(
+            "今天您是第 8 位访客 · 累计 128 位访客",
+          )
+          await expect(visitorCounter).toHaveAttribute("aria-busy", "false")
+          await expect(visitorCounter).toHaveAttribute("role", "status")
+          expect(reactions.visitorWrites).toHaveLength(1)
+          expect(reactions.visitorWrites[0].visitor).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          )
+        } else {
+          await expect(visitorCounter).toHaveCount(0)
+          expect(reactions.visitorWrites).toHaveLength(0)
+        }
 
         const documentState = await page.evaluate(() => ({
           lang: document.documentElement.lang,
@@ -280,6 +345,40 @@ for (const target of pages) {
           body: await page.screenshot({ fullPage: false }),
           contentType: "image/png",
         })
+
+        if (target.id.startsWith("blog-")) {
+          const footer = page.locator(".blog-site-footer")
+          await footer.scrollIntoViewIfNeeded()
+          await expect(footer).toBeInViewport()
+          await expect(visitorCounter).toBeInViewport()
+          const footerLayout = await footer.evaluate((element) => {
+            const footerBounds = element.getBoundingClientRect()
+            const metaBounds = element.querySelector(".blog-footer-meta")!.getBoundingClientRect()
+            const navBounds = element.querySelector("nav")!.getBoundingClientRect()
+            const overlaps =
+              Math.min(metaBounds.right, navBounds.right) -
+                Math.max(metaBounds.left, navBounds.left) >
+                0 &&
+              Math.min(metaBounds.bottom, navBounds.bottom) -
+                Math.max(metaBounds.top, navBounds.top) >
+                0
+            return {
+              footerLeft: footerBounds.left,
+              footerRight: footerBounds.right,
+              viewportWidth: document.documentElement.clientWidth,
+              overlaps,
+            }
+          })
+          expect(footerLayout.footerLeft).toBeGreaterThanOrEqual(0)
+          expect(footerLayout.footerRight).toBeLessThanOrEqual(footerLayout.viewportWidth)
+          expect(footerLayout.overlaps).toBe(false)
+          await testInfo.attach(`${target.id}-footer-${viewport.name}-${theme}`, {
+            body: await page.screenshot({ fullPage: false }),
+            contentType: "image/png",
+          })
+          await page.evaluate(() => window.scrollTo(0, 0))
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
+        }
 
         const reactionRoot = page.locator("[data-article-reaction]")
         if (target.id.endsWith("-article")) {
@@ -361,6 +460,9 @@ for (const target of pages) {
             slug: await page.locator("body").getAttribute("data-slug"),
           })
           expect(reactions.likeWrites[0].visitor).toBe(reactions.viewWrites[0].visitor)
+          if (target.id.startsWith("blog")) {
+            expect(reactions.visitorWrites[0].visitor).toBe(reactions.viewWrites[0].visitor)
+          }
           expect(reactions.likeWrites[0].visitor).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
           )
@@ -390,7 +492,7 @@ for (const target of pages) {
 
 test("blog listing and article display the same editorial date", async ({ page }) => {
   await mockReactions(page)
-  await page.goto("http://127.0.0.1:4173/")
+  await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded" })
   const firstPost = page.locator(".post-row").first()
   const listedDate = await firstPost.locator("time").getAttribute("datetime")
   expect(listedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
@@ -412,6 +514,10 @@ test.describe("article reactions", () => {
     const viewCount = page.locator("[data-article-reaction] [data-view-count]")
     await expect(button).toHaveAttribute("aria-pressed", "false")
     await expect(viewCount).toHaveText("33")
+    await expect(page.locator("[data-blog-visitor-copy]")).toHaveText(
+      "今天您是第 8 位访客 · 累计 128 位访客",
+    )
+    expect(mock.visitorWrites).toHaveLength(1)
     await button.click()
     await expect(button).toHaveAttribute("aria-pressed", "true")
     const firstSlug = await page.locator("body").getAttribute("data-slug")
@@ -422,8 +528,12 @@ test.describe("article reactions", () => {
       "true",
     )
     await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
+    await expect(page.locator("[data-blog-visitor-copy]")).toHaveText(
+      "今天您是第 8 位访客 · 累计 128 位访客",
+    )
     expect(mock.likeWrites).toHaveLength(1)
     expect(mock.viewWrites).toHaveLength(2)
+    expect(mock.visitorWrites).toHaveLength(2)
     expect(mock.viewWrites[1].visitor).toBe(mock.viewWrites[0].visitor)
 
     await page.evaluate(() =>
@@ -437,6 +547,7 @@ test.describe("article reactions", () => {
     )
     await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
     expect(mock.viewWrites).toHaveLength(3)
+    expect(mock.visitorWrites).toHaveLength(2)
     expect(firstSlug).not.toBe("blog/macos-network-automount")
   })
 
@@ -445,7 +556,17 @@ test.describe("article reactions", () => {
     await page.goto("http://127.0.0.1:4174/ai/", { waitUntil: "domcontentloaded" })
     await expect(page.locator(".page-listing")).toBeVisible()
     await expect(page.locator("[data-article-reaction]")).toHaveCount(0)
+    await expect(page.locator("[data-blog-visitors]")).toHaveCount(0)
   })
+})
+
+test("blog visitor counter stays quiet when the API is unavailable", async ({ page }) => {
+  await mockReactions(page)
+  await page.route("**/api/visitors", async (route) => {
+    await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"down"}' })
+  })
+  await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded" })
+  await expect(page.locator("[data-blog-visitors]")).toBeHidden()
 })
 
 test.describe("image lightbox", () => {
@@ -694,6 +815,9 @@ test.describe("notes linked graph", () => {
           body: await page.locator(".graph-outer").screenshot(),
           contentType: "image/png",
         })
+
+        await page.evaluate(() => document.dispatchEvent(new CustomEvent("prenav")))
+        await expect(graphCanvas).toHaveCount(0)
       })
     }
   }

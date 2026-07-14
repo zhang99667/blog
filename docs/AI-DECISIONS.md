@@ -72,7 +72,7 @@
 - 决策：图谱从浏览器 URL 取路径时必须先解码，再与 `contentIndex.json` 中的 canonical slug 匹配。异步渲染在读取索引后和 PIXI 初始化后都必须校验 render generation，过期渲染不能继续挂载或泄露 WebGL 上下文。兼容修复由仓库内本地组件接管，不手改 `.quartz/` 插件缓存。
 - 反例：直接用 `window.location.pathname` 的百分号编码值扩展局部图，或在 `.quartz/plugins/graph` 里做一次性修改。
 - 边界：外部 URL 不进入图谱；无内链且无反链的笔记可以合理地显示单点。
-- 锁定证据：`quartz/components/GraphCompatibility.ts`、`GraphCompatibility.test.ts` 的 URL 与 render-generation 上游标记检查、单 worker 中文路由浏览器图谱矩阵和生产 `contentIndex.json` smoke。浏览器门禁不并行争抢 Chromium 共享 WebGL 上下文，但页面、视口与主题覆盖不能减少。
+- 锁定证据：`quartz/components/GraphCompatibility.ts`、`GraphCompatibility.test.ts` 的 URL 与 render-generation 上游标记检查、单 worker 中文路由浏览器图谱矩阵和生产 `contentIndex.json` smoke。浏览器门禁不并行争抢 Chromium 共享 WebGL 上下文，每个用例结束显式触发 `prenav` 释放 PIXI；页面、视口与主题覆盖不能减少。
 
 ## D-009 图片预览交互使用成熟组件
 
@@ -99,3 +99,12 @@
 - 决策：移动端目录面板的绝对定位必须抵消页面 16px 安全边距；收起状态的右边界不得大于视口左边界 1px，打开状态仍覆盖完整视口。
 - 反例：只隐藏溢出条、放宽横向滚动断言，或接受页面左边出现残缺目录文字。
 - 锁定证据：notes 的 320px、390px 浅深色浏览器矩阵显式断言收起目录 `right <= 1px`，全页继续断言没有横向溢出。
+
+## D-012 博客访客数是公开但匿名的页脚信息
+
+- 日期：2026-07-14
+- 触发：用户希望在博客底部显示“今天您是第几位访客”和累计访客，并要求参考网上成熟做法后上线。
+- 决策：只在博客页脚显示一行低干扰文本，不扩展到笔记或工具站。复用自托管 `markz-reactions` 与现有浏览器随机 ID；服务端仅保存 SHA-256。`visitors` 记录累计唯一访客，`daily_visitors` 按 `Asia/Shanghai` 保存当天稳定序号。同一页面文档内的 SPA 跳转不重复请求；只读 `GET /api/visitors` 供生产检查且不污染计数。首次迁移把已有博客文章互动哈希作为累计基线，不伪造历史日序号。
+- 反例：按刷新次数递增、用 IP 与 User-Agent 生成指纹、引入第三方跨站统计脚本、让生产 smoke 每天占一个访客序号、把计数做成醒目的卡片或在接口失败时显示 `0`。
+- 边界：匿名浏览器不是账号；跨设备、隐私模式或清空本地存储会被视为新访客。累计数是轻量公开反馈，不承诺广告分析级精度或防刷能力。
+- 锁定证据：北京时间跨日、幂等、并发、迁移和哈希持久化服务测试；`/api/visitors` 仅博客域名精确代理；博客首页与正文的 320/390/1440 浅深色浏览器矩阵、SPA 复用、API 失败隐藏和生产只读 smoke。

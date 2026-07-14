@@ -281,6 +281,30 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   color: inherit;
 }
 
+.blog-footer-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+.blog-visitor-counter {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  padding-left: var(--brand-space-3);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.blog-visitor-counter[hidden] {
+  display: none;
+}
+
 .blog-site-footer nav {
   display: flex;
   gap: 1rem;
@@ -805,6 +829,19 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
 
   .page[data-frame="blog"] > #quartz-body > .blog-site-footer {
     width: calc(100% - 2rem);
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .blog-footer-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--brand-space-1);
+  }
+
+  .blog-visitor-counter {
+    border-left: 0;
+    padding-left: 0;
   }
 
   .page[data-frame="default"] > #quartz-body .sidebar.left {

@@ -46,7 +46,7 @@ describe("reactions deployment boundary", () => {
     assert.equal(compose.services.edge.depends_on.reactions.condition, "service_healthy")
   })
 
-  test("exposes the API only on the blog and notes hosts", () => {
+  test("keeps article metrics on both content hosts and site visitors on the blog only", () => {
     const blog = serverBlock("markz.fun www.markz.fun")
     const notes = serverBlock("note.markz.fun")
     const jsonutils = serverBlock("jsonutils.markz.fun")
@@ -59,13 +59,18 @@ describe("reactions deployment boundary", () => {
       assert.match(block, /proxy_pass http:\/\/reactions:3000;/)
       assert.match(block, /limit_req zone=markz_reaction_writes/)
     }
+    assert.match(blog, /location = \/api\/visitors \{/)
+    assert.match(blog, /location = \/api\/visitors \{[\s\S]*?limit_req zone=markz_reaction_writes/)
+    assert.doesNotMatch(notes, /\/api\/visitors/)
     for (const block of [jsonutils, admin]) {
       assert.doesNotMatch(block, /\/api\/reactions/)
+      assert.doesNotMatch(block, /\/api\/visitors/)
       assert.match(block, /proxy_pass http:\/\/app-backend:8080;/)
     }
     assert.match(nginx, /limit_req_zone \$markz_reaction_write_key/)
     assert.equal(nginx.match(/location = \/api\/reactions \{/g)?.length, 2)
     assert.equal(nginx.match(/location = \/api\/reactions\/view \{/g)?.length, 2)
+    assert.equal(nginx.match(/location = \/api\/visitors \{/g)?.length, 1)
   })
 
   test("deploys and checks reactions before replacing the edge container", () => {
@@ -78,11 +83,13 @@ describe("reactions deployment boundary", () => {
     assert.match(deploy, /reactionsDir/)
     assert.match(smoke, /markz-reactions/)
     assert.match(smoke, /blog\/__reaction-smoke__/)
+    assert.match(smoke, /\/api\/visitors/)
   })
 
   test("stores anonymous identifiers as hashes and never consumes forwarded IP data", () => {
     assert.match(server, /createHash\("sha256"\)/)
     assert.match(server, /PRIMARY KEY \(site, slug, visitor_hash\)/)
+    assert.match(server, /PRIMARY KEY \(visit_date, visitor_hash\)/)
     assert.doesNotMatch(server, /x-forwarded-for|x-real-ip|remote_addr/i)
   })
 })

@@ -16,8 +16,8 @@ afterEach(async () => {
   )
 })
 
-async function startService(databasePath = ":memory:") {
-  const service = createReactionService({ databasePath })
+async function startService(databasePath = ":memory:", options = {}) {
+  const service = createReactionService({ databasePath, ...options })
   const address = await service.listen()
   return {
     service,
@@ -107,6 +107,72 @@ describe("MarkZ reactions API", () => {
     }
   })
 
+  test("assigns stable daily visitor ordinals in Asia/Shanghai", async () => {
+    let now = new Date("2026-07-13T16:05:00.000Z")
+    const { service, baseUrl } = await startService(":memory:", { now: () => now })
+    try {
+      const initial = await requestJson(`${baseUrl}/api/visitors`)
+      assert.deepEqual(initial.body, {
+        date: "2026-07-14",
+        todayVisitors: 0,
+        totalVisitors: 0,
+      })
+
+      const first = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(1) }),
+      })
+      assert.equal(first.response.status, 201)
+      assert.deepEqual(first.body, {
+        date: "2026-07-14",
+        todayVisitors: 1,
+        totalVisitors: 1,
+        todayOrdinal: 1,
+        addedToday: true,
+        addedTotal: true,
+      })
+
+      const duplicate = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(1) }),
+      })
+      assert.equal(duplicate.response.status, 200)
+      assert.deepEqual(duplicate.body, {
+        ...first.body,
+        addedToday: false,
+        addedTotal: false,
+      })
+
+      const second = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(2) }),
+      })
+      assert.equal(second.body.todayOrdinal, 2)
+      assert.equal(second.body.todayVisitors, 2)
+      assert.equal(second.body.totalVisitors, 2)
+
+      now = new Date("2026-07-14T16:05:00.000Z")
+      const nextDay = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(1) }),
+      })
+      assert.deepEqual(nextDay.body, {
+        date: "2026-07-15",
+        todayVisitors: 1,
+        totalVisitors: 2,
+        todayOrdinal: 1,
+        addedToday: true,
+        addedTotal: false,
+      })
+    } finally {
+      await service.close()
+    }
+  })
+
   test("serializes concurrent writes without losing likes or views", async () => {
     const { service, baseUrl } = await startService()
     try {
@@ -144,6 +210,21 @@ describe("MarkZ reactions API", () => {
 
       const count = await requestJson(`${baseUrl}/api/reactions?site=blog&slug=blog%2Fconcurrent`)
       assert.deepEqual(count.body, { count: 20, likes: 20, views: 20 })
+
+      const visitors = await Promise.all(
+        Array.from({ length: 20 }, (_, index) =>
+          requestJson(`${baseUrl}/api/visitors`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ visitor: visitor(index + 1) }),
+          }),
+        ),
+      )
+      assert.deepEqual(
+        visitors.map(({ body }) => body.todayOrdinal).sort((a, b) => a - b),
+        Array.from({ length: 20 }, (_, index) => index + 1),
+      )
+      assert.equal(Math.max(...visitors.map(({ body }) => body.totalVisitors)), 20)
     } finally {
       await service.close()
     }
@@ -154,7 +235,8 @@ describe("MarkZ reactions API", () => {
     temporaryDirectories.push(directory)
     const databasePath = path.join(directory, "reactions.sqlite")
 
-    const firstRun = await startService(databasePath)
+    const fixedNow = () => new Date("2026-07-13T16:05:00.000Z")
+    const firstRun = await startService(databasePath, { now: fixedNow })
     await requestJson(`${firstRun.baseUrl}/api/reactions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -165,22 +247,40 @@ describe("MarkZ reactions API", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ site: "blog", slug: "blog/persisted", visitor: visitor(7) }),
     })
+    await requestJson(`${firstRun.baseUrl}/api/visitors`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ visitor: visitor(7) }),
+    })
     await firstRun.service.close()
 
     const database = new DatabaseSync(databasePath)
-    for (const table of ["reactions", "views"]) {
+    for (const table of ["reactions", "views", "visitors", "daily_visitors"]) {
       const row = database.prepare(`SELECT visitor_hash FROM ${table}`).get()
       assert.equal(row.visitor_hash.length, 64)
       assert.notEqual(row.visitor_hash, visitor(7))
     }
     database.close()
 
-    const secondRun = await startService(databasePath)
+    const secondRun = await startService(databasePath, { now: fixedNow })
     try {
       const count = await requestJson(
         `${secondRun.baseUrl}/api/reactions?site=blog&slug=blog%2Fpersisted`,
       )
       assert.deepEqual(count.body, { count: 1, likes: 1, views: 1 })
+      const visitors = await requestJson(`${secondRun.baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(7) }),
+      })
+      assert.deepEqual(visitors.body, {
+        date: "2026-07-14",
+        todayVisitors: 1,
+        totalVisitors: 1,
+        todayOrdinal: 1,
+        addedToday: false,
+        addedTotal: false,
+      })
     } finally {
       await secondRun.service.close()
     }
@@ -215,6 +315,16 @@ describe("MarkZ reactions API", () => {
         body: JSON.stringify({ site: "blog", slug: "blog/legacy", visitor: visitor(9) }),
       })
       assert.deepEqual(view.body, { likes: 1, views: 1, added: true })
+
+      const migrated = await requestJson(`${baseUrl}/api/visitors`)
+      assert.equal(migrated.body.totalVisitors, 1)
+      const visitorResult = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: visitor(9) }),
+      })
+      assert.equal(visitorResult.body.todayOrdinal, 1)
+      assert.equal(visitorResult.body.totalVisitors, 2)
     } finally {
       await service.close()
     }
@@ -242,6 +352,17 @@ describe("MarkZ reactions API", () => {
       const viewMethod = await requestJson(`${baseUrl}/api/reactions/view`)
       assert.equal(viewMethod.response.status, 405)
       assert.equal(viewMethod.response.headers.get("allow"), "POST")
+
+      const visitorMethod = await requestJson(`${baseUrl}/api/visitors`, { method: "DELETE" })
+      assert.equal(visitorMethod.response.status, 405)
+      assert.equal(visitorMethod.response.headers.get("allow"), "GET, POST")
+
+      const invalidCounterVisitor = await requestJson(`${baseUrl}/api/visitors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ visitor: "visitor" }),
+      })
+      assert.equal(invalidCounterVisitor.response.status, 400)
 
       const oversized = await requestJson(`${baseUrl}/api/reactions`, {
         method: "POST",

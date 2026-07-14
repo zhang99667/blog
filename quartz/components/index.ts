@@ -8,6 +8,7 @@ import ConditionalRender from "./ConditionalRender"
 import { BrandMark, BrandPageTitle } from "./BrandMark"
 import { ImageLightbox } from "./ImageLightbox"
 import { ArticleReactions } from "./ArticleReactions"
+import { BlogVisitorCounter } from "./BlogVisitorCounter"
 
 export { componentRegistry, defineComponent } from "./registry"
 export { External } from "./external"
@@ -26,4 +27,5 @@ export {
   BrandPageTitle,
   ImageLightbox,
   ArticleReactions,
+  BlogVisitorCounter,
 }

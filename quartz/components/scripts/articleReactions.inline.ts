@@ -1,4 +1,5 @@
 import { Eye, ThumbsUp, type IconNode } from "lucide"
+import { readVisitorStorage, visitorId, writeVisitorStorage } from "./visitorIdentity"
 
 type ReactionSite = "blog" | "notes"
 
@@ -14,39 +15,12 @@ interface ReactionPayload {
   liked?: boolean
 }
 
-const visitorStorageKey = "markz.reactions.visitor.v1"
 const apiPath = "/api/reactions"
 const viewApiPath = "/api/reactions/view"
-const visitorPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-let volatileVisitor: string | undefined
 let activeController: AbortController | undefined
 let activeRoot: HTMLElement | undefined
 let activePageKey: string | undefined
-
-function readStorage(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeStorage(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    // The current page can still register once when storage is unavailable.
-  }
-}
-
-function visitorId(): string {
-  const stored = readStorage(visitorStorageKey)
-  if (stored && visitorPattern.test(stored)) return stored
-  if (!volatileVisitor) volatileVisitor = crypto.randomUUID()
-  writeStorage(visitorStorageKey, volatileVisitor)
-  return volatileVisitor
-}
 
 function pageIdentity(): PageIdentity | undefined {
   const page = document.querySelector<HTMLElement>(".page[data-frame]")
@@ -287,7 +261,7 @@ function mountReactions() {
     }
 
     if (controller.signal.aborted) return
-    render(payload.likes, payload.views, readStorage(likedKey) === "1")
+    render(payload.likes, payload.views, readVisitorStorage(likedKey) === "1")
   }
 
   elements.button.addEventListener(
@@ -312,7 +286,7 @@ function mountReactions() {
         })
         const payload = await parseResponse(response)
         if (controller.signal.aborted) return
-        writeStorage(likedKey, "1")
+        writeVisitorStorage(likedKey, "1")
         render(payload.likes, payload.views, true)
         elements.status.textContent = "点赞成功"
       } catch {

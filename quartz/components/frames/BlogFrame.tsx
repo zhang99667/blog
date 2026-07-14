@@ -44,7 +44,20 @@ export const BlogFrame: PageFrame = {
           </main>
         </div>
         <footer class="blog-site-footer">
-          <p>© 2026 {brandIdentity.name}</p>
+          <div class="blog-footer-meta">
+            <p>© 2026 {brandIdentity.name}</p>
+            <span
+              class="blog-visitor-counter"
+              data-blog-visitors
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-busy="true"
+              hidden
+            >
+              <span data-blog-visitor-copy />
+            </span>
+          </div>
           <nav aria-label="页脚导航">
             <a href="/index.xml">RSS</a>
             <a href="https://note.markz.fun/">笔记</a>

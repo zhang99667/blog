@@ -8,6 +8,13 @@ import { DatabaseSync } from "node:sqlite"
 const MAX_BODY_BYTES = 2_048
 const VALID_SITES = new Set(["blog", "notes"])
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const VISITOR_TIME_ZONE = "Asia/Shanghai"
+const VISITOR_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: VISITOR_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -42,6 +49,18 @@ function normalizeVisitor(visitor) {
     throw new HttpError(400, "Invalid visitor")
   }
   return createHash("sha256").update(visitor.toLowerCase()).digest("hex")
+}
+
+function visitorDate(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error("Invalid visitor clock")
+
+  const parts = Object.fromEntries(
+    VISITOR_DATE_FORMATTER.formatToParts(date)
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value: part }) => [type, part]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 function jsonResponse(response, status, payload, extraHeaders = {}) {
@@ -107,6 +126,26 @@ export function createReactionStore(databasePath) {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (site, slug, visitor_hash)
     ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS visitors (
+      visitor_hash TEXT NOT NULL PRIMARY KEY,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS daily_visitors (
+      visit_date TEXT NOT NULL,
+      visitor_hash TEXT NOT NULL,
+      ordinal INTEGER NOT NULL CHECK (ordinal > 0),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (visit_date, visitor_hash),
+      UNIQUE (visit_date, ordinal)
+    ) STRICT, WITHOUT ROWID;
+    INSERT OR IGNORE INTO visitors (visitor_hash, created_at)
+    SELECT visitor_hash, MIN(created_at)
+    FROM (
+      SELECT visitor_hash, created_at FROM reactions WHERE site = 'blog'
+      UNION ALL
+      SELECT visitor_hash, created_at FROM views WHERE site = 'blog'
+    )
+    GROUP BY visitor_hash;
   `)
 
   const likeCountStatement = database.prepare(
@@ -121,6 +160,22 @@ export function createReactionStore(databasePath) {
   const insertViewStatement = database.prepare(
     "INSERT OR IGNORE INTO views (site, slug, visitor_hash) VALUES (?, ?, ?)",
   )
+  const visitorCountStatement = database.prepare("SELECT COUNT(*) AS count FROM visitors")
+  const dailyVisitorCountStatement = database.prepare(
+    "SELECT COUNT(*) AS count FROM daily_visitors WHERE visit_date = ?",
+  )
+  const visitorOrdinalStatement = database.prepare(
+    "SELECT ordinal FROM daily_visitors WHERE visit_date = ? AND visitor_hash = ?",
+  )
+  const insertVisitorStatement = database.prepare(
+    "INSERT OR IGNORE INTO visitors (visitor_hash) VALUES (?)",
+  )
+  const insertDailyVisitorStatement = database.prepare(`
+    INSERT OR IGNORE INTO daily_visitors (visit_date, visitor_hash, ordinal)
+    SELECT ?, ?, COALESCE(MAX(ordinal), 0) + 1
+    FROM daily_visitors
+    WHERE visit_date = ?
+  `)
 
   function countsFor(page) {
     const likes = Number(likeCountStatement.get(page.site, page.slug).count)
@@ -135,6 +190,14 @@ export function createReactionStore(databasePath) {
     return { added: Number(result.changes) === 1, ...countsFor(page) }
   }
 
+  function visitorCountsFor(visitDate) {
+    return {
+      date: visitDate,
+      todayVisitors: Number(dailyVisitorCountStatement.get(visitDate).count),
+      totalVisitors: Number(visitorCountStatement.get().count),
+    }
+  }
+
   return {
     counts(site, slug) {
       const page = normalizePage(site, slug)
@@ -146,13 +209,38 @@ export function createReactionStore(databasePath) {
     addView(site, slug, visitor) {
       return add(insertViewStatement, site, slug, visitor)
     },
+    visitorCounts(visitDate) {
+      return visitorCountsFor(visitDate)
+    },
+    addVisitor(visitor, visitDate) {
+      const visitorHash = normalizeVisitor(visitor)
+      database.exec("BEGIN IMMEDIATE")
+      try {
+        const totalResult = insertVisitorStatement.run(visitorHash)
+        const todayResult = insertDailyVisitorStatement.run(visitDate, visitorHash, visitDate)
+        const ordinal = visitorOrdinalStatement.get(visitDate, visitorHash)?.ordinal
+        if (!Number.isSafeInteger(ordinal) || ordinal < 1) {
+          throw new Error("Visitor ordinal was not persisted")
+        }
+        database.exec("COMMIT")
+        return {
+          ...visitorCountsFor(visitDate),
+          todayOrdinal: Number(ordinal),
+          addedToday: Number(todayResult.changes) === 1,
+          addedTotal: Number(totalResult.changes) === 1,
+        }
+      } catch (error) {
+        database.exec("ROLLBACK")
+        throw error
+      }
+    },
     close() {
       database.close()
     },
   }
 }
 
-export function createReactionService({ databasePath = ":memory:" } = {}) {
+export function createReactionService({ databasePath = ":memory:", now = () => new Date() } = {}) {
   const store = createReactionStore(databasePath)
   const server = createServer(async (request, response) => {
     try {
@@ -164,6 +252,22 @@ export function createReactionService({ databasePath = ":memory:" } = {}) {
           return
         }
         jsonResponse(response, 200, { status: "ok" })
+        return
+      }
+
+      if (url.pathname === "/api/visitors") {
+        const visitDate = visitorDate(now())
+        if (request.method === "GET") {
+          jsonResponse(response, 200, store.visitorCounts(visitDate))
+          return
+        }
+        if (request.method === "POST") {
+          const body = await readJson(request)
+          const result = store.addVisitor(body.visitor, visitDate)
+          jsonResponse(response, result.addedToday ? 201 : 200, result)
+          return
+        }
+        jsonResponse(response, 405, { error: "Method not allowed" }, { allow: "GET, POST" })
         return
       }
 

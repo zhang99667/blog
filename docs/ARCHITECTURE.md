@@ -4,16 +4,16 @@
 
 ## 系统边界
 
-| 系统            | 职责                               | 权威入口                          | 生成结果                          |
-| --------------- | ---------------------------------- | --------------------------------- | --------------------------------- |
-| Obsidian 源仓库 | 私有写作与公开标记                 | `zhang99667/note`                 | 同步输入                          |
-| 发布编排        | 定时触发、私有签出、校验与部署     | `markz-publish.yaml`              | 可审计的发布记录                  |
-| 内容同步        | 筛选、复制、生成首页和文章元数据   | `scripts/sync-notes.mjs`          | `content/site/`、`content/notes/` |
-| 设计系统        | 品牌、主题、排版、布局和无障碍基础 | `design-system/tokens.json`       | TS、SCSS、favicon、分享图         |
-| Quartz 构建     | 博客、笔记和回退路由               | `quartz.ts`、`quartz.config.yaml` | `public/`、`public-notes/`        |
-| 匿名互动        | 文章点赞、唯一浏览与持久化         | `services/reactions/`             | SQLite 数据文件                   |
-| 边缘路由        | TLS、域名分流和 API 代理           | `deploy/nginx.conf`               | `markz-edge`                      |
-| 独立工具        | JSONUtils、装箱单                  | 各自仓库                          | 独立产品界面                      |
+| 系统            | 职责                                 | 权威入口                          | 生成结果                          |
+| --------------- | ------------------------------------ | --------------------------------- | --------------------------------- |
+| Obsidian 源仓库 | 私有写作与公开标记                   | `zhang99667/note`                 | 同步输入                          |
+| 发布编排        | 定时触发、私有签出、校验与部署       | `markz-publish.yaml`              | 可审计的发布记录                  |
+| 内容同步        | 筛选、复制、生成首页和文章元数据     | `scripts/sync-notes.mjs`          | `content/site/`、`content/notes/` |
+| 设计系统        | 品牌、主题、排版、布局和无障碍基础   | `design-system/tokens.json`       | TS、SCSS、favicon、分享图         |
+| Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml` | `public/`、`public-notes/`        |
+| 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`             | SQLite 数据文件                   |
+| 边缘路由        | TLS、域名分流和 API 代理             | `deploy/nginx.conf`               | `markz-edge`                      |
+| 独立工具        | JSONUtils、装箱单                    | 各自仓库                          | 独立产品界面                      |
 
 ## 数据流
 
@@ -39,6 +39,16 @@ article-reactions component
   -> SQLite reactions.sqlite
 ```
 
+博客页脚访客统计复用同一条隐私边界清晰的运行时链路：
+
+```text
+blog visitor counter
+  -> same-origin /api/visitors
+  -> markz-edge write rate limit
+  -> markz-reactions
+  -> SQLite visitors + daily_visitors
+```
+
 设计数据走单独的生成链：
 
 ```text
@@ -53,6 +63,7 @@ tokens.json
 - `markz.fun`：博客静态文件；`/notes/` 是笔记回退入口。
 - `note.markz.fun`：独立笔记静态文件。
 - `markz.fun/api/reactions`、`note.markz.fun/api/reactions`：同一个匿名互动服务，按 `site + canonical slug` 分开计算点赞和唯一浏览；`/api/reactions/view` 幂等登记当前浏览器的文章浏览。
+- `markz.fun/api/visitors`：博客专属站点访客接口；`GET` 只读返回北京时间当天与累计访客数，`POST` 为匿名浏览器登记稳定的当天序号。笔记和工具域名不暴露该接口。
 - `jsonutils.markz.fun`：JSONUtils 前端与 `/api/` 代理；`/admin` 进入后台。
 - `zhangjihao.markz.fun`：装箱单产品。
 - 只有 `markz-edge` 可以绑定宿主机 `80/443`。
@@ -67,7 +78,7 @@ tokens.json
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
-- 点赞和浏览数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。数据库目录不参与静态文件 `rsync --delete`。
+- 点赞、文章浏览和博客访客数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
 - 用户纠偏归 `docs/AI-DECISIONS.md`，可判定规则必须进入自动门禁。
 - 第三方组件的兼容修复归本仓库源码和浏览器门禁，不能依赖 `.quartz/` 插件缓存中的手工改动。
 

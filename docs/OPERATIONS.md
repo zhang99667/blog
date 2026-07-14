@@ -15,7 +15,7 @@ npm run build
 
 `quality/link-baseline.json` 只记录迁移自 Obsidian 的历史断链债务。`quality:build` 会拒绝新增断链和已修复但未清理的陈旧基线；只有在人工确认债务变化后才运行 `node scripts/quality/check-build.mjs --update-link-baseline`。
 
-本地调试互动 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions` 和 `/api/reactions/view`。
+本地调试互动 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions`、`/api/reactions/view` 和博客专属 `/api/visitors`。
 
 ## 发布流程
 
@@ -34,12 +34,15 @@ npm run build
 ### 互动数据维护
 
 - 健康检查：`curl -fsS https://markz.fun/api/reactions/health`。
+- 访客只读汇总：`curl -fsS https://markz.fun/api/visitors`；该请求不登记访客，可用于生产 smoke。
 - 容器状态：`docker inspect -f '{{.State.Health.Status}}' markz-reactions`。
 - 备份时先短暂停止 reactions，复制整个 `reactions-data` 目录后再启动，确保数据库、WAL 和共享内存文件属于同一时点。
 - 不要使用 `docker compose down -v` 代替普通重建；虽然当前数据库是 bind mount，运维习惯仍应保护持久化目录。
 - 恢复时保持目录属主为服务器 `markz` 用户，并在恢复后先检查健康接口，再重建 edge。
 
-匿名点赞和浏览量只用于轻量反馈，不是账号级统计或风控。`reactions`、`views` 两张表分别用唯一键阻止同一浏览器 ID 对同一文章重复累计，Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次计入点赞和浏览，这是当前产品边界。
+匿名点赞、文章浏览和博客访客只用于轻量反馈，不是账号级统计或风控。`reactions`、`views` 分别阻止同一浏览器 ID 对同一文章重复累计；`visitors` 阻止累计访客重复，`daily_visitors` 保存北京时间当天稳定序号。Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次计入，这是当前产品边界。
+
+访客功能首次启用时，会把已有博客文章点赞和唯一浏览中的匿名哈希合并进 `visitors`，作为累计基线；`daily_visitors` 从功能上线当天开始，不反推历史日序号。博客页面每次完整加载最多登记一次，Quartz 站内 SPA 跳转复用当前结果。接口失败时页脚计数隐藏，不能阻断静态内容。
 
 GitHub 仓库需要以下 Actions 配置：
 
@@ -85,11 +88,11 @@ GitHub 仓库需要以下 Actions 配置：
 3. 检查 `.cache/publish-manifest.json`，不要手改生成 Markdown。
 4. 在 GitHub Actions 中确认 `MarkZ Publish` 最近一次运行成功，私有 note 签出使用的是只读 deploy key。
 
-### 新 reactions 接口返回 404
+### 新互动或访客接口返回 404
 
 1. 先确认 `/api/reactions/health` 正常，区分边缘路由故障和旧服务进程。
 2. 在远端执行 `docker compose up -d --force-recreate --wait reactions`，确保同步后的 `server.mjs` 被新 Node 进程加载。
-3. 重新运行 `npm run smoke:production`，不能只检查健康接口；健康接口在旧版本中也可能存在。
+3. 重新运行 `npm run smoke:production`，确认 `/api/visitors` 只读汇总和文章互动都可用；旧版本健康接口返回 200 不能证明新路由已加载。
 
 ### 笔记日期全部变成同步当天
 

@@ -3,6 +3,7 @@ import type { QuartzLayoutOverrides } from "./quartz/plugins/loader/config-loade
 import { brandIdentity, brandTheme } from "./quartz/brand.generated"
 import {
   ArticleReactions,
+  BlogVisitorCounter,
   BrandPageTitle,
   ImageLightbox,
   componentRegistry,
@@ -30,6 +31,13 @@ componentRegistry.replace("PageTitle", BrandPageTitle, "local:markz-design-syste
 componentRegistry.replace("page-title", BrandPageTitle, "local:markz-design-system")
 componentRegistry.replace("ImageLightbox", ImageLightbox, "local:markz-image-lightbox")
 componentRegistry.replace("ArticleReactions", ArticleReactions, "local:markz-article-reactions")
+if (!isNotes) {
+  componentRegistry.replace(
+    "BlogVisitorCounter",
+    BlogVisitorCounter,
+    "local:markz-blog-visitor-counter",
+  )
+}
 registerGraphCompatibilityOverride()
 
 const config = await loadQuartzConfig(
