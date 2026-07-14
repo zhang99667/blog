@@ -174,7 +174,30 @@ for (const target of pages) {
         expect(documentState.lang.toLowerCase()).toMatch(/^zh/)
         expect(documentState.theme).toBe(theme)
         expect(documentState.mainCount).toBe(1)
-        expect(documentState.scrollWidth).toBeLessThanOrEqual(documentState.clientWidth + 1)
+        const overflowElements =
+          documentState.scrollWidth > documentState.clientWidth + 1
+            ? await page.evaluate(() => {
+                const clientWidth = document.documentElement.clientWidth
+                return Array.from(document.body.querySelectorAll<HTMLElement>("*"))
+                  .map((element) => {
+                    const bounds = element.getBoundingClientRect()
+                    return {
+                      element: `${element.tagName.toLowerCase()}.${Array.from(element.classList).join(".")}`,
+                      left: Math.round(bounds.left),
+                      right: Math.round(bounds.right),
+                      width: Math.round(bounds.width),
+                    }
+                  })
+                  .filter(
+                    ({ left, right, width }) => width > 0 && (left < -1 || right > clientWidth + 1),
+                  )
+                  .slice(0, 8)
+              })
+            : []
+        expect(
+          documentState.scrollWidth,
+          `Elements outside the viewport: ${JSON.stringify(overflowElements)}`,
+        ).toBeLessThanOrEqual(documentState.clientWidth + 1)
         expect(documentState.scrollY).toBeLessThanOrEqual(1)
 
         const vectorImage = page.locator('article img[src$=".svg"]').first()
@@ -218,20 +241,27 @@ for (const target of pages) {
         const reactionRoot = page.locator("[data-article-reaction]")
         if (target.id.endsWith("-article")) {
           await expect(reactionRoot).toHaveCount(1)
-          await reactionRoot.scrollIntoViewIfNeeded()
           const reactionButton = reactionRoot.locator("button")
           await expect(reactionRoot).toHaveAttribute("aria-busy", "false")
+          await expect(reactionRoot).toBeInViewport()
           await expect(reactionButton).toBeEnabled()
           await expect(reactionButton).toHaveAttribute("aria-pressed", "false")
           await expect(reactionButton).toHaveAttribute("aria-disabled", "false")
           await expect(reactionButton.locator("[data-reaction-count]")).toHaveText("12")
+
+          expect(await reactionRoot.evaluate((element) => getComputedStyle(element).position)).toBe(
+            "fixed",
+          )
+          expect(await page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
 
           const bounds = await reactionButton.boundingBox()
           expect(bounds).not.toBeNull()
           expect(bounds!.width).toBeGreaterThanOrEqual(44)
           expect(bounds!.height).toBeGreaterThanOrEqual(44)
           expect(bounds!.x).toBeGreaterThanOrEqual(0)
+          expect(bounds!.y).toBeGreaterThanOrEqual(0)
           expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
+          expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height)
 
           await reactionButton.focus()
           await page.keyboard.press("Enter")
@@ -240,6 +270,7 @@ for (const target of pages) {
           await expect(reactionButton.locator("[data-reaction-label]")).toHaveText("已赞")
           await expect(reactionButton.locator("[data-reaction-count]")).toHaveText("13")
           await expect(reactionRoot.locator("[data-reaction-message]")).toHaveText("谢谢")
+          await expect(reactionRoot).toBeInViewport()
           expect(reactions.writes).toHaveLength(1)
           expect(reactions.writes[0]).toMatchObject({
             site: target.id.startsWith("blog") ? "blog" : "notes",
