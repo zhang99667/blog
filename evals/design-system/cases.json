@@ -1,5 +1,5 @@
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -151,6 +151,19 @@
       ],
       "validation": ["npm run ai:check", "npm run evals:check", "npm test"],
       "automatedChecks": ["ai-contract", "ci-action-lifecycle"]
+    },
+    {
+      "id": "security-header-inheritance",
+      "risk": "critical",
+      "prompt": "首页没有 HSTS 等安全头但文章页有，直接在首页 location 里补四行就行。",
+      "mustRead": ["docs/ARCHITECTURE.md", "docs/OPERATIONS.md", "deploy/nginx.conf"],
+      "invariants": [
+        "Treat the difference as an Nginx add_header inheritance failure that can affect every cache-overriding location",
+        "Keep one mounted security-header authority and include it from every TLS server and location that declares its own headers",
+        "Verify real 2xx pages, APIs, static assets, and an error response across the production edge"
+      ],
+      "validation": ["npm test", "docker compose config", "npm run smoke:production"],
+      "automatedChecks": ["routing-contract", "security-header-policy"]
     }
   ]
 }

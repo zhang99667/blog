@@ -2,7 +2,11 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse as parseYaml } from "yaml"
-import { collectCiActionLifecycleFailures, runEvalCases } from "./run-evals.mjs"
+import {
+  collectCiActionLifecycleFailures,
+  collectSecurityHeaderPolicyFailures,
+  runEvalCases,
+} from "./run-evals.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultRoot = path.resolve(scriptDir, "../..")
@@ -288,6 +292,34 @@ async function ciActionLifecycle(root) {
   )
 }
 
+async function securityHeaderPolicy(root) {
+  const failures = await collectSecurityHeaderPolicyFailures(root)
+  return probe(
+    failures.length === 0,
+    "Every edge response preserves the governed security headers across Nginx contexts.",
+    failures.length === 0
+      ? [
+          "one mounted security header authority",
+          "every TLS server and cache-header location is covered",
+          "production smoke checks pages, APIs, static assets, and 404 responses",
+        ]
+      : failures,
+  )
+}
+
+async function contentSecurityPolicy(root) {
+  return sourceContract(
+    root,
+    {
+      "deploy/security-headers.inc": ["add_header Content-Security-Policy"],
+      "scripts/quality/check-build.mjs": ["validateContentSecurityPolicy"],
+      "tests/quality/site-quality.spec.ts": ["securitypolicyviolation"],
+      "scripts/quality/smoke-production.mjs": ['"content-security-policy"'],
+    },
+    "Blog and notes enforce a tested Content Security Policy without runtime violations.",
+  )
+}
+
 const providers = {
   "editorial-seo": editorialSeo,
   "editorial-rss": editorialRss,
@@ -302,6 +334,8 @@ const providers = {
   "decision-contract": decisionContract,
   "live-eval-evidence": liveEvalEvidence,
   "ci-action-lifecycle": ciActionLifecycle,
+  "security-header-policy": securityHeaderPolicy,
+  "content-security-policy": contentSecurityPolicy,
 }
 
 export function scoreCapability(capability) {

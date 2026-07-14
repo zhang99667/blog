@@ -8,6 +8,7 @@ quartz/brand.generated.ts
 quartz/styles/_brand.generated.scss
 quartz/static
 design-system/reference
+deploy/security-headers.inc
 evals/**/*.jsonl
 playwright-report
 test-results

@@ -163,3 +163,12 @@
 - 反例：忽略兼容模式告警；只把 `upload-artifact` 改成可移动的 `@v7`；固定 SHA 却删除版本注释导致无法审计与更新；只升级发布工作流而遗漏验证或演进工作流；关闭 Dependabot 后靠偶尔人工搜索新版本。
 - 边界：离线探针验证引用形态、版本基线和更新通道，不声称仅凭源码就证明任意 SHA 的上游归属；首次和重大升级仍需从官方仓库核验提交并让全部远端工作流真实运行。本仓库使用 GitHub-hosted runner，自托管 runner 的最低版本兼容性不在本决策覆盖范围内。
 - 锁定证据：GitHub 官方发布记录与提交 API、三个工作流的完整 SHA 和同行版本注释、`ci-action-lifecycle` 演进探针、浮动引用与旧主版本回归单测、`ci-action-supply-chain` eval、Dependabot GitHub Actions 配置，以及远端 Verify、Publish、Evolution 的无淘汰告警运行。
+
+## D-019 安全响应头必须覆盖 Nginx 的每个响应上下文
+
+- 日期：2026-07-14
+- 触发：生产实测发现文章页返回 HSTS、`nosniff`、防嵌入和 Referrer 策略，但博客首页、JSONUtils 首页和静态 CSS 全部缺失；这些 location 为缓存单独声明了 `add_header`，从而覆盖了 server 层继承。
+- 决策：四项既有安全头集中到只读 `deploy/security-headers.inc`。部署脚本显式同步，edge Compose 显式挂载；每个 TLS server 引用一次，任何自行声明 `add_header` 的 location 必须在同一层再次引用。代理响应先隐藏上游同名头再由 edge 统一输出一份；Referrer 策略通过 map 保留上游更严格的值，静态响应回落到站点默认值。确定性解析器检查所有 Nginx block、隐藏规则和策略 map，生产 smoke 检查各域名页面、API、静态资源和真实 404，并拒绝重复或冲突值。
+- 反例：只给博客首页复制四行；看到文章页正常就宣称全站正常；让 edge 与 API 同时输出相同安全头；用站点默认 Referrer 策略覆盖上游更严格策略；升级 Nginx 来掩盖当前配置错误；删除 `no-store` 或 immutable 缓存策略以恢复继承；只 grep 配置而不读取线上响应头。
+- 边界：本决策统一当前 HSTS、MIME、防嵌入和 Referrer 基线，不顺带改变独立工具权限，也不声称已经具备 Content Security Policy。CSP 需要先外置 Quartz 可执行内联脚本、盘点资源源站并通过浏览器策略违规门禁，作为独立演进能力处理。
+- 锁定证据：Nginx 官方继承规则、集中 include、上游隐藏规则与 Referrer map、Compose 只读挂载、部署同步、上下文解析回归测试、`security-header-inheritance` eval、远端 `nginx -t`，以及博客、笔记、JSONUtils、后台、装箱单、API、静态图片和 404 的生产响应头 smoke。

@@ -8,7 +8,9 @@ import {
   collectGraphRuntimeBoundaryFailures,
   collectRoutingContractFailures,
   collectRuntimeBackupBoundaryFailures,
+  collectSecurityHeaderPolicyFailures,
   validateCiActionLifecycle,
+  validateNginxSecurityHeaderContexts,
 } from "./run-evals.mjs"
 
 test("routing ownership contract matches the repository", async () => {
@@ -55,4 +57,25 @@ jobs:
   assert.ok(failures.some((failure) => failure.includes("full commit SHA")))
   assert.ok(failures.some((failure) => failure.includes("upload-artifact v4.6.2")))
   assert.ok(failures.some((failure) => failure.includes("Dependabot must govern")))
+})
+
+test("security headers remain centralized across every Nginx response context", async () => {
+  assert.deepEqual(await collectSecurityHeaderPolicyFailures(), [])
+})
+
+test("security header context audit catches TLS and cache inheritance gaps", () => {
+  const failures = validateNginxSecurityHeaderContexts(`
+server {
+  listen 443 ssl;
+}
+server {
+  listen 443 ssl;
+  include /etc/nginx/conf.d/security-headers.inc;
+  location = /index.html {
+    add_header Cache-Control "no-store" always;
+  }
+}
+`)
+  assert.ok(failures.some((failure) => failure.includes("TLS server")))
+  assert.ok(failures.some((failure) => failure.includes("declares add_header")))
 })

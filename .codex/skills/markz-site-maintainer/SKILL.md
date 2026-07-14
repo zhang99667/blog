@@ -53,7 +53,7 @@ npm run deploy
 - Surface roles: `design-system/manifest.json`.
 - Wordmark component: `quartz/components/BrandMark.tsx`.
 - Blog homepage template and note publishing: `scripts/sync-notes.mjs`.
-- Edge routing: `deploy/nginx.conf` and `deploy/docker-compose.edge.yml`.
+- Edge routing and response policy: `deploy/nginx.conf`, `deploy/security-headers.inc`, and `deploy/docker-compose.edge.yml`.
 - AI workflow: `docs/AI-ENGINEERING-PLAYBOOK.md`.
 - Machine-readable authority and evidence graph: `ai/manifest.json`.
 - Continuous maturity priorities and probes: `ai/evolution.json` and `scripts/ai/evolve.mjs`.

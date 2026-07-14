@@ -110,6 +110,117 @@ export async function collectCiActionLifecycleFailures(root = defaultRoot) {
   return validateCiActionLifecycle(workflowSources, await readText(root, ".github/dependabot.yml"))
 }
 
+const securityHeaderInclude = "include /etc/nginx/conf.d/security-headers.inc;"
+const governedSecurityHeaders = [
+  'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
+  'add_header X-Content-Type-Options "nosniff" always;',
+  'add_header X-Frame-Options "DENY" always;',
+  "add_header Referrer-Policy $markz_referrer_policy always;",
+]
+const hiddenUpstreamSecurityHeaders = [
+  "proxy_hide_header Strict-Transport-Security;",
+  "proxy_hide_header X-Content-Type-Options;",
+  "proxy_hide_header X-Frame-Options;",
+  "proxy_hide_header Referrer-Policy;",
+]
+
+export function validateNginxSecurityHeaderContexts(source) {
+  const failures = []
+  const contexts = []
+
+  function closeContext(lineNumber) {
+    const context = contexts.pop()
+    if (!context) {
+      failures.push(`nginx has an unmatched closing brace at line ${lineNumber}`)
+      return
+    }
+    if (context.hasAddHeader && !context.hasSecurityHeaders) {
+      failures.push(
+        `${context.label} at line ${context.lineNumber} declares add_header without the governed security include`,
+      )
+    }
+    if (context.label === "server" && context.hasTlsListen && !context.hasSecurityHeaders) {
+      failures.push(
+        `TLS server at line ${context.lineNumber} is missing the governed security include`,
+      )
+    }
+  }
+
+  for (const [index, rawLine] of source.split("\n").entries()) {
+    const lineNumber = index + 1
+    const line = rawLine.replace(/\s+#.*$/, "").trim()
+    if (!line) continue
+    if (line === "}") {
+      closeContext(lineNumber)
+      continue
+    }
+    if (line.endsWith("{")) {
+      contexts.push({
+        label: line.slice(0, -1).trim(),
+        lineNumber,
+        hasAddHeader: false,
+        hasSecurityHeaders: false,
+        hasTlsListen: false,
+      })
+      continue
+    }
+    const context = contexts.at(-1)
+    if (!context) continue
+    if (line === securityHeaderInclude) context.hasSecurityHeaders = true
+    if (line.startsWith("add_header ")) context.hasAddHeader = true
+    if (/^listen\s+443\s+ssl;/.test(line)) context.hasTlsListen = true
+  }
+  while (contexts.length > 0) {
+    const context = contexts.at(-1)
+    failures.push(`${context.label} at line ${context.lineNumber} is not closed`)
+    contexts.pop()
+  }
+  return failures
+}
+
+export async function collectSecurityHeaderPolicyFailures(root = defaultRoot) {
+  const [nginx, securityHeaders, compose, deploy, smoke] = await Promise.all([
+    readText(root, "deploy/nginx.conf"),
+    readText(root, "deploy/security-headers.inc"),
+    readText(root, "deploy/docker-compose.edge.yml"),
+    readText(root, "scripts/deploy.mjs"),
+    readText(root, "scripts/quality/smoke-production.mjs"),
+  ])
+  const failures = validateNginxSecurityHeaderContexts(nginx)
+  for (const directive of governedSecurityHeaders) {
+    if (!securityHeaders.includes(directive)) {
+      failures.push(`security header authority is missing ${directive}`)
+    }
+    if (nginx.includes(directive)) {
+      failures.push(`nginx duplicates the governed directive ${directive}`)
+    }
+  }
+  for (const directive of hiddenUpstreamSecurityHeaders) {
+    if (!securityHeaders.includes(directive)) {
+      failures.push(`security header authority is missing ${directive}`)
+    }
+  }
+  for (const snippet of [
+    "map $upstream_http_referrer_policy $markz_referrer_policy",
+    '"" "strict-origin-when-cross-origin";',
+  ]) {
+    if (!nginx.includes(snippet)) failures.push(`nginx referrer policy map is missing ${snippet}`)
+  }
+  for (const [source, snippet, label] of [
+    [
+      compose,
+      "security-headers.inc:/etc/nginx/conf.d/security-headers.inc:ro",
+      "edge Compose mount",
+    ],
+    [deploy, "securityHeaders", "deployment sync"],
+    [smoke, "validateSecurityHeaders", "production smoke"],
+    [smoke, "__security-header-smoke__.png", "production 404 smoke"],
+  ]) {
+    if (!source.includes(snippet)) failures.push(`${label} is missing ${snippet}`)
+  }
+  return failures
+}
+
 export async function collectRoutingContractFailures(root = defaultRoot) {
   const failures = []
   const compose = await readText(root, "deploy/docker-compose.edge.yml")
@@ -341,6 +452,7 @@ const providers = {
   "graph-runtime-boundary": collectGraphRuntimeBoundaryFailures,
   "article-social-image-boundary": collectArticleSocialImageFailures,
   "ci-action-lifecycle": collectCiActionLifecycleFailures,
+  "security-header-policy": collectSecurityHeaderPolicyFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {

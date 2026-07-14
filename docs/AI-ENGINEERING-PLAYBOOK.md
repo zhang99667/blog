@@ -46,6 +46,7 @@
 | 博客首页文案和结构         | `scripts/sync-notes.mjs`                                | `content/site/index.md` |
 | 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs`     | `public-notes/`         |
 | 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                       | JSONUtils override      |
+| 安全响应头                 | `deploy/security-headers.inc`、`deploy/nginx.conf`      | 各 location 复制具体值  |
 | favicon、通用分享图        | 设计令牌和 `generate.mjs`                               | 版本化 PNG              |
 | 文章级分享图               | 设计令牌、文章 frontmatter、`article-social-images.mjs` | `.cache/social-images/` |
 | canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`                  | 生成 HTML               |

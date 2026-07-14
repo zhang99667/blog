@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const publicDir = path.join(root, "public")
 const publicNotesDir = path.join(root, "public-notes")
 const nginxConfig = path.join(root, "deploy/nginx.conf")
+const securityHeaders = path.join(root, "deploy/security-headers.inc")
 const edgeCompose = path.join(root, "deploy/docker-compose.edge.yml")
 const reactionsDir = path.join(root, "services/reactions")
 
@@ -37,7 +38,12 @@ if (!existsSync(publicDir)) {
 if (!existsSync(publicNotesDir)) {
   throw new Error("public-notes/ does not exist. Run `npm run build` before deploy.")
 }
-if (!existsSync(nginxConfig) || !existsSync(edgeCompose) || !existsSync(reactionsDir)) {
+if (
+  !existsSync(nginxConfig) ||
+  !existsSync(securityHeaders) ||
+  !existsSync(edgeCompose) ||
+  !existsSync(reactionsDir)
+) {
   throw new Error("Edge deployment configuration is missing.")
 }
 
@@ -64,6 +70,13 @@ run("rsync", [
   `${host}:${remoteReactionsDir}/`,
 ])
 run("rsync", ["-az", "-e", ssh.join(" "), nginxConfig, `${host}:${remoteAppDir}/nginx.conf`])
+run("rsync", [
+  "-az",
+  "-e",
+  ssh.join(" "),
+  securityHeaders,
+  `${host}:${remoteAppDir}/security-headers.inc`,
+])
 run("rsync", [
   "-az",
   "-e",

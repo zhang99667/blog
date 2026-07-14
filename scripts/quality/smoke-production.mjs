@@ -15,6 +15,12 @@ const brandEvidence = [
   `markz-card-${tokens.brand.assetRevision}.png`,
 ]
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
+const expectedSecurityHeaders = new Map([
+  ["strict-transport-security", ["max-age=31536000; includeSubDomains"]],
+  ["x-content-type-options", ["nosniff"]],
+  ["x-frame-options", ["DENY"]],
+  ["referrer-policy", ["strict-origin-when-cross-origin", "no-referrer"]],
+])
 const routes = [
   { url: "https://markz.fun/", evidence: brandEvidence },
   { url: "https://note.markz.fun/", evidence: brandEvidence },
@@ -32,15 +38,30 @@ const routes = [
   },
   { url: "https://markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
   { url: "https://note.markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
+  { url: "https://markz.fun/static/__security-header-smoke__.png", status: 404 },
 ]
 
 const failures = []
+
+function validateSecurityHeaders(label, response) {
+  for (const [header, expectedValues] of expectedSecurityHeaders) {
+    const actual = response.headers.get(header)
+    if (!expectedValues.includes(actual)) {
+      failures.push(
+        `${label} has invalid ${header}: ${actual ?? "missing"}; expected ${expectedValues.join(" or ")}`,
+      )
+    }
+  }
+}
+
 await Promise.all(
-  routes.map(async ({ url, evidence = [] }) => {
+  routes.map(async ({ url, evidence = [], status = 200 }) => {
     try {
       const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15000) })
       const body = await response.text()
-      if (!response.ok) failures.push(`${url} returned ${response.status}`)
+      if (response.status !== status)
+        failures.push(`${url} returned ${response.status}, expected ${status}`)
+      validateSecurityHeaders(url, response)
       for (const snippet of evidence) {
         if (!body.includes(snippet)) failures.push(`${url} is missing ${snippet}`)
       }
@@ -70,6 +91,7 @@ try {
   const imageUrl = `https://markz.fun/static/${entry.path}`
   const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
   if (!imageResponse.ok) throw new Error(`social image returned ${imageResponse.status}`)
+  validateSecurityHeaders("production article social image", imageResponse)
   if (imageResponse.headers.get("content-type")?.split(";")[0] !== "image/png") {
     failures.push("production article social image must return image/png")
   }
@@ -92,6 +114,7 @@ try {
   const response = await fetch("https://note.markz.fun/static/contentIndex.json", {
     signal: AbortSignal.timeout(15000),
   })
+  validateSecurityHeaders("production note graph index", response)
   const index = await response.json()
   const outgoing = index[linkedGraphSlug]?.links ?? []
   if (outgoing.length < 4) {
@@ -183,6 +206,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

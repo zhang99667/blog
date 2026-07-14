@@ -180,6 +180,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     ".github/workflows/markz-verify.yaml",
     ".github/workflows/markz-publish.yaml",
     ".github/workflows/markz-evolve.yaml",
+    "deploy/security-headers.inc",
     "docs/ARCHITECTURE.md",
     "docs/OPERATIONS.md",
     "docs/SYSTEM-BENCHMARKS.md",

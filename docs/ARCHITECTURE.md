@@ -16,6 +16,7 @@
 | 运行时本机备份  | 在线一致快照、校验、保留与恢复演练   | `services/reactions/backup.mjs`     | 加密前的本机私有快照              |
 | AI 演进控制面   | 能力盘点、证据探针、排序和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
 | CI 供应链       | Action 不可变引用、运行时与依赖更新  | 工作流、`.github/dependabot.yml`    | 可审计的验证与发布运行            |
+| 边缘安全策略    | HTTPS 响应头的一致性与继承边界       | `deploy/security-headers.inc`       | 页面、API、静态资源和错误响应     |
 | 边缘路由        | TLS、域名分流和 API 代理             | `deploy/nginx.conf`                 | `markz-edge`                      |
 | 独立工具        | JSONUtils、装箱单                    | 各自仓库                            | 独立产品界面                      |
 
@@ -105,6 +106,17 @@ official GitHub Action release
   -> Verify / Publish / Evolution prove the pinned revisions on GitHub-hosted runners
 ```
 
+边缘安全响应头使用单一挂载文件，避免 Nginx location 继承陷阱：
+
+```text
+deploy/security-headers.inc
+  -> deploy.mjs syncs the authority beside nginx.conf
+  -> edge Compose mounts the read-only include
+  -> every TLS server includes the baseline
+  -> every location with its own add_header includes the same baseline again
+  -> production smoke checks pages + APIs + static assets + 404 responses
+```
+
 ## 运行时路由
 
 - `markz.fun`：博客静态文件；`/notes/` 是笔记回退入口。
@@ -129,6 +141,7 @@ official GitHub Action release
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
 - 成熟度能力、评分和风险边界归 `ai/evolution.json`；探针只报告可观察事实，定时工作流不能直接修改代码、部署或处理密钥。
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
+- HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
 - 点赞、文章浏览和博客访客数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
@@ -159,14 +172,15 @@ official GitHub Action release
 
 ## 变更影响面
 
-| 变更        | 最小影响面             | 必须扩大的验证                               |
-| ----------- | ---------------------- | -------------------------------------------- |
-| 设计令牌    | 博客、笔记、品牌图片   | 主题、三个视口、无障碍                       |
-| 同步筛选    | 内容目录、索引、链接   | 公开范围、构建、断链                         |
-| Quartz 组件 | 对应 frame 或页面类型  | 真实构建页面、SPA 导航                       |
-| 发现元数据  | 博客、笔记、回退入口   | canonical、JSON-LD、RSS、robots、断链        |
-| 文章分享图  | 博客成稿与社交元数据   | 字体校验和、尺寸、体积、唯一性、三处 URL     |
-| 演进模型    | AI 报告、CI 和改进队列 | schema、探针、eval、风险边界                 |
-| CI Action   | 验证、发布与演进工作流 | 完整 SHA、版本注释、Dependabot、三条远端运行 |
-| edge 配置   | 所有公网域名           | Nginx 测试、端口所有权、生产 smoke           |
-| AI 规则     | Agent 行为与 CI        | manifest、eval runner、资产注册表            |
+| 变更        | 最小影响面               | 必须扩大的验证                                 |
+| ----------- | ------------------------ | ---------------------------------------------- |
+| 设计令牌    | 博客、笔记、品牌图片     | 主题、三个视口、无障碍                         |
+| 同步筛选    | 内容目录、索引、链接     | 公开范围、构建、断链                           |
+| Quartz 组件 | 对应 frame 或页面类型    | 真实构建页面、SPA 导航                         |
+| 发现元数据  | 博客、笔记、回退入口     | canonical、JSON-LD、RSS、robots、断链          |
+| 文章分享图  | 博客成稿与社交元数据     | 字体校验和、尺寸、体积、唯一性、三处 URL       |
+| 演进模型    | AI 报告、CI 和改进队列   | schema、探针、eval、风险边界                   |
+| CI Action   | 验证、发布与演进工作流   | 完整 SHA、版本注释、Dependabot、三条远端运行   |
+| 安全响应头  | 所有 edge 域名与响应类型 | Nginx 上下文、Compose 挂载、2xx/404 生产 smoke |
+| edge 配置   | 所有公网域名             | Nginx 测试、端口所有权、生产 smoke             |
+| AI 规则     | Agent 行为与 CI          | manifest、eval runner、资产注册表              |

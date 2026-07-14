@@ -1,6 +1,6 @@
 {
   "$schema": "./evolution.schema.json",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "objective": "持续把 MarkZ 建设成克制、可靠、易发现、愿意继续阅读的成熟个人博客，并让 AI 协作从当前证据自动选择下一项改进。",
   "cadence": {
     "schedule": "weekly and after evolution-source changes",
@@ -204,6 +204,34 @@
       "check": "ci-action-lifecycle",
       "nextAction": "把远程 Action 固定到完整 commit SHA，保留精确版本注释，并由 Dependabot 至少每周检查更新。",
       "validation": ["npm run ai:check", "npm run evals:check", "npm test"]
+    },
+    {
+      "id": "edge-security-headers",
+      "track": "runtime",
+      "name": "全站安全响应基线",
+      "description": "所有 HTTPS 页面、API、静态资源和错误响应一致返回集中治理的 HSTS、MIME、防嵌入与 Referrer 策略。",
+      "impact": 5,
+      "urgency": 5,
+      "confidence": 5,
+      "effort": 2,
+      "risk": "critical",
+      "check": "security-header-policy",
+      "nextAction": "集中安全响应头，覆盖每个 TLS server 和自行声明 add_header 的 location，并在生产检查 2xx、静态资源与 404。",
+      "validation": ["npm test", "npm run verify", "npm run smoke:production"]
+    },
+    {
+      "id": "content-security-policy",
+      "track": "runtime",
+      "name": "内容安全策略",
+      "description": "博客与笔记使用可执行、可测试且不依赖 unsafe-inline 脚本的 Content Security Policy 限制资源来源。",
+      "impact": 5,
+      "urgency": 4,
+      "confidence": 5,
+      "effort": 3,
+      "risk": "critical",
+      "check": "content-security-policy",
+      "nextAction": "先外置 Quartz 内联可执行脚本并盘点字体、图片、连接源，再发布 CSP，构建和浏览器门禁拒绝策略违规。",
+      "validation": ["npm test", "npm run quality:web", "npm run smoke:production"]
     }
   ]
 }

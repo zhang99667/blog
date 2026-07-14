@@ -39,7 +39,7 @@ npm run build
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
 
-部署会先同步 `services/reactions/`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数。
+部署会先同步 `services/reactions/`、`nginx.conf` 和集中式 `security-headers.inc`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，并检查页面、API、静态资源和 404 都保留安全响应头。
 
 ### 互动数据维护
 
@@ -94,6 +94,14 @@ GitHub 仓库需要以下 Actions 配置：
 2. 如果 JSONUtils 绑定了 `80/443`，先修复其 Compose，再重建 `markz-edge`。
 3. 检查 `deploy/nginx.conf` 的 `server_name` 与默认 server。
 4. 对所有域名执行 HTTPS smoke，不以单个首页 `200` 作为恢复证据。
+
+### 首页或静态资源缺少安全响应头
+
+1. 对首页、文章和静态资源分别运行 `curl -sSI`，不能用文章页的响应头代表全部 location。
+2. 检查对应 location 是否声明了 `add_header`；Nginx 1.28 在当前层出现任意 `add_header` 时不会继承 server 层的其他响应头。
+3. 不在各 location 复制四项具体值；确认 server 和该 location 都引用 `/etc/nginx/conf.d/security-headers.inc`。
+4. 代理 API 若自行输出同名头，由集中 include 的 `proxy_hide_header` 统一收口；不要删除 Referrer map，它负责保留上游更严格策略。
+5. 运行演进探针、远端 `nginx -t` 和完整生产 smoke，验证正常响应、静态资源与 404，并确认每项安全头只有一个有效值。
 
 ### note.markz.fun 返回 421
 
