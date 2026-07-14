@@ -22,6 +22,8 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `.github/workflows/markz-verify.yaml`          | 公开源码静态门禁               | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-publish.yaml`         | 私有内容同步与生产发布         | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-evolve.yaml`          | 定时刷新唯一成熟度改进任务     | 权威       | `npm run evolve:check`              | 2026-07-14 |
+| `.github/workflows/markz-backup.yaml`          | 审批门控的加密异地备份         | 权威       | `npm run evals:check`               | 2026-07-14 |
+| `deploy/known_hosts`                           | 生产 SSH 主机身份固定值        | 权威       | `npm test`、`npm run evals:check`   | 2026-07-14 |
 | `docs/AI-ENGINEERING-PLAYBOOK.md`              | 跨 AI 工具执行闭环             | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `docs/ARCHITECTURE.md`                         | 系统边界、数据流和所有权       | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `docs/OPERATIONS.md`                           | 发布、故障和回退手册           | 权威       | `npm run ai:check`                  | 2026-07-14 |
@@ -36,6 +38,8 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/design-system/`                       | 设计生成和漂移门禁             | 权威       | `npm test`                          | 2026-07-11 |
 | `scripts/ai/`                                  | AI 资产治理门禁                | 权威       | `npm test`                          | 2026-07-14 |
 | `scripts/ai/evolve.mjs`                        | 探测、评分和生成实时进化报告   | 权威       | `npm run evolve:check`、`npm test`  | 2026-07-14 |
+| `scripts/runtime-backup/`                      | 密钥引导、加密打包与安全恢复   | 权威       | `npm test`、真实临时密钥恢复演练    | 2026-07-14 |
+| `services/reactions/`                          | 匿名互动、快照及异地包完整性   | 权威       | `npm test`、生产 smoke              | 2026-07-14 |
 | `quality/`                                     | 构建质量与性能预算             | 权威       | `npm run quality:build`             | 2026-07-11 |
 | `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-11 |
 | `scripts/quality/content-security-policy.mjs`  | CSP 解析与单一策略读取         | 权威       | `npm test`、`npm run quality:build` | 2026-07-14 |

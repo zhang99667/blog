@@ -6,6 +6,7 @@ import { test } from "node:test"
 import {
   backupHealth,
   createBackup,
+  latestVerifiedBackup,
   restoreSnapshot,
   runRestoreDrill,
   verifySnapshot,
@@ -138,6 +139,25 @@ test("health rejects stale or corrupted snapshots", async (t) => {
     backupHealth({ backupDir, now: new Date("2026-07-14T05:00:00.000Z") }),
     /checksum|integrity/i,
   )
+})
+
+test("latest verified metadata omits server-local paths and volatile age", async (t) => {
+  const { databasePath, backupDir, store } = await fixture(t)
+  seed(store)
+  const result = await createBackup({
+    databasePath,
+    backupDir,
+    now: new Date("2026-07-14T04:00:00.000Z"),
+  })
+
+  const latest = await latestVerifiedBackup({
+    backupDir,
+    now: new Date("2026-07-14T05:00:00.000Z"),
+  })
+  assert.equal(latest.snapshot, result.snapshot)
+  assert.equal(latest.sha256, result.sha256)
+  assert.equal("snapshotPath" in latest, false)
+  assert.equal("ageMs" in latest, false)
 })
 
 test("restore creates a separately verified database and never overwrites a destination", async (t) => {

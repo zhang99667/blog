@@ -48,7 +48,7 @@ jobs:
       - run: npx quartz plugin install
       - run: npx playwright install --with-deps chromium
 
-      - name: Configure deployment SSH
+      - name: Configure pinned deployment SSH
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.MARKZ_SSH_PRIVATE_KEY }}
@@ -57,7 +57,7 @@ jobs:
           install -d -m 700 ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${BLOG_SSH_HOST#*@}" >> ~/.ssh/known_hosts
+          install -m 600 deploy/known_hosts ~/.ssh/known_hosts
 
       - name: Verify and deploy
         run: npm run deploy

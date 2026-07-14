@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import test from "node:test"
@@ -6,6 +7,7 @@ import {
   rankGaps,
   renderEvolutionMarkdown,
   scoreCapability,
+  validateRuntimeBackupActivation,
   validateEvolutionProgram,
 } from "./evolve.mjs"
 
@@ -82,4 +84,27 @@ test("evolution report exposes current evidence and the next action", () => {
   assert.match(markdown, /文章继续阅读/)
   assert.match(markdown, /实时评测：6\/6/)
   assert.match(markdown, /Add related posts/)
+})
+
+test("runtime backup activation evidence is bound to its public recipient and recovery run", () => {
+  const recipient = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n"
+  const activation = {
+    version: "1.0.0",
+    activatedAt: "2026-07-14T14:00:00.000Z",
+    workflowRunId: 123,
+    artifactId: 456,
+    artifactName: "markz-runtime-backup-123",
+    artifactDigest: `sha256:${"a".repeat(64)}`,
+    sourceCommit: "b".repeat(40),
+    recipientSha256: createHash("sha256").update(recipient).digest("hex"),
+    retentionDays: 90,
+    restoreDrill: "passed",
+  }
+
+  assert.deepEqual(validateRuntimeBackupActivation(activation, recipient), [])
+  assert.match(validateRuntimeBackupActivation(activation, `${recipient}age1changed\n`)[0], /stale/)
+  assert.match(
+    validateRuntimeBackupActivation({ ...activation, restoreDrill: "skipped" }, recipient)[0],
+    /invalid/,
+  )
 })

@@ -181,3 +181,12 @@
 - 反例：用 `script-src 'unsafe-inline'` 或 `'unsafe-eval'` 快速消除报错；给所有域名下发同一 CSP；保留每页内联启动代码；把 Mermaid、D3 或 Pixi 放回公共 CDN；只检查响应头存在而不运行页面；把按需 vendor 从总资源预算中完全排除。
 - 边界：CSP 不替代依赖审计、输入净化或产品权限。Google 字体仍按设计系统决策显式允许；YouTube frame 是已配置能力但当前内容不必加载。未来新增外部图片、连接、frame、Explorer 行为或脚本源，必须先修改权威策略和确定性门禁，不能临时加通配符。`pixi.js/unsafe-eval` 是官方命名的静态兼容模块，不等于策略允许动态求值，最终以浏览器无违规为准。
 - 锁定证据：Nginx host map 解析测试、327 个 HTML 的零可执行内联脚本与资源源站检查、Explorer/Mermaid/Pixi 兼容单测、自托管资产和总量预算、保持 200 KB 的核心脚本预算、所有 52 个 Playwright 场景的 `securitypolicyviolation` 监听、Mermaid/图谱/404 专项交互、`content-security-policy-runtime` eval、生产精确响应头 smoke，以及实现前后 13/15 到 14/15 的演进报告。
+
+## D-021 异地备份必须把审批、加密和可恢复性绑在一起
+
+- 日期：2026-07-14
+- 触发：成熟度报告只剩 `runtime-backup` 未完成；本机快照已经能恢复，但服务器或磁盘丢失仍会同时带走数据库和全部快照。继续自动迭代时又不能擅自创建外部密钥或上传匿名访客哈希。
+- 决策：建立每日 GitHub Actions Artifact 异地链路，但用 `MARKZ_RUNTIME_BACKUP_ENABLED == 'true'` 做显式审批门控，默认跳过。Runner 只读取已经通过 health 与 drill 的最新快照，生产 SSH 主机使用仓库固定的 Ed25519 key，不动态信任扫描结果。包内只允许 SQLite 快照、伴随清单和 bundle 清单；官方 `age 1.3.1` 三平台发行包固定 SHA-256。密文同时面向用户专用长期公钥与本次运行临时公钥，上传前必须用临时私钥解密同一密文并完成隔离 SQLite 恢复；上传目录只能包含 `.age` 与 `.sha256`，保留 90 天。密钥引导必须带 `--confirm-create-key`，私钥默认写到仓库外且拒绝覆盖；恢复工具只写全新目标。
+- 反例：因为工作流文件存在就把成熟度改成 15/15；复用个人或部署 SSH 私钥加密；把 age 私钥放进 GitHub Secret；上传明文 SQLite、manifest 或 staging 目录；使用未校验的安装脚本或浮动 age 版本；只测试解密而不恢复数据库；主机 key 变化时自动接受；恢复时直接覆盖在线数据库。
+- 边界：创建专用 identity、提交 public recipient、设置启用变量和首次外部上传都需要用户明确同意；未授权时工作流保持跳过，演进报告必须继续显示 14/15。首次成功还要登记与当前 recipient 哈希绑定的 run、artifact digest 和下载恢复证据，不能只凭源码升为完成。Artifact 是现有 GitHub 平台内的加密恢复层，不替代用户保存私钥，也不覆盖 GitHub 账号丢失、超过 90 天保留或多区域灾备。把恢复文件放入生产仍是单独的破坏性审批。
+- 锁定证据：`markz-backup.yaml` 审批条件、只读权限、固定 Action 和 90 天密文路径；`age-tool.sh` 版本与三平台校验和；bootstrap 私钥仓库外与拒绝覆盖；最新快照机器输出、包文件集与 checksum 篡改测试；临时长期 recipient 的真实加密解密、SQLite 恢复端到端演练；固定 `known_hosts` 与 live fingerprint 比对；`runtime-backup-boundary` eval，以及在 recipient 缺失时仍保持 14/15 的演进报告。

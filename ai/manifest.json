@@ -1,6 +1,6 @@
 {
   "$schema": "./manifest.schema.json",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "project": "MarkZ blog and public notes",
   "authorities": [
     { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
@@ -24,6 +24,16 @@
       "id": "edge-content-security-policy",
       "path": "deploy/nginx.conf",
       "kind": "host-scoped-runtime-policy"
+    },
+    {
+      "id": "runtime-backup-workflow",
+      "path": ".github/workflows/markz-backup.yaml",
+      "kind": "approval-gated-disaster-recovery-workflow"
+    },
+    {
+      "id": "runtime-backup-tooling",
+      "path": "scripts/runtime-backup",
+      "kind": "disaster-recovery-tooling"
     }
   ],
   "instructionLayers": [
@@ -59,6 +69,18 @@
       "prompt": ".github/prompts/evolve-site.prompt.md",
       "requiredCommands": ["npm run evolve:report", "npm run verify"],
       "requiredEvidence": ["ranked-gap-before", "implementation", "ranked-gap-after"]
+    },
+    "runtimeBackup": {
+      "risk": "critical",
+      "prompt": ".github/prompts/runtime-backup.prompt.md",
+      "requiredCommands": ["npm test", "npm run evals:check", "npm run evolve:report"],
+      "requiredEvidence": [
+        "explicit-activation-approval",
+        "public-recipient-only",
+        "encrypted-artifact",
+        "decrypt-and-restore-drill",
+        "successful-off-host-run"
+      ]
     }
   },
   "qualityGates": {

@@ -60,19 +60,69 @@ npm run build
 3. 把已验证的 `recovered.sqlite` 安装到数据目录，权限设为 `0600`，属主保持服务器 `markz` 用户；不要把旧 WAL/SHM 配到新主文件。
 4. 使用 `docker compose up -d --force-recreate --wait reactions reactions-backup` 重启，依次检查 API 健康、备份健康和恢复演练，再重建 edge。
 
+### 审批门控的异地备份
+
+`.github/workflows/markz-backup.yaml` 已定义每日 `03:29 UTC` 的异地恢复链，但默认由 `MARKZ_RUNTIME_BACKUP_ENABLED` 关闭。它复用服务器部署 SSH 访问能力，却用 `deploy/known_hosts` 固定生产 Ed25519 主机身份；不使用动态 `ssh-keyscan`。只有用户明确同意新增专用密钥和 GitHub Artifact 存储后，才能执行以下激活步骤：
+
+1. 运行 `bash scripts/runtime-backup/bootstrap-key.sh --confirm-create-key`。默认把私钥写到仓库外的 `~/.config/markz/runtime-backup.agekey`，权限 `0600`；仓库只得到 `deploy/runtime-backup-recipient.txt` 公钥。
+2. 把私钥另存到用户控制的密码管理器或离线介质。服务器、GitHub Secrets、Actions 日志和提交历史都不能保存它。
+3. 提交公钥并运行完整门禁后，设置仓库变量：`gh variable set MARKZ_RUNTIME_BACKUP_ENABLED -R zhang99667/blog --body true`。
+4. 手动触发首次运行：`gh workflow run markz-backup.yaml -R zhang99667/blog`，等待成功并确认 Artifact 只包含一个 `.age` 和一个 `.sha256`。
+5. 下载首次 Artifact，按下述命令恢复到新文件；把 run、artifact ID、digest、source commit、recipient SHA-256 和恢复结论写入 `ai/runtime-backup-activation.json`。只有该证据与当前公钥匹配后，`runtime-backup` 才能从 14/15 升为完成。
+
+激活证据格式固定为：
+
+```json
+{
+  "version": "1.0.0",
+  "activatedAt": "<ISO-8601 UTC>",
+  "workflowRunId": 123456789,
+  "artifactId": 123456789,
+  "artifactName": "markz-runtime-backup-123456789",
+  "artifactDigest": "sha256:<64 lowercase hex>",
+  "sourceCommit": "<40 lowercase hex>",
+  "recipientSha256": "<sha256 of deploy/runtime-backup-recipient.txt>",
+  "retentionDays": 90,
+  "restoreDrill": "passed"
+}
+```
+
+该文件是人工确认后的首次激活证据，不由定时任务自动提交。recipient 变化会让探针重新变为未完成，直到新旧 recipient 重叠轮换和下载恢复重新得到证明。
+
+启用后的工作流读取最新本机快照并再次执行 health 与 drill；Runner 只在临时目录保存明文。`age 1.3.1` 发布包与平台 SHA-256 固定，实际密文同时写给长期公钥和本次运行的临时公钥。上传前必须用临时私钥解密同一密文、验证精确文件集并真实恢复 SQLite；随后清除 staging、临时私钥和恢复文件。Artifact 关闭二次压缩，每日一份，保留 90 天，因此启用后的服务器故障 RPO 上限约为 24 小时。
+
+下载并恢复异地副本：
+
+```bash
+gh run list -R zhang99667/blog --workflow markz-backup.yaml --status success
+gh run download <run-id> -R zhang99667/blog --name markz-runtime-backup-<run-id> --dir .cache/runtime-backup-download
+bash scripts/runtime-backup/restore-encrypted.sh \
+  .cache/runtime-backup-download \
+  ~/.config/markz/runtime-backup.agekey \
+  .cache/recovered-reactions.sqlite
+node services/reactions/backup.mjs verify .cache/recovered-reactions.sqlite
+```
+
+恢复脚本会先校验密文 SHA-256、通过 `age` 认证解密、检查包内只有快照和两份清单，再恢复到一个不存在的新路径。把该文件替换进生产仍属于破坏性操作，必须另行确认，并按上一节先停服务、保留当前数据库与 WAL/SHM 回退副本。
+
+轮换密钥时先生成第二把专用 identity，将新旧两个公钥同时放入 recipient 文件并成功运行、下载、恢复一份新 Artifact；旧私钥至少保留到最后一份使用旧 recipient 的 Artifact 过期后才能删除。不要原地覆盖 identity，也不要只更新公钥而没有恢复证据。
+
 匿名点赞、文章浏览和博客访客只用于轻量反馈，不是账号级统计或风控。`reactions`、`views` 分别阻止同一浏览器 ID 对同一文章重复累计；`visitors` 阻止累计访客重复，`daily_visitors` 保存北京时间当天稳定序号。Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次计入，这是当前产品边界。
 
 访客功能首次启用时，会把已有博客文章点赞和唯一浏览中的匿名哈希合并进 `visitors`，作为累计基线；`daily_visitors` 从功能上线当天开始，不反推历史日序号。博客页面每次完整加载最多登记一次，Quartz 站内 SPA 跳转复用当前结果。接口失败时页脚计数隐藏，不能阻断静态内容。
 
 GitHub 仓库需要以下 Actions 配置：
 
-| 类型     | 名称                    | 用途                                |
-| -------- | ----------------------- | ----------------------------------- |
-| Secret   | `NOTE_REPO_SSH_KEY`     | `note` 仓库专用只读 deploy key 私钥 |
-| Secret   | `MARKZ_SSH_PRIVATE_KEY` | CI 专用服务器部署私钥               |
-| Variable | `BLOG_SSH_HOST`         | 可选，默认 `markz@39.97.237.248`    |
+| 类型     | 名称                           | 用途                                |
+| -------- | ------------------------------ | ----------------------------------- |
+| Secret   | `NOTE_REPO_SSH_KEY`            | `note` 仓库专用只读 deploy key 私钥 |
+| Secret   | `MARKZ_SSH_PRIVATE_KEY`        | CI 专用服务器部署私钥               |
+| Variable | `BLOG_SSH_HOST`                | 可选，默认 `markz@39.97.237.248`    |
+| Variable | `MARKZ_RUNTIME_BACKUP_ENABLED` | 异地备份审批开关，默认关闭          |
 
 不要把个人日常 SSH 私钥上传到 GitHub。两把 CI 密钥独立生成、独立撤销；`note` deploy key 不授予写权限。
+
+生产 SSH 主机公钥固定在 `deploy/known_hosts`。服务器重装或主机密钥轮换时，应从已经信任的控制台核验新指纹后更新权威文件并跑完整发布门禁；不要通过恢复 `ssh-keyscan` 绕过失败。
 
 ### 本地发布
 
@@ -138,6 +188,15 @@ GitHub 仓库需要以下 Actions 配置：
 3. 运行 `docker exec markz-reactions-backup node /app/backup.mjs once`；随后分别执行 `health` 和 `drill`。
 4. 若校验失败，保留失败文件与日志用于分析，不手改 `latest.json` 冒充健康；从最近一份通过校验的快照恢复。
 5. 若整台服务器或磁盘不可用，本机快照也会同时丢失。当前必须明确报告“无异地副本”，不能把本机 32 份保留描述成完整灾备。
+
+### MarkZ Runtime Backup 跳过或失败
+
+1. 未经批准时，job 因 `MARKZ_RUNTIME_BACKUP_ENABLED` 缺失而跳过是正确状态；不要为消除黄色状态擅自启用。
+2. 已批准但仍跳过时，检查仓库变量是否精确为 `true`，并确认主分支包含仅公钥的 `deploy/runtime-backup-recipient.txt`。
+3. SSH 失败先比对可信控制台中的主机 Ed25519 指纹与 `deploy/known_hosts`；不要现场执行 `ssh-keyscan` 覆盖固定值。
+4. age 下载失败或校验不符时保留失败，核验官方发布与三平台 SHA 后通过代码审查升级；不能跳过 checksum。
+5. 打包失败时区分本机快照健康、精确文件集、临时接收者解密和 SQLite 恢复哪一步失败。任何一步失败都不能上传旧密文冒充新恢复点。
+6. Artifact 下载后必须运行 `restore-encrypted.sh`。只看到工作流绿色或文件存在，不足以批准生产恢复。
 
 ### 笔记日期全部变成同步当天
 

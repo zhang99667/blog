@@ -332,6 +332,16 @@ async function verifyRecordedSnapshot(backupDir, manifest) {
   return { ...verification, snapshotPath }
 }
 
+export async function latestVerifiedBackup({
+  backupDir,
+  now = new Date(),
+  maxAgeMs = DEFAULT_MAX_AGE_MS,
+} = {}) {
+  const result = await backupHealth({ backupDir, now, maxAgeMs })
+  const { snapshotPath: _snapshotPath, ageMs: _ageMs, ...manifest } = result
+  return manifest
+}
+
 export async function backupHealth({
   backupDir,
   now = new Date(),
@@ -477,6 +487,18 @@ async function main() {
   }
   if (command === "verify") {
     const result = await verifySnapshot(process.argv[3])
+    console.log(JSON.stringify(result))
+    return
+  }
+  if (command === "latest-json") {
+    const result = await latestVerifiedBackup({
+      backupDir: options.backupDir,
+      maxAgeMs: positiveInteger(
+        process.env.BACKUP_MAX_AGE_MS,
+        DEFAULT_MAX_AGE_MS,
+        "BACKUP_MAX_AGE_MS",
+      ),
+    })
     console.log(JSON.stringify(result))
     return
   }

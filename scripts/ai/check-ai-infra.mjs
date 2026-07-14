@@ -175,11 +175,14 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     ".github/prompts/publish-content.prompt.md",
     ".github/prompts/edge-incident.prompt.md",
     ".github/prompts/evolve-site.prompt.md",
+    ".github/prompts/runtime-backup.prompt.md",
     ".github/pull_request_template.md",
     ".github/dependabot.yml",
     ".github/workflows/markz-verify.yaml",
     ".github/workflows/markz-publish.yaml",
     ".github/workflows/markz-evolve.yaml",
+    ".github/workflows/markz-backup.yaml",
+    "deploy/known_hosts",
     "deploy/security-headers.inc",
     "docs/ARCHITECTURE.md",
     "docs/OPERATIONS.md",
@@ -197,6 +200,12 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "scripts/ai/run-evals.mjs",
     "scripts/ai/evolve.mjs",
     "scripts/ai/evolve.test.mjs",
+    "scripts/runtime-backup/age-tool.sh",
+    "scripts/runtime-backup/bootstrap-key.sh",
+    "scripts/runtime-backup/package-encrypted.sh",
+    "scripts/runtime-backup/restore-encrypted.sh",
+    "services/reactions/offsite-backup.mjs",
+    "services/reactions/offsite-backup.test.mjs",
     "quality/budgets.json",
     "scripts/quality/check-build.mjs",
     "scripts/quality/smoke-production.mjs",
@@ -260,6 +269,21 @@ export async function collectAiInfraFailures(root = defaultRoot) {
 
   const skill = await readText(root, ".codex/skills/markz-site-maintainer/SKILL.md")
   failures.push(...validateSkill(skill))
+
+  const runtimeBackupPrompt = await readText(root, ".github/prompts/runtime-backup.prompt.md")
+  for (const snippet of [
+    "explicit user approval",
+    "private age identity outside the repository",
+    "MARKZ_RUNTIME_BACKUP_ENABLED",
+    "restore to a new path",
+  ]) {
+    requireSnippet(
+      runtimeBackupPrompt,
+      ".github/prompts/runtime-backup.prompt.md",
+      snippet,
+      failures,
+    )
+  }
 
   const cases = JSON.parse(await readText(root, "evals/design-system/cases.json"))
   failures.push(...validateEvalCases(cases))

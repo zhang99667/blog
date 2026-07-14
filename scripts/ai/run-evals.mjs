@@ -426,8 +426,14 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
 export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
   const failures = []
   const backup = await readText(root, "services/reactions/backup.mjs")
+  const offsite = await readText(root, "services/reactions/offsite-backup.mjs")
   const compose = await readText(root, "deploy/docker-compose.edge.yml")
   const smoke = await readText(root, "scripts/quality/smoke-production.mjs")
+  const ageTool = await readText(root, "scripts/runtime-backup/age-tool.sh")
+  const keyBootstrap = await readText(root, "scripts/runtime-backup/bootstrap-key.sh")
+  const packageScript = await readText(root, "scripts/runtime-backup/package-encrypted.sh")
+  const restoreScript = await readText(root, "scripts/runtime-backup/restore-encrypted.sh")
+  const knownHosts = await readText(root, "deploy/known_hosts")
   for (const snippet of [
     "await backup(source, temporarySnapshot",
     "PRAGMA integrity_check",
@@ -449,18 +455,85 @@ export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
     failures.push("production smoke must perform a reactions restore drill")
   }
 
+  for (const snippet of [
+    "verifyBackupSet",
+    "verifyOffsiteBundle",
+    "restoreOffsiteBundle",
+    'assertEqual(names, expectedNames, "file set")',
+  ]) {
+    if (!offsite.includes(snippet)) failures.push(`off-site backup verifier is missing ${snippet}`)
+  }
+  for (const snippet of [
+    'MARKZ_AGE_VERSION="1.3.1"',
+    "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377",
+    "01120ea2cbf0463d4c6bd767f99f3271bbed1cdc8a9aa718a76ba1fe4f01998b",
+    "age release checksum mismatch",
+  ]) {
+    if (!ageTool.includes(snippet)) failures.push(`age tool installer is missing ${snippet}`)
+  }
+  for (const snippet of [
+    "ephemeral_identity",
+    'offsite-backup.mjs" verify',
+    'offsite-backup.mjs" restore',
+    "Runtime backup output contains an unexpected file",
+  ]) {
+    if (!packageScript.includes(snippet)) {
+      failures.push(`off-site backup packaging is missing ${snippet}`)
+    }
+  }
+  for (const snippet of ["--confirm-create-key", "private backup identity must stay outside"]) {
+    if (!keyBootstrap.includes(snippet)) failures.push(`backup key bootstrap is missing ${snippet}`)
+  }
+  for (const snippet of [
+    "Encrypted artifact checksum does not match",
+    "Artifact directory contains an unexpected file",
+    "Restore destination already exists",
+    'offsite-backup.mjs" verify',
+    'offsite-backup.mjs" restore',
+  ]) {
+    if (!restoreScript.includes(snippet)) failures.push(`off-site recovery is missing ${snippet}`)
+  }
+  for (const source of [ageTool, keyBootstrap, packageScript, restoreScript]) {
+    if (/MARKZ_SSH_PRIVATE_KEY|NOTE_REPO_SSH_KEY/.test(source)) {
+      failures.push("runtime backup tools must not consume deployment or notes private keys")
+    }
+  }
+  if (!/^39\.97\.237\.248 ssh-ed25519 [A-Za-z0-9+/=]+\n$/.test(knownHosts)) {
+    failures.push("production SSH trust must pin one Ed25519 host key")
+  }
+
   const workflowPath = path.join(root, ".github/workflows/markz-backup.yaml")
   try {
     const workflow = await fs.readFile(workflowPath, "utf8")
-    if (
-      workflow.includes("upload-artifact") &&
-      /\.sqlite\b/.test(workflow) &&
-      !/(?:age|gpg|openssl|encrypt)/i.test(workflow)
-    ) {
-      failures.push("off-host workflow must not upload a plaintext SQLite snapshot")
+    for (const snippet of [
+      "schedule:",
+      "workflow_dispatch:",
+      "contents: read",
+      "deploy/known_hosts",
+      "backup.mjs latest-json",
+      "backup.mjs drill",
+      "package-encrypted.sh",
+      "MARKZ_RUNTIME_BACKUP_ENABLED",
+      "path: .cache/runtime-backup-upload",
+      "compression-level: 0",
+      "retention-days: 90",
+      "steps.upload.outputs.artifact-digest",
+    ]) {
+      if (!workflow.includes(snippet)) failures.push(`off-site workflow is missing ${snippet}`)
+    }
+    if (workflow.includes("ssh-keyscan")) {
+      failures.push("off-site workflow must not trust a live SSH key scan")
+    }
+    const parsed = parseYaml(workflow)
+    const upload = parsed.jobs?.backup?.steps?.find((step) =>
+      String(step.uses ?? "").startsWith("actions/upload-artifact@"),
+    )
+    if (upload?.with?.path !== ".cache/runtime-backup-upload") {
+      failures.push("off-site workflow artifact path must contain ciphertext only")
     }
   } catch (error) {
-    if (error.code !== "ENOENT") throw error
+    if (error.code === "ENOENT") failures.push("off-site backup workflow is missing")
+    else throw error
   }
   return failures
 }

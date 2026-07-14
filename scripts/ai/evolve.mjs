@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -125,11 +126,40 @@ async function anonymousFeedback(root) {
   )
 }
 
+export function validateRuntimeBackupActivation(activation, recipient) {
+  const recipientSha256 = createHash("sha256").update(recipient).digest("hex")
+  if (
+    activation.version !== "1.0.0" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(activation.activatedAt ?? "") ||
+    !Number.isSafeInteger(activation.workflowRunId) ||
+    activation.workflowRunId <= 0 ||
+    !Number.isSafeInteger(activation.artifactId) ||
+    activation.artifactId <= 0 ||
+    activation.artifactName !== `markz-runtime-backup-${activation.workflowRunId}` ||
+    !/^sha256:[a-f0-9]{64}$/.test(activation.artifactDigest ?? "") ||
+    !/^[a-f0-9]{40}$/.test(activation.sourceCommit ?? "") ||
+    activation.recipientSha256 !== recipientSha256 ||
+    activation.retentionDays !== 90 ||
+    activation.restoreDrill !== "passed"
+  ) {
+    return ["off-site backup activation evidence is invalid or stale for its recipient"]
+  }
+  return []
+}
+
 async function runtimeBackup(root) {
   const required = [
     "services/reactions/backup.mjs",
     "services/reactions/backup.test.mjs",
+    "services/reactions/offsite-backup.mjs",
+    "services/reactions/offsite-backup.test.mjs",
+    "scripts/runtime-backup/age-tool.sh",
+    "scripts/runtime-backup/bootstrap-key.sh",
+    "scripts/runtime-backup/package-encrypted.sh",
+    "scripts/runtime-backup/restore-encrypted.sh",
     ".github/workflows/markz-backup.yaml",
+    "deploy/runtime-backup-recipient.txt",
+    "ai/runtime-backup-activation.json",
   ]
   const missing = []
   for (const file of required)
@@ -137,9 +167,54 @@ async function runtimeBackup(root) {
   if (missing.length === 0) {
     const compose = await readText(root, "deploy/docker-compose.edge.yml")
     const smoke = await readText(root, "scripts/quality/smoke-production.mjs")
+    const workflow = await readText(root, ".github/workflows/markz-backup.yaml")
+    const ageTool = await readText(root, "scripts/runtime-backup/age-tool.sh")
+    const packageScript = await readText(root, "scripts/runtime-backup/package-encrypted.sh")
+    const restoreScript = await readText(root, "scripts/runtime-backup/restore-encrypted.sh")
+    const recipient = await readText(root, "deploy/runtime-backup-recipient.txt")
+    const activation = await readJson(root, "ai/runtime-backup-activation.json")
     if (!compose.includes("reactions-backup")) missing.push("backup sidecar is not deployed")
     if (!smoke.includes("reactions backup"))
       missing.push("production smoke does not verify backups")
+    for (const snippet of [
+      "schedule:",
+      "backup.mjs latest-json",
+      "package-encrypted.sh",
+      "MARKZ_RUNTIME_BACKUP_ENABLED",
+      "upload-artifact",
+      "retention-days: 90",
+    ]) {
+      if (!workflow.includes(snippet)) missing.push(`off-site backup workflow lacks ${snippet}`)
+    }
+    for (const snippet of [
+      "ephemeral_identity",
+      'offsite-backup.mjs" verify',
+      'offsite-backup.mjs" restore',
+    ]) {
+      if (!packageScript.includes(snippet))
+        missing.push(`off-site backup packaging lacks ${snippet}`)
+    }
+    if (!ageTool.includes('MARKZ_AGE_VERSION="1.3.1"')) {
+      missing.push("off-site backup age tool is not pinned")
+    }
+    for (const snippet of [
+      "Encrypted artifact checksum does not match",
+      'offsite-backup.mjs" restore',
+    ]) {
+      if (!restoreScript.includes(snippet)) missing.push(`off-site recovery lacks ${snippet}`)
+    }
+    const recipients = recipient
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+    if (
+      recipients.length === 0 ||
+      recipients.some((line) => !/^age1[0-9a-z]+$/.test(line)) ||
+      recipient.includes("AGE-SECRET-KEY")
+    ) {
+      missing.push("off-site backup requires public age recipients without private identities")
+    }
+    missing.push(...validateRuntimeBackupActivation(activation, recipient))
   }
   return probe(
     missing.length === 0,

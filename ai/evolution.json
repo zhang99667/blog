@@ -1,6 +1,6 @@
 {
   "$schema": "./evolution.schema.json",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "objective": "持续把 MarkZ 建设成克制、可靠、易发现、愿意继续阅读的成熟个人博客，并让 AI 协作从当前证据自动选择下一项改进。",
   "cadence": {
     "schedule": "weekly and after evolution-source changes",
@@ -107,10 +107,16 @@
       "urgency": 5,
       "confidence": 5,
       "effort": 4,
-      "risk": "high",
+      "risk": "critical",
       "check": "runtime-backup",
-      "nextAction": "设计在线一致快照、完整性校验、保留与加密异地副本；新增外部存储或密钥前需要用户确认。",
-      "validation": ["npm test", "npm run verify", "npm run smoke:production"]
+      "nextAction": "获得明确同意后创建仓库外专用 age identity，只提交 public recipient，启用审批变量，并用首次 Artifact 下载恢复证明异地路径。",
+      "validation": [
+        "npm test",
+        "npm run evals:check",
+        "npm run evolve:report",
+        "npm run verify",
+        "npm run smoke:production"
+      ]
     },
     {
       "id": "production-observability",

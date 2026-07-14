@@ -1,0 +1,111 @@
+name: MarkZ Runtime Backup
+
+on:
+  schedule:
+    - cron: "29 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: markz-runtime-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypt, restore-test, and archive
+    if: vars.MARKZ_RUNTIME_BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BLOG_SSH_HOST: ${{ vars.BLOG_SSH_HOST || 'markz@39.97.237.248' }}
+      REMOTE_BACKUP_DIR: /home/markz/apps/blog/reactions-backups
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Configure pinned production SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.MARKZ_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          install -m 600 deploy/known_hosts ~/.ssh/known_hosts
+
+      - name: Fetch latest verified snapshot
+        id: fetch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          staging="$RUNNER_TEMP/markz-runtime-backup-staging"
+          mkdir -m 700 "$staging"
+          ssh_options=(-i ~/.ssh/id_ed25519 -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes)
+          ssh "${ssh_options[@]}" "$BLOG_SSH_HOST" \
+            "docker exec markz-reactions-backup node /app/backup.mjs health"
+          ssh "${ssh_options[@]}" "$BLOG_SSH_HOST" \
+            "docker exec markz-reactions-backup node /app/backup.mjs drill"
+          latest_metadata="$(ssh "${ssh_options[@]}" "$BLOG_SSH_HOST" \
+            "docker exec markz-reactions-backup node /app/backup.mjs latest-json")"
+          export LATEST_BACKUP_METADATA="$latest_metadata"
+          snapshot_name="$(node --input-type=module -e '
+            const metadata = JSON.parse(process.env.LATEST_BACKUP_METADATA)
+            if (!/^reactions-\d{8}T\d{9}Z(?:-\d+)?\.sqlite$/.test(metadata.snapshot ?? "")) {
+              throw new Error("Remote backup returned an invalid snapshot name")
+            }
+            process.stdout.write(metadata.snapshot)
+          ')"
+          unset LATEST_BACKUP_METADATA latest_metadata
+          manifest_name="${snapshot_name%.sqlite}.json"
+          scp "${ssh_options[@]}" \
+            "$BLOG_SSH_HOST:$REMOTE_BACKUP_DIR/$snapshot_name" "$staging/$snapshot_name"
+          scp "${ssh_options[@]}" \
+            "$BLOG_SSH_HOST:$REMOTE_BACKUP_DIR/$manifest_name" "$staging/$manifest_name"
+          chmod 600 "$staging/$snapshot_name" "$staging/$manifest_name"
+          printf 'snapshot-name=%s\n' "$snapshot_name" >> "$GITHUB_OUTPUT"
+
+      - name: Encrypt and prove recovery
+        shell: bash
+        env:
+          BACKUP_STAGING_DIR: ${{ runner.temp }}/markz-runtime-backup-staging
+          MARKZ_BACKUP_AGE_RECIPIENT_FILE: deploy/runtime-backup-recipient.txt
+          RUNTIME_BACKUP_OUTPUT_DIR: ${{ github.workspace }}/.cache/runtime-backup-upload
+        run: bash scripts/runtime-backup/package-encrypted.sh "${{ steps.fetch.outputs.snapshot-name }}"
+
+      - name: Remove plaintext and credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/markz-runtime-backup-staging"
+          rm -f ~/.ssh/id_ed25519
+
+      - name: Upload encrypted off-site recovery point
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: markz-runtime-backup-${{ github.run_id }}
+          path: .cache/runtime-backup-upload
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 90
+
+      - name: Summarize recovery evidence
+        shell: bash
+        run: |
+          {
+            printf '### Encrypted runtime recovery point\n\n'
+            printf -- '- Artifact ID: `%s`\n' '${{ steps.upload.outputs.artifact-id }}'
+            printf -- '- Artifact URL: %s\n' '${{ steps.upload.outputs.artifact-url }}'
+            printf -- '- Artifact digest: `%s`\n' '${{ steps.upload.outputs.artifact-digest }}'
+            printf -- '- Source commit: `%s`\n' "$GITHUB_SHA"
+            printf -- '- Retention: 90 days\n'
+            printf -- '- Decrypt and restore drill: passed\n'
+          } >> "$GITHUB_STEP_SUMMARY"

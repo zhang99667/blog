@@ -39,35 +39,37 @@
 
 ## 修改入口
 
-| 需求                       | 修改入口                                                | 不要修改                |
-| -------------------------- | ------------------------------------------------------- | ----------------------- |
-| 品牌颜色、字体、圆角、宽度 | `design-system/tokens.json`                             | 生成 SCSS、生成 TS      |
-| 字标结构                   | `quartz/components/BrandMark.tsx`                       | 各页面复制 HTML         |
-| 博客首页文案和结构         | `scripts/sync-notes.mjs`                                | `content/site/index.md` |
-| 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs`     | `public-notes/`         |
-| 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                       | JSONUtils override      |
-| 安全响应头                 | `deploy/security-headers.inc`、`deploy/nginx.conf`      | 各 location 复制具体值  |
-| 博客与笔记 CSP             | `deploy/nginx.conf` host map、CSP 兼容组件              | 给工具域名套编辑站策略  |
-| favicon、通用分享图        | 设计令牌和 `generate.mjs`                               | 版本化 PNG              |
-| 文章级分享图               | 设计令牌、文章 frontmatter、`article-social-images.mjs` | `.cache/social-images/` |
-| canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`                  | 生成 HTML               |
-| RSS、robots                | `scripts/build-site-extras.mjs`                         | `public/` 发现文件      |
-| 文章继续阅读               | `scripts/sync-notes.mjs`                                | 生成文章 Markdown       |
-| 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`            | GitHub issue 正文       |
-| CI Action 版本与更新       | 工作流、`.github/dependabot.yml`、`run-evals.mjs`       | 浮动 Action 标签        |
+| 需求                       | 修改入口                                                     | 不要修改                |
+| -------------------------- | ------------------------------------------------------------ | ----------------------- |
+| 品牌颜色、字体、圆角、宽度 | `design-system/tokens.json`                                  | 生成 SCSS、生成 TS      |
+| 字标结构                   | `quartz/components/BrandMark.tsx`                            | 各页面复制 HTML         |
+| 博客首页文案和结构         | `scripts/sync-notes.mjs`                                     | `content/site/index.md` |
+| 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs`          | `public-notes/`         |
+| 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                            | JSONUtils override      |
+| 安全响应头                 | `deploy/security-headers.inc`、`deploy/nginx.conf`           | 各 location 复制具体值  |
+| 博客与笔记 CSP             | `deploy/nginx.conf` host map、CSP 兼容组件                   | 给工具域名套编辑站策略  |
+| favicon、通用分享图        | 设计令牌和 `generate.mjs`                                    | 版本化 PNG              |
+| 文章级分享图               | 设计令牌、文章 frontmatter、`article-social-images.mjs`      | `.cache/social-images/` |
+| canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`                       | 生成 HTML               |
+| RSS、robots                | `scripts/build-site-extras.mjs`                              | `public/` 发现文件      |
+| 文章继续阅读               | `scripts/sync-notes.mjs`                                     | 生成文章 Markdown       |
+| 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`                 | GitHub issue 正文       |
+| CI Action 版本与更新       | 工作流、`.github/dependabot.yml`、`run-evals.mjs`            | 浮动 Action 标签        |
+| 运行时备份与恢复           | `services/reactions/`、`scripts/runtime-backup/`、备份工作流 | 明文 Artifact、在线库   |
 
 ## 验证矩阵
 
-| 变更                           | 必须运行                                                   |
-| ------------------------------ | ---------------------------------------------------------- |
-| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build`        |
-| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                             |
-| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`              |
-| GitHub Action 与依赖策略       | `npm run ai:check`、`npm run evals:check`、`npm test`      |
-| 同步逻辑、内容选择             | `npm test`、`npm run build`                                |
-| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke            |
-| CSP、脚本或第三方运行时        | `npm run quality:build`、`npm run quality:web`、公网 smoke |
-| 上线前完整验证                 | `npm run verify`                                           |
+| 变更                           | 必须运行                                                            |
+| ------------------------------ | ------------------------------------------------------------------- |
+| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build`                 |
+| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                                      |
+| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`                       |
+| GitHub Action 与依赖策略       | `npm run ai:check`、`npm run evals:check`、`npm test`               |
+| 加密异地备份、密钥或恢复       | `npm run ai:check`、`npm run evals:check`、`npm test`、真实恢复演练 |
+| 同步逻辑、内容选择             | `npm test`、`npm run build`                                         |
+| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke                     |
+| CSP、脚本或第三方运行时        | `npm run quality:build`、`npm run quality:web`、公网 smoke          |
+| 上线前完整验证                 | `npm run verify`                                                    |
 
 浏览器、生产和安全补充门禁：
 
@@ -85,6 +87,8 @@
 - `medium`：视觉、组件、内容发布规则，增加构建和浏览器证据。
 - `high`：跨站身份、同步公开范围、AI 权威图，运行完整门禁并复核影响面。
 - `critical`：公网路由、TLS、端口、密钥和部署生命周期，必须有变更前状态、配置测试、全域名 smoke 和回退依据。
+
+异地备份的脚本和默认关闭工作流可以自主改进；创建 identity、启用 Artifact、轮换 recipient 或把恢复文件放入生产必须先得到明确批准。源码中出现工作流不等于能力完成，`evolve:report` 还必须看见 public recipient，并由首次远端运行和下载恢复补足运行时证据。
 
 任务风险与必需证据以 `ai/manifest.json` 为机器权威。风险不明确时按更高一级处理。
 

@@ -58,6 +58,7 @@ npm run deploy
 - AI workflow: `docs/AI-ENGINEERING-PLAYBOOK.md`.
 - Machine-readable authority and evidence graph: `ai/manifest.json`.
 - Continuous maturity priorities and probes: `ai/evolution.json` and `scripts/ai/evolve.mjs`.
+- Runtime backup workflow and recovery tooling: `.github/workflows/markz-backup.yaml`, `services/reactions/offsite-backup.mjs`, and `scripts/runtime-backup/`.
 
 ## Boundaries
 
@@ -69,6 +70,7 @@ npm run deploy
 - Do not use generated Markdown, HTML, TS, SCSS, or PNG as an editing source.
 - Do not claim visual completion from one viewport, one theme, or one screenshot.
 - Do not let scheduled automation change code, production, privacy scope, or secrets without the governed agent and approval flow.
+- Do not create or rotate backup identities, enable off-site artifacts, or replace production data without explicit approval. Keep private age identities outside the repository, server, and Actions.
 - Do not restore executable inline scripts, serialized function callbacks, public runtime CDNs, or unsafe script CSP sources; prove runtime compatibility with the complete browser gate.
 
 ## Rule evolution
