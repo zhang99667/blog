@@ -138,6 +138,7 @@ export function validateEvolutionWorkflow(source) {
     "npm run evolve:report",
     "gh issue",
     "upload-artifact",
+    "include-hidden-files: true",
   ]) {
     if (!source.includes(snippet)) failures.push(`evolution workflow is missing ${snippet}`)
   }

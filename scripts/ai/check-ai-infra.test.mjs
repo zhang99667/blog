@@ -153,6 +153,8 @@ steps:
   - run: npm run evolve:report
   - run: gh issue edit
   - uses: actions/upload-artifact@v4
+    with:
+      include-hidden-files: true
 `
   assert.deepEqual(validateEvolutionWorkflow(workflow), [])
   assert.ok(

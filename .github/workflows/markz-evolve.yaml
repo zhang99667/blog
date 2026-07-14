@@ -61,4 +61,5 @@ jobs:
           name: markz-evolution-${{ github.run_id }}
           path: .cache/evolution-report.*
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 30
