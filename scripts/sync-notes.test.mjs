@@ -72,10 +72,11 @@ test("generated notes carry stable Quartz date frontmatter", () => {
   assert.match(markdown, /---\n正文\n$/)
 })
 
-test("Quartz reads generated frontmatter before filesystem timestamps", () => {
+test("Quartz displays the editorial date and reads frontmatter before filesystem timestamps", () => {
   const config = parseYaml(readFileSync("quartz.config.yaml", "utf8"))
   const dates = config.plugins.find(
     (plugin) => plugin.source === "github:quartz-community/created-modified-date",
   )
+  assert.equal(dates.options.defaultDateType, "created")
   assert.deepEqual(dates.options.priority, ["frontmatter", "filesystem"])
 })

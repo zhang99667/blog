@@ -388,6 +388,19 @@ for (const target of pages) {
   }
 }
 
+test("blog listing and article display the same editorial date", async ({ page }) => {
+  await mockReactions(page)
+  await page.goto("http://127.0.0.1:4173/")
+  const firstPost = page.locator(".post-row").first()
+  const listedDate = await firstPost.locator("time").getAttribute("datetime")
+  expect(listedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+  await firstPost.locator("a").click()
+  await expect(page).toHaveURL(/\/blog\//)
+  const articleDate = await page.locator(".content-meta time").getAttribute("datetime")
+  expect(articleDate?.slice(0, 10)).toBe(listedDate)
+})
+
 test.describe("article reactions", () => {
   test("likes survive reload while unique views and SPA page keys stay separate", async ({
     page,

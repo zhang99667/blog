@@ -60,10 +60,10 @@
 
 - 日期：2026-07-13
 - 触发：用户发现每次自动同步后，笔记日期都会整体更新成同步当天。
-- 决策：同步器以源 frontmatter 为最高优先级，否则读取 note 文件的 Git 首次和最近提交时间，并把稳定的 `created`、`modified` 写入生成 Markdown。Quartz 先读 frontmatter，不能只读文件系统时间。
-- 反例：使用源 checkout 的 `mtime`、生成文件的 `mtime` 或 Action 运行时间作为笔记日期。
+- 决策：同步器以源 frontmatter 为最高优先级，否则读取 note 文件的 Git 首次和最近提交时间，并把稳定的 `created`、`modified` 写入生成 Markdown。Quartz 先读 frontmatter，不能只读文件系统时间。公开列表和正文头部都显示作者指定的 `date/created` 编辑日期；`modified` 继续保留为更新元数据，但不覆盖公开显示日期。
+- 反例：使用源 checkout 的 `mtime`、生成文件的 `mtime`、Action 运行时间或一次批量元数据提交的 Git 修改时间替换文章公开日期，或者让列表显示 `created`、正文显示 `modified`。
 - 边界：未纳入 Git 且没有日期 frontmatter 的本地新文件可以暂时回退到文件系统时间；CI 发布的文件必须有完整 Git 历史。
-- 锁定证据：`scripts/sync-notes.test.mjs`、`fetch-depth: 0`、`quartz.config.yaml` 日期优先级和 `npm run build`。
+- 锁定证据：`scripts/sync-notes.test.mjs`、`fetch-depth: 0`、`quartz.config.yaml` 的 `defaultDateType: created` 与日期优先级、列表和正文 `<time>` 一致性浏览器测试及 `npm run build`。
 
 ## D-008 中文路由图谱必须使用 canonical slug
 

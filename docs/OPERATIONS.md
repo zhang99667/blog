@@ -96,7 +96,8 @@ GitHub 仓库需要以下 Actions 配置：
 1. 确认 `MarkZ Publish` 对 note 使用 `fetch-depth: 0`，同步器需要完整文件历史。
 2. 检查生成 Markdown 是否包含稳定的 `created`、`modified` frontmatter。
 3. 运行 `npm test`，日期回归用例必须证明 Git 日期不受 checkout `mtime` 影响。
-4. 不要把 Quartz 日期优先级改回仅 `filesystem`。
+4. 比较首页或归档列表与正文头部的 `<time datetime>` 日期部分，两处必须一致。
+5. 不要把 Quartz 日期优先级改回仅 `filesystem`，也不要把公开默认日期从 `created` 改成 `modified`。
 
 ### 是否需要 note Action
 
