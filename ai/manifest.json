@@ -1,6 +1,6 @@
 {
   "$schema": "./manifest.schema.json",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "project": "MarkZ blog and public notes",
   "authorities": [
     { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
@@ -8,7 +8,8 @@
     { "id": "operations", "path": "docs/OPERATIONS.md", "kind": "runbook" },
     { "id": "visual-tokens", "path": "design-system/tokens.json", "kind": "source" },
     { "id": "surface-boundaries", "path": "design-system/manifest.json", "kind": "contract" },
-    { "id": "decisions", "path": "docs/AI-DECISIONS.md", "kind": "decision-log" }
+    { "id": "decisions", "path": "docs/AI-DECISIONS.md", "kind": "decision-log" },
+    { "id": "evolution", "path": "ai/evolution.json", "kind": "maturity-program" }
   ],
   "instructionLayers": [
     { "scope": "repository", "path": "AGENTS.md" },
@@ -37,10 +38,21 @@
       "prompt": ".github/prompts/edge-incident.prompt.md",
       "requiredCommands": ["npm run verify", "npm run deploy"],
       "requiredEvidence": ["all-public-routes", "exclusive-port-ownership", "nginx-config-test"]
+    },
+    "siteEvolution": {
+      "risk": "high",
+      "prompt": ".github/prompts/evolve-site.prompt.md",
+      "requiredCommands": ["npm run evolve:report", "npm run verify"],
+      "requiredEvidence": ["ranked-gap-before", "implementation", "ranked-gap-after"]
     }
   },
   "qualityGates": {
-    "fast": ["npm run design:check", "npm run ai:check", "npm run evals:check"],
+    "fast": [
+      "npm run design:check",
+      "npm run ai:check",
+      "npm run evals:check",
+      "npm run evolve:check"
+    ],
     "complete": ["npm run verify", "npm run quality:web"],
     "production": ["npm run deploy", "npm run smoke:production"]
   },
@@ -54,6 +66,11 @@
       "id": "browser-quality",
       "path": "tests/quality/site-quality.spec.ts",
       "runner": "npm run quality:web"
+    },
+    {
+      "id": "continuous-evolution",
+      "path": "ai/evolution.json",
+      "runner": "npm run evolve:check"
     }
   ]
 }

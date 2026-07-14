@@ -28,4 +28,5 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run evals:check
+      - run: npm run evolve:check
       - run: npm run security:check

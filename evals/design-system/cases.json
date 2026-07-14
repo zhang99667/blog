@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -82,6 +82,19 @@
       ],
       "validation": ["npm run ai:check", "npm run evals:check"],
       "automatedChecks": ["ai-contract", "browser-contract"]
+    },
+    {
+      "id": "continuous-site-evolution",
+      "risk": "high",
+      "prompt": "作为成熟博客继续自主迭代，并让 AI 基建能够持续自我进化。",
+      "mustRead": ["ai/evolution.json", "docs/AI-ENGINEERING-PLAYBOOK.md", "docs/ARCHITECTURE.md"],
+      "invariants": [
+        "Rank improvements from observable repository evidence instead of open-ended taste",
+        "Keep critical routing, privacy, secret, and destructive changes behind human approval",
+        "Implement one bounded capability through authoritative sources, tests, browser evidence, and deployment gates"
+      ],
+      "validation": ["npm run evolve:check", "npm run evals:check", "npm run quality:web"],
+      "automatedChecks": ["ai-contract", "content-boundary", "browser-contract"]
     }
   ]
 }

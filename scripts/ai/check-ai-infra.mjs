@@ -100,6 +100,53 @@ export function validateAiManifest(payload) {
   return failures
 }
 
+export function validateDecisionLog(source) {
+  const failures = []
+  const headings = [...source.matchAll(/^## D-(\d{3})\s+.+$/gm)]
+  if (headings.length === 0) return ["decision log requires at least one D-NNN entry"]
+  const requiredFields = ["日期", "触发", "决策", "反例", "边界", "锁定证据"]
+  for (const [index, heading] of headings.entries()) {
+    const expected = index + 1
+    const actual = Number(heading[1])
+    if (actual !== expected) {
+      failures.push(
+        `decision numbers must be contiguous: expected D-${String(expected).padStart(3, "0")}, found D-${heading[1]}`,
+      )
+    }
+    const start = heading.index + heading[0].length
+    const end = headings[index + 1]?.index ?? source.length
+    const section = source.slice(start, end)
+    for (const field of requiredFields) {
+      if (!new RegExp(`^- ${field}：\\S`, "m").test(section)) {
+        failures.push(`D-${heading[1]} requires a non-empty ${field} field`)
+      }
+    }
+  }
+  return failures
+}
+
+export function validateEvolutionWorkflow(source) {
+  const failures = []
+  for (const snippet of [
+    "push:",
+    "branches:",
+    "- main",
+    "schedule:",
+    "issues: write",
+    "npm run evolve:check",
+    "npm run evals:check",
+    "npm run evolve:report",
+    "gh issue",
+    "upload-artifact",
+  ]) {
+    if (!source.includes(snippet)) failures.push(`evolution workflow is missing ${snippet}`)
+  }
+  if (/^ {4}paths:/m.test(source)) {
+    failures.push("evolution workflow must audit every main push without a path filter")
+  }
+  return failures
+}
+
 function requireSnippet(source, relativePath, snippet, failures) {
   if (!source.includes(snippet)) {
     failures.push(`${relativePath} must include ${JSON.stringify(snippet)}`)
@@ -114,6 +161,8 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "GEMINI.md",
     "ai/manifest.json",
     "ai/manifest.schema.json",
+    "ai/evolution.json",
+    "ai/evolution.schema.json",
     ".codex/README.md",
     ".codex/skills/markz-site-maintainer/SKILL.md",
     ".codex/skills/markz-site-maintainer/agents/openai.yaml",
@@ -124,9 +173,11 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     ".github/prompts/brand-change.prompt.md",
     ".github/prompts/publish-content.prompt.md",
     ".github/prompts/edge-incident.prompt.md",
+    ".github/prompts/evolve-site.prompt.md",
     ".github/pull_request_template.md",
     ".github/workflows/markz-verify.yaml",
     ".github/workflows/markz-publish.yaml",
+    ".github/workflows/markz-evolve.yaml",
     "docs/ARCHITECTURE.md",
     "docs/OPERATIONS.md",
     "docs/SYSTEM-BENCHMARKS.md",
@@ -141,6 +192,8 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "scripts/design-system/check.mjs",
     "scripts/ai/check-ai-infra.mjs",
     "scripts/ai/run-evals.mjs",
+    "scripts/ai/evolve.mjs",
+    "scripts/ai/evolve.test.mjs",
     "quality/budgets.json",
     "scripts/quality/check-build.mjs",
     "scripts/quality/smoke-production.mjs",
@@ -230,9 +283,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
   }
 
   const decisions = await readText(root, "docs/AI-DECISIONS.md")
-  for (const decision of ["D-001", "D-002", "D-003", "D-004", "D-005", "D-006", "D-007", "D-008"]) {
-    requireSnippet(decisions, "docs/AI-DECISIONS.md", decision, failures)
-  }
+  failures.push(...validateDecisionLog(decisions))
 
   const deployScript = await readText(root, "scripts/deploy.mjs")
   if (
@@ -254,6 +305,8 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "design:check",
     "ai:check",
     "evals:check",
+    "evolve:check",
+    "evolve:report",
     "quality:build",
     "quality:web",
     "security:check",
@@ -285,6 +338,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "npm run check",
     "npm test",
     "npm run evals:check",
+    "npm run evolve:check",
     "npm run security:check",
   ]) {
     requireSnippet(verifyWorkflow, ".github/workflows/markz-verify.yaml", command, failures)
@@ -303,6 +357,9 @@ export async function collectAiInfraFailures(root = defaultRoot) {
   ]) {
     requireSnippet(publishWorkflow, ".github/workflows/markz-publish.yaml", snippet, failures)
   }
+
+  const evolveWorkflow = await readText(root, ".github/workflows/markz-evolve.yaml")
+  failures.push(...validateEvolutionWorkflow(evolveWorkflow))
 
   return failures
 }

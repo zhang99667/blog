@@ -11,6 +11,7 @@ private note repository
   -> scripts/sync-notes.mjs
   -> content/site + content/notes (generated, ignored)
   -> Quartz
+  -> canonical + JSON-LD + RSS + robots
   -> public + public-notes (generated, ignored)
   -> rsync + markz-edge
   -> markz.fun + note.markz.fun
@@ -46,6 +47,8 @@ npm run preview:notes
 ```
 
 不具备私有笔记权限的外部贡献者仍可执行 `npm run check`、`npm test`、`npm run evals:check` 和 `npm run security:check`。完整构建与部署只在受信任的发布工作流中运行。
+
+运行 `npm run evolve:report` 可以查看机器可读能力账本的当前成熟度和下一优先项。每周巡检只更新一个 GitHub 改进任务，不自动提交代码或部署。
 
 ## 项目约定
 

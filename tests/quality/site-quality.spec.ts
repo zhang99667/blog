@@ -380,6 +380,36 @@ for (const target of pages) {
           await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
         }
 
+        const relatedReading = page.locator("[data-related-reading]")
+        if (target.id === "blog-article") {
+          await expect(relatedReading).toHaveCount(1)
+          const relatedLinks = relatedReading.locator(".related-reading-item > a")
+          const relatedLinkCount = await relatedLinks.count()
+          expect(relatedLinkCount).toBeGreaterThanOrEqual(1)
+          expect(relatedLinkCount).toBeLessThanOrEqual(3)
+          const currentPath = new URL(page.url()).pathname
+          for (const pathname of await relatedLinks.evaluateAll((links) =>
+            links.map((link) => new URL((link as HTMLAnchorElement).href).pathname),
+          )) {
+            expect(pathname).toMatch(/^\/blog\/[^/]+$/)
+            expect(pathname).not.toBe(currentPath)
+          }
+          await relatedReading.scrollIntoViewIfNeeded()
+          await expect(relatedReading).toBeInViewport()
+          const relatedBounds = await relatedReading.boundingBox()
+          expect(relatedBounds).not.toBeNull()
+          expect(relatedBounds!.x).toBeGreaterThanOrEqual(0)
+          expect(relatedBounds!.x + relatedBounds!.width).toBeLessThanOrEqual(viewport.width)
+          await testInfo.attach(`${target.id}-related-${viewport.name}-${theme}`, {
+            body: await page.screenshot({ fullPage: false }),
+            contentType: "image/png",
+          })
+          await page.evaluate(() => window.scrollTo(0, 0))
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
+        } else {
+          await expect(relatedReading).toHaveCount(0)
+        }
+
         const reactionRoot = page.locator("[data-article-reaction]")
         if (target.id.endsWith("-article")) {
           await expect(reactionRoot).toHaveCount(1)

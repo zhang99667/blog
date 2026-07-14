@@ -10,7 +10,8 @@
 4. `design-system/manifest.json`：各域名的角色与身份边界。
 5. `docs/DESIGN-SYSTEM.md`：视觉原则与变更协议。
 6. `docs/AI-DECISIONS.md`：用户纠偏和已锁定的架构决策。
-7. 与任务相关的路径级指令、源码、测试和部署配置。
+7. 涉及成熟度巡检或自主迭代时读取 `ai/evolution.json` 并先运行 `npm run evolve:report`。
+8. 与任务相关的路径级指令、源码、测试和部署配置。
 
 不要默认读取整份 Obsidian 内容。先用 `rg` 定位任务相关文件。
 
@@ -20,6 +21,7 @@
 - `scripts/sync-notes.mjs` 从 Obsidian 仓库同步并生成公开内容。
 - `content/notes/`、`content/site/`、`public/` 和 `public-notes/` 都包含生成内容。
 - 品牌唯一来源是 `design-system/tokens.json`。
+- 成熟度能力、证据探针、排序公式和自主化边界唯一来源是 `ai/evolution.json`。
 - 公网 `80/443` 只属于独立 `markz-edge`，JSONUtils 前端不能绑定宿主机公网端口。
 
 ## 标准工作流
@@ -33,6 +35,7 @@
 7. 涉及 UI 时运行浏览器质量门禁，覆盖 320、390、1440 三档宽度和双主题。
 8. 涉及上线时部署后检查博客、笔记、JSONUtils、后台、装箱单和 API。
 9. 用户纠偏或重复事故必须回写决策与自动门禁。
+10. 广义“继续优化”任务先按演进报告选择一个有边界的能力，完成后重新运行报告，证明能力状态发生变化。
 
 ## 修改入口
 
@@ -44,6 +47,10 @@
 | 笔记公开范围               | `scripts/sync-notes.mjs`、`scripts/blog.config.mjs` | `public-notes/`         |
 | 路由与 TLS                 | `deploy/nginx.conf`、edge Compose                   | JSONUtils override      |
 | favicon、分享图            | 设计令牌和生成脚本                                  | PNG 二进制              |
+| canonical、JSON-LD         | `quartz/components/seo.ts`、`Head.tsx`              | 生成 HTML               |
+| RSS、robots                | `scripts/build-site-extras.mjs`                     | `public/` 发现文件      |
+| 文章继续阅读               | `scripts/sync-notes.mjs`                            | 生成文章 Markdown       |
+| 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`        | GitHub issue 正文       |
 
 ## 验证矩阵
 
@@ -51,6 +58,7 @@
 | ------------------------------ | --------------------------------------------------- |
 | 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build` |
 | AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                      |
+| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`       |
 | 同步逻辑、内容选择             | `npm test`、`npm run build`                         |
 | 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke     |
 | 上线前完整验证                 | `npm run verify`                                    |
@@ -107,6 +115,7 @@
 4. 更新 `docs/AI-ASSET-REGISTRY.md`。
 5. 为代表性场景补 `automatedChecks`，运行 `npm run evals:check`。
 6. 运行 `npm run ai:check`，防止规则只停留在文档里。
+7. 运行 `npm run evolve:report`，确认已完成能力从缺口队列移除，下一项由同一评分模型选出。
 
 ## 完成定义
 

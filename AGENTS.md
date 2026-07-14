@@ -11,6 +11,7 @@
 5. 涉及 UI 时读取 `docs/DESIGN-SYSTEM.md` 和 `docs/SYSTEM-BENCHMARKS.md`
 6. 涉及历史纠偏或部署时读取 `docs/AI-DECISIONS.md` 和 `docs/OPERATIONS.md`
 7. 涉及 AI 资产时读取 `docs/AI-ASSET-REGISTRY.md`
+8. 涉及成熟度巡检或自主迭代时读取 `ai/evolution.json`，先运行 `npm run evolve:report`
 
 ## 不可破坏的边界
 
@@ -32,6 +33,7 @@
 6. UI 改动运行浏览器门禁，检查 320px、390px、桌面、浅色和深色。
 7. 部署后检查所有域名和 JSONUtils API。
 8. 用户纠偏或重复问题要更新决策、规则和自动检查。
+9. 自主迭代按进化报告选择首个有证据的缺口；完成后重跑报告，不能通过降分或削弱探针让项目“进步”。
 
 ## 命令
 
@@ -40,6 +42,8 @@ npm run design:generate
 npm run design:check
 npm run ai:check
 npm run evals:check
+npm run evolve:check
+npm run evolve:report
 npm run check
 npm test
 npm run build

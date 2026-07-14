@@ -1,6 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { validateAiManifest, validateEvalCases, validateSkill } from "./check-ai-infra.mjs"
+import {
+  validateAiManifest,
+  validateDecisionLog,
+  validateEvalCases,
+  validateEvolutionWorkflow,
+  validateSkill,
+} from "./check-ai-infra.mjs"
 
 test("project skill contract accepts a complete skill", () => {
   const source = `---
@@ -110,4 +116,48 @@ test("AI manifest requires authorities, instruction layers, workflows, and eval 
     "invalid or duplicate AI authority: authority-3",
     "AI workflows require risk, prompt, commands, and evidence",
   ])
+})
+
+test("decision log contract checks every contiguous entry and required field", () => {
+  const entry = (id, overrides = {}) => `## D-${id} Decision
+
+- 日期：${overrides.date ?? "2026-07-14"}
+- 触发：${overrides.trigger ?? "A reusable correction."}
+- 决策：${overrides.decision ?? "Govern it."}
+- 反例：${overrides.counterexample ?? "One-off edits."}
+- 边界：${overrides.boundary ?? "Keep product boundaries."}
+- 锁定证据：${overrides.evidence ?? "npm test"}
+`
+  assert.deepEqual(validateDecisionLog(`${entry("001")}\n${entry("002")}`), [])
+
+  const failures = validateDecisionLog(
+    `${entry("001")}\n${entry("003", { evidence: "" }).replace("- 决策：Govern it.", "- 决策：")}`,
+  )
+  assert.ok(failures.some((failure) => failure.includes("expected D-002")))
+  assert.ok(failures.some((failure) => failure.includes("requires a non-empty 决策")))
+  assert.ok(failures.some((failure) => failure.includes("requires a non-empty 锁定证据")))
+})
+
+test("evolution workflow audits every main push and cannot narrow itself to AI paths", () => {
+  const workflow = `on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "41 2 * * 1"
+permissions:
+  issues: write
+steps:
+  - run: npm run evolve:check
+  - run: npm run evals:check
+  - run: npm run evolve:report
+  - run: gh issue edit
+  - uses: actions/upload-artifact@v4
+`
+  assert.deepEqual(validateEvolutionWorkflow(workflow), [])
+  assert.ok(
+    validateEvolutionWorkflow(
+      workflow.replace("  schedule:", '    paths:\n      - "ai/**"\n  schedule:'),
+    ).includes("evolution workflow must audit every main push without a path filter"),
+  )
 })

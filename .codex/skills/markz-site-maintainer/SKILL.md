@@ -14,6 +14,7 @@ Keep every change aligned with the repository's design source, content pipeline,
 3. For UI or branding, read `docs/DESIGN-SYSTEM.md`.
 4. For deployment or repeated failures, read `docs/AI-DECISIONS.md`.
 5. For AI rules, skills, or evals, read `docs/AI-ENGINEERING-PLAYBOOK.md` and `docs/AI-ASSET-REGISTRY.md`.
+6. For broad maturity or self-evolution work, read `ai/evolution.json` and run `npm run evolve:report`.
 
 ## Workflow
 
@@ -26,6 +27,7 @@ Keep every change aligned with the repository's design source, content pipeline,
 7. Run browser quality checks and inspect real built pages at 320x800, 390x844, and 1440x900 in light and dark themes.
 8. After deployment, verify blog, notes, JSONUtils, admin, packing-list, and API routes.
 9. Turn user corrections or repeated incidents into a decision entry and deterministic check.
+10. For autonomous maturity work, implement the first eligible gap from `npm run evolve:report`, then rerun the report and prove that capability moved to achieved. Do not lower its score or detector.
 
 ## Command map
 
@@ -34,6 +36,8 @@ npm run design:generate
 npm run design:check
 npm run ai:check
 npm run evals:check
+npm run evolve:check
+npm run evolve:report
 npm run quality:build
 npm run quality:web
 npm run check
@@ -52,6 +56,7 @@ npm run deploy
 - Edge routing: `deploy/nginx.conf` and `deploy/docker-compose.edge.yml`.
 - AI workflow: `docs/AI-ENGINEERING-PLAYBOOK.md`.
 - Machine-readable authority and evidence graph: `ai/manifest.json`.
+- Continuous maturity priorities and probes: `ai/evolution.json` and `scripts/ai/evolve.mjs`.
 
 ## Boundaries
 
@@ -62,6 +67,7 @@ npm run deploy
 - Do not bind JSONUtils to host ports 80 or 443.
 - Do not use generated Markdown, HTML, TS, SCSS, or PNG as an editing source.
 - Do not claim visual completion from one viewport, one theme, or one screenshot.
+- Do not let scheduled automation change code, production, privacy scope, or secrets without the governed agent and approval flow.
 
 ## Rule evolution
 

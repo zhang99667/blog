@@ -13,9 +13,19 @@ npm run build
 
 博客和笔记分别使用 `npm run preview`、`npm run preview:notes`。视觉改动还必须运行 `npm run quality:web`。
 
+广义成熟度迭代先运行 `npm run evolve:report`。报告按 `ai/evolution.json` 的固定评分公式列出已具备能力、证据不足项和下一优先项；实现完成后运行 `npm run evolve:check` 和 `npm run evolve:report`，确认探针状态已改变。
+
 `quality/link-baseline.json` 只记录迁移自 Obsidian 的历史断链债务。`quality:build` 会拒绝新增断链和已修复但未清理的陈旧基线；只有在人工确认债务变化后才运行 `node scripts/quality/check-build.mjs --update-link-baseline`。
 
 本地调试互动 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions`、`/api/reactions/view` 和博客专属 `/api/visitors`。
+
+## AI 演进巡检
+
+`.github/workflows/markz-evolve.yaml` 每周一和相关控制面变更后运行。它安装锁定依赖，执行成熟度探针与代表性 eval，更新唯一的 `[AI Evolution] MarkZ maturity backlog` issue，并保存 Markdown/JSON 报告。
+
+该工作流只做审计和排队，不提交代码、不触发部署、不读取生产 SSH 密钥。`critical` 路由、隐私、破坏性操作、外部密钥和任何证据不足的能力都必须由人工选择任务后走标准开发、验证和发布流程。若报告与仓库事实不符，先修探针或模型，不能手工改 issue 文案冒充能力完成。
+
+发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 会校验这些契约及单一字体样式表。
 
 ## 发布流程
 

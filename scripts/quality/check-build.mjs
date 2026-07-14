@@ -37,6 +37,10 @@ export function inspectHtml(source) {
     meta: new Map(),
     references: [],
     canonical: "",
+    alternateRss: "",
+    structuredData: [],
+    structuredDataErrors: [],
+    fontStylesheets: [],
     refresh: "",
   }
 
@@ -56,8 +60,23 @@ export function inspectHtml(source) {
         facts.refresh = attrs.content ?? ""
       }
     }
-    if (node.nodeName === "link" && attrs.rel?.toLowerCase() === "canonical") {
-      facts.canonical = attrs.href ?? ""
+    if (node.nodeName === "link") {
+      const relations = new Set((attrs.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean))
+      if (relations.has("canonical")) facts.canonical = attrs.href ?? ""
+      if (relations.has("alternate") && attrs.type?.toLowerCase() === "application/rss+xml") {
+        facts.alternateRss = attrs.href ?? ""
+      }
+      if (relations.has("stylesheet") && attrs.href?.startsWith("https://fonts.googleapis.com/")) {
+        facts.fontStylesheets.push(attrs.href)
+      }
+    }
+    if (node.nodeName === "script" && attrs.type?.toLowerCase() === "application/ld+json") {
+      const body = (node.childNodes ?? []).map((child) => child.value ?? "").join("")
+      try {
+        facts.structuredData.push(JSON.parse(body))
+      } catch (error) {
+        facts.structuredDataErrors.push(error.message)
+      }
     }
     for (const name of ["href", "src"]) {
       if (attrs[name]) facts.references.push(attrs[name])
@@ -67,6 +86,75 @@ export function inspectHtml(source) {
 
   visit(document)
   return facts
+}
+
+function htmlRoute(relativePath) {
+  const normalized = relativePath.replaceAll(path.sep, "/").replace(/\.html$/i, "")
+  if (normalized === "index") return ""
+  if (normalized.endsWith("/index")) return `${normalized.slice(0, -"index".length)}`
+  return normalized
+}
+
+export function expectedCanonicalUrl(outputId, relativePath) {
+  const normalized = relativePath.replaceAll(path.sep, "/")
+  const isFallback = outputId === "blog" && normalized.startsWith("notes/")
+  const publicPath = isFallback ? normalized.slice("notes/".length) : normalized
+  const origin =
+    outputId === "notes" || isFallback ? "https://note.markz.fun/" : "https://markz.fun/"
+  return new URL(htmlRoute(publicPath), origin).toString()
+}
+
+function hasStructuredType(payloads, type) {
+  return payloads.some((payload) => {
+    if (payload?.["@type"] === type) return true
+    return Array.isArray(payload?.["@graph"])
+      ? payload["@graph"].some((node) => node?.["@type"] === type)
+      : false
+  })
+}
+
+export function validateSeoMetadata(relativePath, facts, options) {
+  const failures = []
+  const { expectedCanonical, expectedFeed, article = false, noindex = false } = options
+  if (facts.canonical !== expectedCanonical) {
+    failures.push(`${relativePath} canonical must be ${expectedCanonical}`)
+  }
+  if (facts.alternateRss !== expectedFeed) {
+    failures.push(`${relativePath} RSS discovery must be ${expectedFeed}`)
+  }
+  if (facts.structuredDataErrors.length > 0) {
+    failures.push(`${relativePath} has invalid JSON-LD`)
+  }
+  if (!hasStructuredType(facts.structuredData, "WebPage")) {
+    failures.push(`${relativePath} needs WebPage structured data`)
+  }
+  if (article) {
+    if (facts.meta.get("og:type") !== "article") {
+      failures.push(`${relativePath} must use the article Open Graph type`)
+    }
+    if (!facts.meta.get("article:published_time") || !facts.meta.get("article:modified_time")) {
+      failures.push(`${relativePath} needs published and modified article metadata`)
+    }
+    if (!hasStructuredType(facts.structuredData, "BlogPosting")) {
+      failures.push(`${relativePath} needs BlogPosting structured data`)
+    }
+  } else if (facts.meta.get("og:type") !== "website") {
+    failures.push(`${relativePath} must use the website Open Graph type`)
+  }
+  if (noindex && !facts.meta.get("robots")?.toLowerCase().includes("noindex")) {
+    failures.push(`${relativePath} fallback content must be noindex`)
+  }
+  if (facts.fontStylesheets.length !== 1) {
+    failures.push(
+      `${relativePath} must load exactly one governed Google Fonts stylesheet, found ${facts.fontStylesheets.length}`,
+    )
+  }
+  for (const stylesheet of facts.fontStylesheets) {
+    if (/Schibsted|Source%20Sans|IBM%20Plex/i.test(stylesheet)) {
+      failures.push(`${relativePath} loads an ungoverned fallback font family`)
+    }
+  }
+  return failures
 }
 
 export function validateHtmlMetadata(relativePath, facts) {
@@ -131,6 +219,43 @@ async function existingCandidate(candidates) {
 async function sumFileSizes(files) {
   const sizes = await Promise.all(files.map(async (file) => (await fs.stat(file)).size))
   return sizes.reduce((total, size) => total + size, 0)
+}
+
+async function validateDiscoveryFiles(outputRoot, outputId, failures) {
+  const host = outputId === "notes" ? "note.markz.fun" : "markz.fun"
+  try {
+    const robots = await fs.readFile(path.join(outputRoot, "robots.txt"), "utf8")
+    if (!robots.includes(`Sitemap: https://${host}/sitemap.xml`)) {
+      failures.push(`${outputId} robots.txt must declare its canonical sitemap`)
+    }
+  } catch {
+    failures.push(`${outputId} output is missing robots.txt`)
+  }
+
+  if (outputId !== "blog") return
+  try {
+    const rss = await fs.readFile(path.join(outputRoot, "index.xml"), "utf8")
+    if (!rss.includes('rel="self" type="application/rss+xml"')) {
+      failures.push("blog RSS needs an Atom self-discovery link")
+    }
+    const items = [...rss.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((match) => match[1])
+    if (items.length === 0) failures.push("blog RSS must contain editorial posts")
+    for (const item of items) {
+      const link = item.match(/<link>([^<]+)<\/link>/)?.[1]
+      let pathname = ""
+      try {
+        pathname = new URL(link).pathname
+      } catch {
+        failures.push("blog RSS contains an invalid item URL")
+        continue
+      }
+      if (!/^\/blog\/[^/]+$/.test(pathname)) {
+        failures.push(`blog RSS contains a non-article item: ${link}`)
+      }
+    }
+  } catch {
+    failures.push("blog output is missing index.xml")
+  }
 }
 
 export function literalModuleReferences(source) {
@@ -232,6 +357,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
         `${output.id} initial JS budget exceeded: ${initialJsBytes} > ${output.maxInitialJsBytes}`,
       )
     }
+    await validateDiscoveryFiles(outputRoot, output.id, failures)
 
     const indexFile = path.join(outputRoot, "index.html")
     let indexSource = ""
@@ -256,6 +382,32 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       }
       const facts = inspectHtml(source)
       failures.push(...validateHtmlMetadata(relativePath, facts))
+      const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
+      if (!facts.refresh) {
+        const isNotFound = /(?:^|\/)404\.html$/i.test(outputRelativePath)
+        if (isNotFound) {
+          if (!facts.meta.get("robots")?.toLowerCase().includes("noindex")) {
+            failures.push(`${relativePath} 404 page needs noindex`)
+          }
+          if (facts.canonical)
+            failures.push(`${relativePath} 404 page must not declare a canonical`)
+        } else {
+          const isFallback = output.id === "blog" && outputRelativePath.startsWith("notes/")
+          const article =
+            output.id === "blog" && /^blog\/(?!index\.html$)[^/]+\.html$/i.test(outputRelativePath)
+          failures.push(
+            ...validateSeoMetadata(relativePath, facts, {
+              expectedCanonical: expectedCanonicalUrl(output.id, outputRelativePath),
+              expectedFeed:
+                output.id === "notes" || isFallback
+                  ? "https://note.markz.fun/index.xml"
+                  : "https://markz.fun/index.xml",
+              article,
+              noindex: isFallback,
+            }),
+          )
+        }
+      }
       if (facts.meta.get("og:image:type") === "image/.png") {
         failures.push(`${relativePath} contains an invalid image MIME type`)
       }
@@ -266,7 +418,6 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
         if (output.allowedExternalRoutes.includes(reference)) continue
         const candidates = referenceCandidates(outputRoot, htmlFile, reference)
         if (candidates.length > 0 && !(await existingCandidate(candidates))) {
-          const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
           const key = `${output.id}:${outputRelativePath}::${reference}`
           observedBroken.set(key, {
             key,

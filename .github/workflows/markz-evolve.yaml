@@ -1,0 +1,64 @@
+name: MarkZ Evolution
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "41 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: markz-evolution
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: Refresh maturity backlog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run evolve:check
+      - run: npm run evals:check
+
+      - name: Build current evolution reports
+        run: |
+          mkdir -p .cache
+          npm run evolve:report -- --output .cache/evolution-report.md
+          npm run evolve:report -- --format json --output .cache/evolution-report.json
+          cat .cache/evolution-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update the single evolution issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: "[AI Evolution] MarkZ maturity backlog"
+        run: |
+          set -euo pipefail
+          issue_number="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == "[AI Evolution] MarkZ maturity backlog") | .number' | head -n 1)"
+          if [[ -n "$issue_number" ]]; then
+            gh issue edit "$issue_number" --body-file .cache/evolution-report.md
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file .cache/evolution-report.md
+          fi
+
+      - name: Upload machine-readable evolution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: markz-evolution-${{ github.run_id }}
+          path: .cache/evolution-report.*
+          if-no-files-found: error
+          retention-days: 30

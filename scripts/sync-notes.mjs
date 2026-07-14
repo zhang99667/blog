@@ -759,10 +759,11 @@ async function writeBlogPosts(posts, records, assetLookup) {
       noteLookup,
       assetLookup,
     )
+    const related = renderRelatedReading(post, posts, records)
     const source = `\n\n<aside class="article-source">\n  <span>原始笔记</span>\n  <a href="${noteOrigin}${post.url}">在笔记库中查看</a>\n</aside>\n`
     await fs.writeFile(
       path.join(blogDir, `${post.post.slug}.md`),
-      `${fm}${body.trimStart()}${source}`,
+      `${fm}${body.trimStart()}${related}${source}`,
     )
   }
 }
@@ -949,6 +950,95 @@ function createNoteLookup(records) {
 
 function normalizeLookupKey(value) {
   return String(value).normalize("NFKC").replace(/\.md$/i, "").trim().toLowerCase()
+}
+
+function linkedPostIds(record, lookup) {
+  const ids = new Set()
+  for (const link of record.links ?? []) {
+    const target = lookup.get(normalizeLookupKey(link))
+    if (target?.post && target.id !== record.id) ids.add(target.id)
+  }
+  return ids
+}
+
+export function rankRelatedPosts(current, posts, records = posts, limit = 3) {
+  const lookup = createNoteLookup(records)
+  const outgoing = linkedPostIds(current, lookup)
+  const currentTags = new Map(
+    (current.tags ?? []).map((tag) => [normalizeLookupKey(tag), String(tag)]),
+  )
+  const cappedLimit = Math.min(3, Math.max(0, Math.floor(Number(limit) || 0)))
+
+  return posts
+    .filter((candidate) => candidate.post && candidate.id !== current.id)
+    .map((candidate) => {
+      const isOutgoing = outgoing.has(candidate.id)
+      const isIncoming = linkedPostIds(candidate, lookup).has(current.id)
+      const sharedTags = (candidate.tags ?? []).filter((tag) =>
+        currentTags.has(normalizeLookupKey(tag)),
+      )
+      const sameCollection =
+        Boolean(current.collection?.slug) && current.collection.slug === candidate.collection?.slug
+      const score =
+        (isOutgoing ? 100 : 0) +
+        (isIncoming ? 60 : 0) +
+        sharedTags.length * 20 +
+        (sameCollection ? 12 : 0)
+
+      if (score === 0) return undefined
+
+      let reason
+      if (isOutgoing) reason = "文中关联"
+      else if (isIncoming) reason = "相关延伸"
+      else if (sharedTags.length > 0) {
+        reason = `共同主题 · ${currentTags.get(normalizeLookupKey(sharedTags[0]))}`
+      } else {
+        reason = `同属 ${candidate.collection.title}`
+      }
+
+      return { post: candidate, reason, score }
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        Math.abs(a.post.post.order - current.post.order) -
+          Math.abs(b.post.post.order - current.post.order) ||
+        a.post.post.order - b.post.post.order ||
+        a.post.title.localeCompare(b.post.title, "zh-CN"),
+    )
+    .slice(0, cappedLimit)
+}
+
+function renderRelatedReading(post, posts, records) {
+  const related = rankRelatedPosts(post, posts, records)
+  if (related.length === 0) return ""
+
+  const id = `related-reading-${post.post.slug}`
+  const rows = related
+    .map(
+      ({ post: relatedPost, reason }) => `    <li class="related-reading-item">
+      <a href="${relatedPost.post.url}">
+        <span class="related-reading-copy">
+          <strong>${htmlEscape(relatedPost.title)}</strong>
+          <span>${htmlEscape(relatedPost.summary)}</span>
+        </span>
+        <span class="related-reading-reason">${htmlEscape(reason)}</span>
+        <span class="related-reading-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>`,
+    )
+    .join("\n")
+
+  return `\n\n<aside class="related-reading" data-related-reading aria-labelledby="${htmlEscape(id)}">
+  <header class="related-reading-header">
+    <p class="eyebrow">Related</p>
+    <h2 id="${htmlEscape(id)}">继续阅读</h2>
+  </header>
+  <ol class="related-reading-list">
+${rows}
+  </ol>
+</aside>\n`
 }
 
 function rewriteOutsideCode(markdown, transform) {

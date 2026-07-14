@@ -2,7 +2,12 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { parse as parseYaml } from "yaml"
-import { parseGitDateLog, resolveSourceDates, withStableDates } from "./sync-notes.mjs"
+import {
+  parseGitDateLog,
+  rankRelatedPosts,
+  resolveSourceDates,
+  withStableDates,
+} from "./sync-notes.mjs"
 
 const checkoutStat = {
   birthtime: new Date("2026-07-13T08:00:00Z"),
@@ -79,4 +84,48 @@ test("Quartz displays the editorial date and reads frontmatter before filesystem
   )
   assert.equal(dates.options.defaultDateType, "created")
   assert.deepEqual(dates.options.priority, ["frontmatter", "filesystem"])
+})
+
+test("related posts favor real links and never include notes-only content", () => {
+  const collection = { slug: "ai", title: "AI 工程" }
+  const post = (id, order, options = {}) => ({
+    id,
+    title: options.title ?? id,
+    summary: `${id} summary`,
+    sourcePath: `AI/${id}.md`,
+    links: options.links ?? [],
+    tags: options.tags ?? [],
+    collection: options.collection ?? collection,
+    post: { order, slug: id, url: `/blog/${id}` },
+  })
+  const current = post("current", 4, { links: ["outgoing"], tags: ["MCP"] })
+  const outgoing = post("outgoing", 8)
+  const incoming = post("incoming", 1, { links: ["current"] })
+  const tagged = post("tagged", 7, {
+    tags: ["mcp"],
+    collection: { slug: "network", title: "网络" },
+  })
+  const sameCollection = post("same-collection", 5)
+  const extra = post("extra", 6)
+  const noteOnly = {
+    ...post("note-only", 2, { links: ["current"] }),
+    post: undefined,
+  }
+  const posts = [current, outgoing, incoming, tagged, sameCollection, extra]
+
+  const related = rankRelatedPosts(current, posts, [...posts, noteOnly], 99)
+
+  assert.deepEqual(
+    related.map(({ post: relatedPost }) => relatedPost.id),
+    ["outgoing", "incoming", "tagged"],
+  )
+  assert.deepEqual(
+    related.map(({ reason }) => reason),
+    ["文中关联", "相关延伸", "共同主题 · MCP"],
+  )
+  assert.equal(related.length, 3)
+  assert.equal(
+    related.some(({ post: relatedPost }) => relatedPost.id === "note-only"),
+    false,
+  )
 })

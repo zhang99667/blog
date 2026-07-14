@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MarkZ continuous evolution program",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "objective", "cadence", "selectionPolicy", "guardrails", "capabilities"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "objective": { "type": "string", "minLength": 1 },
+    "cadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schedule", "workflow"],
+      "properties": {
+        "schedule": { "type": "string", "minLength": 1 },
+        "workflow": { "type": "string", "minLength": 1 }
+      }
+    },
+    "selectionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formula", "tieBreakers", "approvalRequired"],
+      "properties": {
+        "formula": { "const": "impact * urgency * confidence / effort" },
+        "tieBreakers": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "approvalRequired": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "guardrails": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+    "capabilities": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "track",
+          "name",
+          "description",
+          "impact",
+          "urgency",
+          "confidence",
+          "effort",
+          "risk",
+          "check",
+          "nextAction",
+          "validation"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "track": { "enum": ["reader", "content", "runtime", "ai"] },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "impact": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "urgency": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "confidence": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "effort": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "risk": { "enum": ["low", "medium", "high", "critical"] },
+          "check": { "type": "string", "minLength": 1 },
+          "nextAction": { "type": "string", "minLength": 1 },
+          "validation": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

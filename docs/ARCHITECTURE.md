@@ -4,16 +4,18 @@
 
 ## 系统边界
 
-| 系统            | 职责                                 | 权威入口                          | 生成结果                          |
-| --------------- | ------------------------------------ | --------------------------------- | --------------------------------- |
-| Obsidian 源仓库 | 私有写作与公开标记                   | `zhang99667/note`                 | 同步输入                          |
-| 发布编排        | 定时触发、私有签出、校验与部署       | `markz-publish.yaml`              | 可审计的发布记录                  |
-| 内容同步        | 筛选、复制、生成首页和文章元数据     | `scripts/sync-notes.mjs`          | `content/site/`、`content/notes/` |
-| 设计系统        | 品牌、主题、排版、布局和无障碍基础   | `design-system/tokens.json`       | TS、SCSS、favicon、分享图         |
-| Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml` | `public/`、`public-notes/`        |
-| 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`             | SQLite 数据文件                   |
-| 边缘路由        | TLS、域名分流和 API 代理             | `deploy/nginx.conf`               | `markz-edge`                      |
-| 独立工具        | JSONUtils、装箱单                    | 各自仓库                          | 独立产品界面                      |
+| 系统            | 职责                                 | 权威入口                            | 生成结果                          |
+| --------------- | ------------------------------------ | ----------------------------------- | --------------------------------- |
+| Obsidian 源仓库 | 私有写作与公开标记                   | `zhang99667/note`                   | 同步输入                          |
+| 发布编排        | 定时触发、私有签出、校验与部署       | `markz-publish.yaml`                | 可审计的发布记录                  |
+| 内容同步        | 筛选、复制、生成首页和文章元数据     | `scripts/sync-notes.mjs`            | `content/site/`、`content/notes/` |
+| 设计系统        | 品牌、主题、排版、布局和无障碍基础   | `design-system/tokens.json`         | TS、SCSS、favicon、分享图         |
+| Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml`   | `public/`、`public-notes/`        |
+| 发现与分发      | canonical、结构化数据、RSS、robots   | `Head.tsx`、`build-site-extras.mjs` | HTML 元数据与站点发现文件         |
+| 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`               | SQLite 数据文件                   |
+| AI 演进控制面   | 能力盘点、证据探针、排序和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
+| 边缘路由        | TLS、域名分流和 API 代理             | `deploy/nginx.conf`                 | `markz-edge`                      |
+| 独立工具        | JSONUtils、装箱单                    | 各自仓库                            | 独立产品界面                      |
 
 ## 数据流
 
@@ -23,6 +25,7 @@ private zhang99667/note
   -> sync-notes.mjs
   -> content/site + content/notes
   -> Quartz builds
+  -> canonical + JSON-LD + RSS + robots
   -> public + public-notes
   -> deploy.mjs
   -> markz-edge
@@ -58,6 +61,17 @@ tokens.json
   -> blog + notes builds
 ```
 
+成熟度演进走一条只读审计优先的控制链：
+
+```text
+ai/evolution.json
+  -> deterministic source probes + eval cases
+  -> Markdown / JSON maturity report
+  -> one scheduled GitHub backlog issue
+  -> bounded human-reviewed implementation
+  -> verify + browser gates + production smoke
+```
+
 ## 运行时路由
 
 - `markz.fun`：博客静态文件；`/notes/` 是笔记回退入口。
@@ -76,6 +90,9 @@ tokens.json
 - 定时发布和服务器密钥归 blog；note 最多发送更新通知，不拥有构建或部署职责。
 - 品牌值归 `design-system/tokens.json`。
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
+- canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
+- 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
+- 成熟度能力、评分和风险边界归 `ai/evolution.json`；探针只报告可观察事实，定时工作流不能直接修改代码、部署或处理密钥。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
 - 点赞、文章浏览和博客访客数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
@@ -93,14 +110,18 @@ tokens.json
 
 公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。同步器把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。列表和正文头部统一显示作者指定的 `date/created` 编辑日期，`modified` 保留用于更新元数据，不能悄悄替换公开显示日期。
 
+博客成稿同步时同时生成静态“继续阅读”。关系计算只读取同一次同步中的公开记录，不请求外部推荐服务，也不在浏览器端重排，因此构建可复现、链接可检查、无额外隐私数据。
+
 生成内容虽然被 Git 忽略，项目构建脚本会显式设置 `QUARTZ_INCLUDE_GITIGNORED=1` 让 Quartz 读取它们；Quartz 的默认 gitignore 行为保持不变。构建和质量门禁每次从受控输入重新执行，避免复用不完整的远端状态。周期同步不需要 note Action；若需要推送后即时发布，note Action 只负责调用 blog 的 `repository_dispatch`，不接触服务器。
 
 ## 变更影响面
 
-| 变更        | 最小影响面            | 必须扩大的验证                     |
-| ----------- | --------------------- | ---------------------------------- |
-| 设计令牌    | 博客、笔记、品牌图片  | 主题、三个视口、无障碍             |
-| 同步筛选    | 内容目录、索引、链接  | 公开范围、构建、断链               |
-| Quartz 组件 | 对应 frame 或页面类型 | 真实构建页面、SPA 导航             |
-| edge 配置   | 所有公网域名          | Nginx 测试、端口所有权、生产 smoke |
-| AI 规则     | Agent 行为与 CI       | manifest、eval runner、资产注册表  |
+| 变更        | 最小影响面             | 必须扩大的验证                        |
+| ----------- | ---------------------- | ------------------------------------- |
+| 设计令牌    | 博客、笔记、品牌图片   | 主题、三个视口、无障碍                |
+| 同步筛选    | 内容目录、索引、链接   | 公开范围、构建、断链                  |
+| Quartz 组件 | 对应 frame 或页面类型  | 真实构建页面、SPA 导航                |
+| 发现元数据  | 博客、笔记、回退入口   | canonical、JSON-LD、RSS、robots、断链 |
+| 演进模型    | AI 报告、CI 和改进队列 | schema、探针、eval、风险边界          |
+| edge 配置   | 所有公网域名           | Nginx 测试、端口所有权、生产 smoke    |
+| AI 规则     | Agent 行为与 CI        | manifest、eval runner、资产注册表     |

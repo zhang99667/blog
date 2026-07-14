@@ -4,11 +4,13 @@ import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
 import {
+  expectedCanonicalUrl,
   inspectHtml,
   literalModuleReferences,
   maxInitialJavaScriptBytes,
   referenceCandidates,
   validateHtmlMetadata,
+  validateSeoMetadata,
 } from "./check-build.mjs"
 
 test("HTML inspection uses structured document data", () => {
@@ -44,6 +46,60 @@ test("SEO redirects require canonical and noindex metadata", () => {
     "redirect.html redirect needs a canonical link",
     "redirect.html redirect needs noindex",
   ])
+})
+
+test("canonical URL expectations collapse index pages and deduplicate notes fallback", () => {
+  assert.equal(expectedCanonicalUrl("blog", "index.html"), "https://markz.fun/")
+  assert.equal(expectedCanonicalUrl("blog", "blog/index.html"), "https://markz.fun/blog/")
+  assert.equal(
+    expectedCanonicalUrl("blog", "notes/ai/agent-mcp.html"),
+    "https://note.markz.fun/ai/agent-mcp",
+  )
+  assert.equal(
+    expectedCanonicalUrl("notes", "ai/Agent MCP 完全指南.html"),
+    "https://note.markz.fun/ai/Agent%20MCP%20%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
+  )
+})
+
+test("article SEO contract requires canonical discovery, dates, JSON-LD, and one font source", () => {
+  const facts = inspectHtml(`<!doctype html><html lang="zh-CN"><head>
+    <title>Agent MCP</title>
+    <meta name="description" content="MCP guide">
+    <meta name="viewport" content="width=device-width">
+    <meta property="og:type" content="article">
+    <meta property="article:published_time" content="2026-07-07T00:00:00.000Z">
+    <meta property="article:modified_time" content="2026-07-13T00:00:00.000Z">
+    <link rel="canonical" href="https://markz.fun/blog/agent-mcp">
+    <link rel="alternate" type="application/rss+xml" href="https://markz.fun/index.xml">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
+    <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":"BlogPosting"}]}</script>
+  </head></html>`)
+
+  assert.deepEqual(
+    validateSeoMetadata("public/blog/agent-mcp.html", facts, {
+      expectedCanonical: "https://markz.fun/blog/agent-mcp",
+      expectedFeed: "https://markz.fun/index.xml",
+      article: true,
+    }),
+    [],
+  )
+})
+
+test("SEO contract rejects duplicate ungoverned font stylesheets", () => {
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <meta property="og:type" content="website">
+    <link rel="canonical" href="https://markz.fun/">
+    <link rel="alternate" type="application/rss+xml" href="https://markz.fun/index.xml">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source%20Sans%20Pro">
+    <script type="application/ld+json">{"@graph":[{"@type":"WebPage"}]}</script>
+  </head></html>`)
+  const failures = validateSeoMetadata("public/index.html", facts, {
+    expectedCanonical: "https://markz.fun/",
+    expectedFeed: "https://markz.fun/index.xml",
+  })
+  assert.ok(failures.some((failure) => failure.includes("exactly one")))
+  assert.ok(failures.some((failure) => failure.includes("ungoverned fallback font")))
 })
 
 test("clean URL references map to file and directory candidates", () => {
