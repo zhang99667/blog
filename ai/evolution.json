@@ -1,6 +1,6 @@
 {
   "$schema": "./evolution.schema.json",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "objective": "持续把 MarkZ 建设成克制、可靠、易发现、愿意继续阅读的成熟个人博客，并让 AI 协作从当前证据自动选择下一项改进。",
   "cadence": {
     "schedule": "weekly and after evolution-source changes",
@@ -190,6 +190,20 @@
       "check": "live-eval-evidence",
       "nextAction": "把确定性 eval 结果注入每周报告和 CI artifact，同时保留历史人工结果作为审计记录。",
       "validation": ["npm run evals:check", "npm run evolve:report", "npm test"]
+    },
+    {
+      "id": "ci-action-lifecycle",
+      "track": "ai",
+      "name": "CI Action 生命周期",
+      "description": "远程 GitHub Actions 使用当前 Node 24 兼容发布的不可变提交，并持续获得自动依赖更新。",
+      "impact": 4,
+      "urgency": 5,
+      "confidence": 5,
+      "effort": 1,
+      "risk": "high",
+      "check": "ci-action-lifecycle",
+      "nextAction": "把远程 Action 固定到完整 commit SHA，保留精确版本注释，并由 Dependabot 至少每周检查更新。",
+      "validation": ["npm run ai:check", "npm run evals:check", "npm test"]
     }
   ]
 }

@@ -154,3 +154,12 @@
 - 反例：所有文章继续共用 `markz-card-v2.png`；为了让探针通过直接启用会下载远程字体并覆盖全部笔记的通用 OG 插件；依赖构建机器的系统中文字体；把生成 PNG 提交为手工设计源；元数据引用三张不同图片；只检查 HTTP 200 而不检查尺寸、标题和体积。
 - 边界：文章分享图是分发元数据，不改变正文 UI，也不为公开笔记逐篇生成卡片。固定 WOFF 只用于构建，不作为浏览器字体发布；改变视觉布局必须递增渲染器版本，改变字体必须同时更新来源、许可、校验和和 URL。
 - 锁定证据：`article-social-images.mjs` 的内容哈希、三行标题和字体校验，生成器图像单测，Static emitter 的博客限定，Head 的统一 URL，逐篇 1200x630/PNG/唯一性/单图与总量构建预算，生产文章 HTML 与 PNG 下载解码 smoke，`article-social-image-governance` eval，以及最短、最长和中英混排卡片人工像素检查。
+
+## D-018 CI Action 既要及时升级，也要不可变
+
+- 日期：2026-07-14
+- 触发：发布工作流虽然成功，但 GitHub 明确警告 `actions/upload-artifact@v4` 仍运行 Node 20 并将被强制切换到 Node 24；现有门禁只检查 Action 名称存在，没有识别已淘汰运行时或浮动标签。
+- 决策：验证、发布和演进工作流中的所有远程 Action 固定到其官方发布的完整 commit SHA，并在同行保留精确语义版本注释。官方 Action 升级到当前 Node 24 兼容稳定版；`.github/dependabot.yml` 至少每周检查 `github-actions`。确定性探针解析全部工作流 YAML，拒绝非完整 SHA、缺少版本注释和低于治理基线的主版本。
+- 反例：忽略兼容模式告警；只把 `upload-artifact` 改成可移动的 `@v7`；固定 SHA 却删除版本注释导致无法审计与更新；只升级发布工作流而遗漏验证或演进工作流；关闭 Dependabot 后靠偶尔人工搜索新版本。
+- 边界：离线探针验证引用形态、版本基线和更新通道，不声称仅凭源码就证明任意 SHA 的上游归属；首次和重大升级仍需从官方仓库核验提交并让全部远端工作流真实运行。本仓库使用 GitHub-hosted runner，自托管 runner 的最低版本兼容性不在本决策覆盖范围内。
+- 锁定证据：GitHub 官方发布记录与提交 API、三个工作流的完整 SHA 和同行版本注释、`ci-action-lifecycle` 演进探针、浮动引用与旧主版本回归单测、`ci-action-supply-chain` eval、Dependabot GitHub Actions 配置，以及远端 Verify、Publish、Evolution 的无淘汰告警运行。

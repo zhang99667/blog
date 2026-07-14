@@ -28,10 +28,10 @@ jobs:
       NOTE_REPO_PRECHECKED_OUT: "1"
     steps:
       - name: Check out blog source
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check out private notes
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: zhang99667/note
           ssh-key: ${{ secrets.NOTE_REPO_SSH_KEY }}
@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload browser quality evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: markz-browser-quality-${{ github.run_id }}
           path: |

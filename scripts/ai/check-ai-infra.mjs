@@ -176,6 +176,7 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     ".github/prompts/edge-incident.prompt.md",
     ".github/prompts/evolve-site.prompt.md",
     ".github/pull_request_template.md",
+    ".github/dependabot.yml",
     ".github/workflows/markz-verify.yaml",
     ".github/workflows/markz-publish.yaml",
     ".github/workflows/markz-evolve.yaml",

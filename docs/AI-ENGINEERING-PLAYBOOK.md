@@ -52,17 +52,19 @@
 | RSS、robots                | `scripts/build-site-extras.mjs`                         | `public/` 发现文件      |
 | 文章继续阅读               | `scripts/sync-notes.mjs`                                | 生成文章 Markdown       |
 | 成熟度能力与排序           | `ai/evolution.json`、`scripts/ai/evolve.mjs`            | GitHub issue 正文       |
+| CI Action 版本与更新       | 工作流、`.github/dependabot.yml`、`run-evals.mjs`       | 浮动 Action 标签        |
 
 ## 验证矩阵
 
-| 变更                           | 必须运行                                            |
-| ------------------------------ | --------------------------------------------------- |
-| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build` |
-| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                      |
-| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`       |
-| 同步逻辑、内容选择             | `npm test`、`npm run build`                         |
-| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke     |
-| 上线前完整验证                 | `npm run verify`                                    |
+| 变更                           | 必须运行                                              |
+| ------------------------------ | ----------------------------------------------------- |
+| 设计令牌、组件、SCSS、品牌资产 | `npm run design:check`、`npm test`、`npm run build`   |
+| AI 入口、规范、Skill、评测     | `npm run ai:check`、`npm test`                        |
+| 成熟度模型、探针、定时报告     | `npm run evolve:check`、`npm run evals:check`         |
+| GitHub Action 与依赖策略       | `npm run ai:check`、`npm run evals:check`、`npm test` |
+| 同步逻辑、内容选择             | `npm test`、`npm run build`                           |
+| 部署和 Nginx                   | `docker compose config`、`nginx -t`、公网 smoke       |
+| 上线前完整验证                 | `npm run verify`                                      |
 
 浏览器、生产和安全补充门禁：
 

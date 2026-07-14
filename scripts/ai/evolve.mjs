@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parse as parseYaml } from "yaml"
-import { runEvalCases } from "./run-evals.mjs"
+import { collectCiActionLifecycleFailures, runEvalCases } from "./run-evals.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultRoot = path.resolve(scriptDir, "../..")
@@ -273,6 +273,21 @@ async function liveEvalEvidence(root) {
   )
 }
 
+async function ciActionLifecycle(root) {
+  const failures = await collectCiActionLifecycleFailures(root)
+  return probe(
+    failures.length === 0,
+    "CI Actions use immutable current releases with automated lifecycle updates.",
+    failures.length === 0
+      ? [
+          "all remote Actions are pinned to full commit SHAs",
+          "Node 24-compatible release annotations are enforced",
+          "Dependabot checks GitHub Actions at least weekly",
+        ]
+      : failures,
+  )
+}
+
 const providers = {
   "editorial-seo": editorialSeo,
   "editorial-rss": editorialRss,
@@ -286,6 +301,7 @@ const providers = {
   "evolution-control-plane": evolutionControlPlane,
   "decision-contract": decisionContract,
   "live-eval-evidence": liveEvalEvidence,
+  "ci-action-lifecycle": ciActionLifecycle,
 }
 
 export function scoreCapability(capability) {

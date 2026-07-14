@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { parse as parseYaml } from "yaml"
+import { parse as parseYaml, parseDocument, visit } from "yaml"
 import { collectDesignSystemFailures } from "../design-system/check.mjs"
 import { collectAiInfraFailures } from "./check-ai-infra.mjs"
 
@@ -15,6 +15,99 @@ async function readText(root, relativePath) {
 
 async function readJson(root, relativePath) {
   return JSON.parse(await readText(root, relativePath))
+}
+
+const minimumCiActionMajors = new Map([
+  ["actions/checkout", 7],
+  ["actions/setup-node", 7],
+  ["actions/upload-artifact", 7],
+])
+
+function workflowActionReferences(source, relativePath) {
+  const document = parseDocument(source)
+  if (document.errors.length > 0) {
+    return {
+      failures: document.errors.map((error) => `${relativePath} is invalid YAML: ${error.message}`),
+      references: [],
+    }
+  }
+
+  const references = []
+  visit(document, {
+    Pair(_, pair) {
+      if (pair.key?.value !== "uses" || typeof pair.value?.value !== "string") return
+      references.push({
+        reference: pair.value.value,
+        versionComment: pair.value.comment?.trim() ?? "",
+      })
+    },
+  })
+  return { failures: [], references }
+}
+
+export function validateCiActionLifecycle(workflowSources, dependabotSource) {
+  const failures = []
+  const seenActions = new Set()
+  for (const { path: relativePath, source } of workflowSources) {
+    const parsed = workflowActionReferences(source, relativePath)
+    failures.push(...parsed.failures)
+    for (const { reference, versionComment } of parsed.references) {
+      if (reference.startsWith("./") || reference.startsWith("docker://")) continue
+      const match = reference.match(/^([^@\s]+)@(.+)$/)
+      if (!match) {
+        failures.push(`${relativePath} has an invalid remote Action reference: ${reference}`)
+        continue
+      }
+      const [, action, revision] = match
+      seenActions.add(action)
+      if (!/^[0-9a-f]{40}$/.test(revision)) {
+        failures.push(`${relativePath} must pin ${action} to a full commit SHA`)
+      }
+      const version = versionComment.match(/^v(\d+)\.(\d+)\.(\d+)$/)
+      if (!version) {
+        failures.push(`${relativePath} must annotate ${action} with an exact version comment`)
+        continue
+      }
+      const minimumMajor = minimumCiActionMajors.get(action)
+      if (minimumMajor && Number(version[1]) < minimumMajor) {
+        failures.push(
+          `${relativePath} uses ${action} ${versionComment}; v${minimumMajor}+ is required`,
+        )
+      }
+    }
+  }
+
+  for (const action of minimumCiActionMajors.keys()) {
+    if (!seenActions.has(action))
+      failures.push(`CI workflows are missing governed Action ${action}`)
+  }
+
+  try {
+    const dependabot = parseYaml(dependabotSource)
+    const update = (dependabot.updates ?? []).find(
+      (item) => item["package-ecosystem"] === "github-actions" && item.directory === "/",
+    )
+    if (!update) {
+      failures.push("Dependabot must govern GitHub Actions at the repository root")
+    } else if (!["daily", "weekly"].includes(update.schedule?.interval)) {
+      failures.push("Dependabot must check GitHub Actions at least weekly")
+    }
+  } catch (error) {
+    failures.push(`.github/dependabot.yml is invalid YAML: ${error.message}`)
+  }
+  return failures
+}
+
+export async function collectCiActionLifecycleFailures(root = defaultRoot) {
+  const workflowDirectory = path.join(root, ".github/workflows")
+  const entries = await fs.readdir(workflowDirectory, { withFileTypes: true })
+  const workflowSources = []
+  for (const entry of entries.sort((first, second) => first.name.localeCompare(second.name))) {
+    if (!entry.isFile() || !/\.ya?ml$/.test(entry.name)) continue
+    const relativePath = `.github/workflows/${entry.name}`
+    workflowSources.push({ path: relativePath, source: await readText(root, relativePath) })
+  }
+  return validateCiActionLifecycle(workflowSources, await readText(root, ".github/dependabot.yml"))
 }
 
 export async function collectRoutingContractFailures(root = defaultRoot) {
@@ -247,6 +340,7 @@ const providers = {
   "runtime-backup-boundary": collectRuntimeBackupBoundaryFailures,
   "graph-runtime-boundary": collectGraphRuntimeBoundaryFailures,
   "article-social-image-boundary": collectArticleSocialImageFailures,
+  "ci-action-lifecycle": collectCiActionLifecycleFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {

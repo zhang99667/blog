@@ -1,6 +1,6 @@
 {
   "$schema": "./manifest.schema.json",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "project": "MarkZ blog and public notes",
   "authorities": [
     { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
@@ -9,7 +9,12 @@
     { "id": "visual-tokens", "path": "design-system/tokens.json", "kind": "source" },
     { "id": "surface-boundaries", "path": "design-system/manifest.json", "kind": "contract" },
     { "id": "decisions", "path": "docs/AI-DECISIONS.md", "kind": "decision-log" },
-    { "id": "evolution", "path": "ai/evolution.json", "kind": "maturity-program" }
+    { "id": "evolution", "path": "ai/evolution.json", "kind": "maturity-program" },
+    {
+      "id": "ci-dependencies",
+      "path": ".github/dependabot.yml",
+      "kind": "dependency-policy"
+    }
   ],
   "instructionLayers": [
     { "scope": "repository", "path": "AGENTS.md" },
