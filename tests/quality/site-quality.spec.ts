@@ -311,6 +311,21 @@ for (const target of pages) {
           expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
           expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height)
 
+          const articleBounds = await page
+            .locator("main.center > article.popover-hint")
+            .boundingBox()
+          expect(articleBounds).not.toBeNull()
+          const safeEdge = viewport.width <= 600 ? 12 : 16
+          const hasSideRoom =
+            viewport.width - articleBounds!.x - articleBounds!.width >= bounds!.width + safeEdge
+          if (hasSideRoom) {
+            await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
+            expect(bounds!.x - articleBounds!.x - articleBounds!.width).toBeCloseTo(safeEdge, 0)
+          } else {
+            await expect(reactionRoot).toHaveAttribute("data-anchor", "viewport")
+            expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
+          }
+
           await reactionButton.focus()
           await page.keyboard.press("Enter")
           await expect(reactionButton).toHaveAttribute("aria-pressed", "true")

@@ -167,6 +167,48 @@ function createReactionRoot() {
   return { root, views, viewCount, button, likeCount, status }
 }
 
+function positionReaction(root: HTMLElement, article: HTMLElement) {
+  root.style.removeProperty("left")
+  root.style.removeProperty("right")
+
+  const edge = Number.parseFloat(getComputedStyle(root).right)
+  const safeEdge = Number.isFinite(edge) ? edge : 16
+  const articleBounds = article.getBoundingClientRect()
+  const reactionBounds = root.getBoundingClientRect()
+  const preferredLeft = articleBounds.right + safeEdge
+  const viewportLeft = window.innerWidth - reactionBounds.width - safeEdge
+  const anchorsToArticle = preferredLeft <= viewportLeft
+  const left = Math.max(safeEdge, anchorsToArticle ? preferredLeft : viewportLeft)
+
+  root.style.left = `${left}px`
+  root.style.right = "auto"
+  root.dataset.anchor = anchorsToArticle ? "article" : "viewport"
+}
+
+function trackReactionPosition(root: HTMLElement, article: HTMLElement, signal: AbortSignal) {
+  let frame = 0
+  const schedule = () => {
+    if (frame !== 0) return
+    frame = window.requestAnimationFrame(() => {
+      frame = 0
+      positionReaction(root, article)
+    })
+  }
+  const observer = new ResizeObserver(schedule)
+  observer.observe(root)
+  observer.observe(article)
+  window.addEventListener("resize", schedule, { signal })
+  signal.addEventListener(
+    "abort",
+    () => {
+      observer.disconnect()
+      if (frame !== 0) window.cancelAnimationFrame(frame)
+    },
+    { once: true },
+  )
+  positionReaction(root, article)
+}
+
 function unmountReactions() {
   activeController?.abort()
   activeController = undefined
@@ -190,6 +232,7 @@ function mountReactions() {
   activeRoot = elements.root
   activePageKey = pageKey
   identity.article.insertAdjacentElement("afterend", elements.root)
+  trackReactionPosition(elements.root, identity.article, controller.signal)
 
   const render = (likes: number, views: number | undefined, liked: boolean) => {
     if (views !== undefined) currentViews = views
