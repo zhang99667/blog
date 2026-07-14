@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
-import { patchGraphPathDecoding } from "./GraphCompatibility"
+import { patchGraphPathDecoding, patchGraphRenderGeneration } from "./GraphCompatibility"
 
 describe("Graph URL compatibility", () => {
   test("decodes an encoded browser pathname before graph lookup", () => {
@@ -32,5 +32,30 @@ describe("Graph URL compatibility", () => {
         ),
       { message: "Expected one Graph URL pathname lookup, found 2" },
     )
+  })
+})
+
+describe("Graph render lifecycle compatibility", () => {
+  const source =
+    "async function D(d,w,g){if(g!==void 0&&g!==E)return function(){};try{var data=await fetchData;map=new Map}catch(i){return function(){}}var Z=new PIXI.Application;await Z.init({}),d.appendChild(Z.canvas)}"
+
+  test("stops stale generations before and after PIXI initialization", () => {
+    const patched = patchGraphRenderGeneration(source)
+    if (typeof patched !== "string") assert.fail("Expected a patched Graph script")
+
+    assert.equal(patched.match(/g!==void 0&&g!==E/g)?.length, 3)
+    assert.match(patched, /await fetchData;if\(g!==void 0&&g!==E\)return function\(\)\{\};/)
+    assert.match(patched, /Z\.destroy\(!0\);return function\(\)\{\}\}d\.appendChild\(Z\.canvas\)/)
+  })
+
+  test("preserves multi-script resources and rejects upstream marker drift", () => {
+    const patched = patchGraphRenderGeneration(["const before = true", source])
+    if (!Array.isArray(patched)) assert.fail("Expected patched Graph scripts")
+    assert.equal(patched[0], "const before = true")
+    assert.match(patched[1], /Z\.destroy\(!0\)/)
+
+    assert.throws(() => patchGraphRenderGeneration("const graph = {}"), {
+      message: "Expected one Graph render checkpoint, found generation=0 fetch=0 canvas=0",
+    })
   })
 })

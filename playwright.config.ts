@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: "./tests/quality",
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // PIXI graph pages compete for Chromium's shared WebGL contexts when this single spec runs in parallel.
+  workers: 1,
   reporter: [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
     browserName: "chromium",

@@ -68,6 +68,7 @@
     "hast-util-to-jsx-runtime": "^2.3.6",
     "isomorphic-git": "^1.36.3",
     "lightningcss": "^1.31.1",
+    "lucide": "1.24.0",
     "micromorph": "^0.4.5",
     "minimatch": "^10.1.1",
     "photoswipe": "5.4.4",

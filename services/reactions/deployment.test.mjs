@@ -54,6 +54,7 @@ describe("reactions deployment boundary", () => {
 
     for (const block of [blog, notes]) {
       assert.match(block, /location = \/api\/reactions \{/)
+      assert.match(block, /location = \/api\/reactions\/view \{/)
       assert.match(block, /location = \/api\/reactions\/health \{/)
       assert.match(block, /proxy_pass http:\/\/reactions:3000;/)
       assert.match(block, /limit_req zone=markz_reaction_writes/)
@@ -64,6 +65,7 @@ describe("reactions deployment boundary", () => {
     }
     assert.match(nginx, /limit_req_zone \$markz_reaction_write_key/)
     assert.equal(nginx.match(/location = \/api\/reactions \{/g)?.length, 2)
+    assert.equal(nginx.match(/location = \/api\/reactions\/view \{/g)?.length, 2)
   })
 
   test("deploys and checks reactions before replacing the edge container", () => {

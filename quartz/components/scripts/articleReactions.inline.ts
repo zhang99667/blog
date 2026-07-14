@@ -1,3 +1,5 @@
+import { Eye, ThumbsUp, type IconNode } from "lucide"
+
 type ReactionSite = "blog" | "notes"
 
 interface PageIdentity {
@@ -7,17 +9,20 @@ interface PageIdentity {
 }
 
 interface ReactionPayload {
-  count: number
+  likes: number
+  views?: number
   liked?: boolean
 }
 
 const visitorStorageKey = "markz.reactions.visitor.v1"
 const apiPath = "/api/reactions"
+const viewApiPath = "/api/reactions/view"
 const visitorPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 let volatileVisitor: string | undefined
 let activeController: AbortController | undefined
 let activeRoot: HTMLElement | undefined
+let activePageKey: string | undefined
 
 function readStorage(key: string): string | null {
   try {
@@ -31,7 +36,7 @@ function writeStorage(key: string, value: string) {
   try {
     localStorage.setItem(key, value)
   } catch {
-    // The current page can still react once when storage is unavailable.
+    // The current page can still register once when storage is unavailable.
   }
 }
 
@@ -62,16 +67,24 @@ function likedStorageKey({ site, slug }: PageIdentity): string {
   return `markz.reactions.liked.v1:${site}:${slug}`
 }
 
-function validPayload(value: unknown): value is ReactionPayload {
-  if (!value || typeof value !== "object") return false
-  const count = (value as { count?: unknown }).count
-  return Number.isSafeInteger(count) && Number(count) >= 0
+function countValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+function normalizePayload(value: unknown): ReactionPayload | undefined {
+  if (!value || typeof value !== "object") return
+  const payload = value as { count?: unknown; likes?: unknown; views?: unknown; liked?: unknown }
+  const likes = countValue(payload.likes) ?? countValue(payload.count)
+  const views = payload.views === undefined ? undefined : countValue(payload.views)
+  if (likes === undefined || (payload.views !== undefined && views === undefined)) return
+  return { likes, views, liked: payload.liked === true }
 }
 
 async function parseResponse(response: Response): Promise<ReactionPayload> {
   const value: unknown = await response.json()
-  if (!response.ok || !validPayload(value)) throw new Error("Invalid reactions response")
-  return value
+  const payload = normalizePayload(value)
+  if (!response.ok || !payload) throw new Error("Invalid reactions response")
+  return payload
 }
 
 function reactionUrl(identity: PageIdentity): URL {
@@ -81,42 +94,77 @@ function reactionUrl(identity: PageIdentity): URL {
   return url
 }
 
+function icon(name: "eye" | "thumbs-up", node: IconNode) {
+  const namespace = "http://www.w3.org/2000/svg"
+  const svg = document.createElementNS(namespace, "svg")
+  const attributes = {
+    class: "article-reaction__icon",
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "2",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "data-lucide": name,
+    "aria-hidden": "true",
+    focusable: "false",
+  }
+  for (const [attribute, value] of Object.entries(attributes)) {
+    svg.setAttribute(attribute, value)
+  }
+  for (const [tag, childAttributes] of node) {
+    const child = document.createElementNS(namespace, tag)
+    for (const [attribute, value] of Object.entries(childAttributes)) {
+      child.setAttribute(attribute, String(value))
+    }
+    svg.append(child)
+  }
+  return svg
+}
+
 function createReactionRoot() {
   const root = document.createElement("div")
   root.className = "article-reaction"
   root.dataset.articleReaction = ""
   root.setAttribute("role", "group")
-  root.setAttribute("aria-label", "文章点赞")
+  root.setAttribute("aria-label", "文章数据")
   root.setAttribute("aria-busy", "true")
+
+  const views = document.createElement("span")
+  views.className = "article-reaction__metric"
+  views.dataset.reactionViews = ""
+  views.title = "浏览量"
+  views.setAttribute("aria-label", "正在读取浏览量")
+  const viewCount = document.createElement("span")
+  viewCount.className = "article-reaction__count"
+  viewCount.dataset.viewCount = ""
+  viewCount.textContent = "--"
+  views.append(icon("eye", Eye), viewCount)
 
   const button = document.createElement("button")
   button.className = "article-reaction__button"
   button.type = "button"
   button.disabled = true
   button.dataset.state = "loading"
+  button.title = "点赞"
   button.setAttribute("aria-pressed", "false")
   button.setAttribute("aria-label", "正在读取点赞数")
+  const likeCount = document.createElement("span")
+  likeCount.className = "article-reaction__count"
+  likeCount.dataset.reactionCount = ""
+  likeCount.textContent = "--"
+  button.append(icon("thumbs-up", ThumbsUp), likeCount)
 
-  const label = document.createElement("span")
-  label.dataset.reactionLabel = ""
-  label.textContent = "赞"
-  const separator = document.createElement("span")
-  separator.className = "article-reaction__separator"
-  separator.setAttribute("aria-hidden", "true")
-  separator.textContent = "·"
-  const count = document.createElement("span")
-  count.dataset.reactionCount = ""
-  count.textContent = "--"
+  const status = document.createElement("span")
+  status.className = "article-reaction__status"
+  status.dataset.reactionStatus = ""
+  status.setAttribute("role", "status")
+  status.setAttribute("aria-live", "polite")
 
-  const message = document.createElement("span")
-  message.className = "article-reaction__message"
-  message.dataset.reactionMessage = ""
-  message.setAttribute("role", "status")
-  message.setAttribute("aria-live", "polite")
-
-  button.append(label, separator, count)
-  root.append(button, message)
-  return { root, button, label, count, message }
+  root.append(views, button, status)
+  return { root, views, viewCount, button, likeCount, status }
 }
 
 function unmountReactions() {
@@ -124,89 +172,112 @@ function unmountReactions() {
   activeController = undefined
   activeRoot?.remove()
   activeRoot = undefined
+  activePageKey = undefined
 }
 
 function mountReactions() {
-  unmountReactions()
   const identity = pageIdentity()
+  const pageKey = identity ? `${identity.site}:${identity.slug}` : undefined
+  if (pageKey && pageKey === activePageKey && activeRoot?.isConnected) return
+  unmountReactions()
   if (!identity) return
 
   const controller = new AbortController()
   const elements = createReactionRoot()
   const likedKey = likedStorageKey(identity)
+  let currentViews = 0
   activeController = controller
   activeRoot = elements.root
+  activePageKey = pageKey
   identity.article.insertAdjacentElement("afterend", elements.root)
 
-  const render = (count: number, liked: boolean) => {
+  const render = (likes: number, views: number | undefined, liked: boolean) => {
+    if (views !== undefined) currentViews = views
     elements.root.setAttribute("aria-busy", "false")
+    elements.views.setAttribute("aria-label", `${currentViews} 次浏览`)
+    elements.viewCount.textContent = String(currentViews)
     elements.button.disabled = false
     elements.button.dataset.state = liked ? "liked" : "ready"
+    elements.button.title = liked ? "已点赞" : "点赞"
     elements.button.setAttribute("aria-pressed", String(liked))
     elements.button.setAttribute("aria-disabled", String(liked))
     elements.button.setAttribute(
       "aria-label",
-      liked ? `已点赞，当前 ${count} 个赞` : `点赞，当前 ${count} 个赞`,
+      liked ? `已点赞，当前 ${likes} 个赞` : `点赞，当前 ${likes} 个赞`,
     )
-    elements.label.textContent = liked ? "已赞" : "赞"
-    elements.count.textContent = String(count)
+    elements.likeCount.textContent = String(likes)
   }
 
+  const requestBody = () =>
+    JSON.stringify({ site: identity.site, slug: identity.slug, visitor: visitorId() })
+
   const load = async () => {
+    let payload: ReactionPayload
     try {
-      const response = await fetch(reactionUrl(identity), {
+      const response = await fetch(viewApiPath, {
+        method: "POST",
         cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: requestBody(),
         signal: controller.signal,
       })
-      const payload = await parseResponse(response)
-      if (controller.signal.aborted) return
-      render(payload.count, readStorage(likedKey) === "1")
+      payload = await parseResponse(response)
     } catch {
       if (controller.signal.aborted) return
-      elements.root.setAttribute("aria-busy", "false")
-      elements.button.disabled = true
-      elements.button.dataset.state = "unavailable"
-      elements.button.setAttribute("aria-disabled", "true")
-      elements.button.setAttribute("aria-label", "点赞暂不可用")
-      elements.message.textContent = "暂不可用"
+      try {
+        const response = await fetch(reactionUrl(identity), {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        payload = await parseResponse(response)
+      } catch {
+        if (controller.signal.aborted) return
+        elements.root.setAttribute("aria-busy", "false")
+        elements.views.setAttribute("aria-label", "浏览量暂不可用")
+        elements.button.disabled = true
+        elements.button.dataset.state = "unavailable"
+        elements.button.setAttribute("aria-disabled", "true")
+        elements.button.setAttribute("aria-label", "点赞暂不可用")
+        elements.status.textContent = "文章数据暂不可用"
+        return
+      }
     }
+
+    if (controller.signal.aborted) return
+    render(payload.likes, payload.views, readStorage(likedKey) === "1")
   }
 
   elements.button.addEventListener(
     "click",
     async () => {
       if (elements.button.dataset.state === "liked") {
-        elements.message.textContent = "已经赞过了"
+        elements.status.textContent = "已经点过赞"
         return
       }
 
       elements.root.setAttribute("aria-busy", "true")
       elements.button.disabled = true
       elements.button.dataset.state = "loading"
-      elements.message.textContent = ""
+      elements.status.textContent = ""
       try {
         const response = await fetch(apiPath, {
           method: "POST",
           cache: "no-store",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            site: identity.site,
-            slug: identity.slug,
-            visitor: visitorId(),
-          }),
+          body: requestBody(),
           signal: controller.signal,
         })
         const payload = await parseResponse(response)
         if (controller.signal.aborted) return
         writeStorage(likedKey, "1")
-        render(payload.count, true)
-        elements.message.textContent = "谢谢"
+        render(payload.likes, payload.views, true)
+        elements.status.textContent = "点赞成功"
       } catch {
         if (controller.signal.aborted) return
         elements.root.setAttribute("aria-busy", "false")
         elements.button.disabled = false
         elements.button.dataset.state = "ready"
-        elements.message.textContent = "暂时没点上"
+        elements.status.textContent = "点赞失败，请稍后重试"
       }
     },
     { signal: controller.signal },

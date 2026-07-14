@@ -812,6 +812,10 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
     overflow: visible;
   }
 
+  .page[data-frame="default"] .explorer .explorer-content {
+    left: calc(var(--brand-space-4) * -1);
+  }
+
   .page[data-frame="default"] .page-title {
     min-width: 0;
     font-size: 1.25rem;

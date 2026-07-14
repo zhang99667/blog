@@ -6,7 +6,7 @@
       "root": "public",
       "maxTotalCssBytes": 250000,
       "maxInitialJsBytes": 200000,
-      "maxTotalJsBytes": 485000,
+      "maxTotalJsBytes": 490000,
       "maxHtmlBytes": 500000,
       "allowedExternalRoutes": ["/zhangjihao/"]
     },

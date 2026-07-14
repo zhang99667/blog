@@ -100,27 +100,51 @@ export function createReactionStore(databasePath) {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (site, slug, visitor_hash)
     ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS views (
+      site TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      visitor_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (site, slug, visitor_hash)
+    ) STRICT, WITHOUT ROWID;
   `)
 
-  const countStatement = database.prepare(
+  const likeCountStatement = database.prepare(
     "SELECT COUNT(*) AS count FROM reactions WHERE site = ? AND slug = ?",
   )
-  const insertStatement = database.prepare(
+  const viewCountStatement = database.prepare(
+    "SELECT COUNT(*) AS count FROM views WHERE site = ? AND slug = ?",
+  )
+  const insertLikeStatement = database.prepare(
     "INSERT OR IGNORE INTO reactions (site, slug, visitor_hash) VALUES (?, ?, ?)",
   )
+  const insertViewStatement = database.prepare(
+    "INSERT OR IGNORE INTO views (site, slug, visitor_hash) VALUES (?, ?, ?)",
+  )
+
+  function countsFor(page) {
+    const likes = Number(likeCountStatement.get(page.site, page.slug).count)
+    const views = Number(viewCountStatement.get(page.site, page.slug).count)
+    return { likes, views }
+  }
+
+  function add(insertStatement, site, slug, visitor) {
+    const page = normalizePage(site, slug)
+    const visitorHash = normalizeVisitor(visitor)
+    const result = insertStatement.run(page.site, page.slug, visitorHash)
+    return { added: Number(result.changes) === 1, ...countsFor(page) }
+  }
 
   return {
-    count(site, slug) {
+    counts(site, slug) {
       const page = normalizePage(site, slug)
-      const row = countStatement.get(page.site, page.slug)
-      return Number(row.count)
+      return countsFor(page)
     },
-    add(site, slug, visitor) {
-      const page = normalizePage(site, slug)
-      const visitorHash = normalizeVisitor(visitor)
-      const result = insertStatement.run(page.site, page.slug, visitorHash)
-      const row = countStatement.get(page.site, page.slug)
-      return { added: Number(result.changes) === 1, count: Number(row.count) }
+    addLike(site, slug, visitor) {
+      return add(insertLikeStatement, site, slug, visitor)
+    },
+    addView(site, slug, visitor) {
+      return add(insertViewStatement, site, slug, visitor)
     },
     close() {
       database.close()
@@ -143,6 +167,17 @@ export function createReactionService({ databasePath = ":memory:" } = {}) {
         return
       }
 
+      if (url.pathname === "/api/reactions/view") {
+        if (request.method !== "POST") {
+          jsonResponse(response, 405, { error: "Method not allowed" }, { allow: "POST" })
+          return
+        }
+        const body = await readJson(request)
+        const result = store.addView(body.site, body.slug, body.visitor)
+        jsonResponse(response, result.added ? 201 : 200, result)
+        return
+      }
+
       if (url.pathname !== "/api/reactions") {
         jsonResponse(response, 404, { error: "Not found" })
         return
@@ -151,15 +186,18 @@ export function createReactionService({ databasePath = ":memory:" } = {}) {
       if (request.method === "GET") {
         const site = url.searchParams.get("site")
         const slug = url.searchParams.get("slug")
-        jsonResponse(response, 200, { count: store.count(site, slug) })
+        const counts = store.counts(site, slug)
+        jsonResponse(response, 200, { count: counts.likes, ...counts })
         return
       }
 
       if (request.method === "POST") {
         const body = await readJson(request)
-        const result = store.add(body.site, body.slug, body.visitor)
+        const result = store.addLike(body.site, body.slug, body.visitor)
         jsonResponse(response, result.added ? 201 : 200, {
-          count: result.count,
+          count: result.likes,
+          likes: result.likes,
+          views: result.views,
           liked: true,
           added: result.added,
         })

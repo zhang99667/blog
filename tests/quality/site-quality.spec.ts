@@ -73,42 +73,72 @@ const imagePages = [
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
 const linkedGraphRoute = "/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 
-async function mockReactions(page: Page, initialCount = 12) {
-  const counts = new Map<string, number>()
-  const visitors = new Map<string, Set<string>>()
-  const writes: Array<{ site: string; slug: string; visitor: string }> = []
+async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
+  const likeCounts = new Map<string, number>()
+  const viewCounts = new Map<string, number>()
+  const likeVisitors = new Map<string, Set<string>>()
+  const viewVisitors = new Map<string, Set<string>>()
+  const likeWrites: Array<{ site: string; slug: string; visitor: string }> = []
+  const viewWrites: Array<{ site: string; slug: string; visitor: string }> = []
 
   await page.route("**/api/reactions**", async (route) => {
     const request = route.request()
+    const url = new URL(request.url())
     if (request.method() === "GET") {
-      const url = new URL(request.url())
       const site = url.searchParams.get("site") ?? ""
       const slug = url.searchParams.get("slug") ?? ""
       const key = `${site}:${slug}`
+      const likes = likeCounts.get(key) ?? initialLikes
+      const views = viewCounts.get(key) ?? initialViews
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ count: counts.get(key) ?? initialCount }),
+        body: JSON.stringify({ count: likes, likes, views }),
       })
       return
     }
 
     const body = request.postDataJSON() as { site: string; slug: string; visitor: string }
     const key = `${body.site}:${body.slug}`
-    const pageVisitors = visitors.get(key) ?? new Set<string>()
+    if (url.pathname.endsWith("/view")) {
+      const pageVisitors = viewVisitors.get(key) ?? new Set<string>()
+      const added = !pageVisitors.has(body.visitor)
+      if (added) pageVisitors.add(body.visitor)
+      viewVisitors.set(key, pageVisitors)
+      viewCounts.set(key, (viewCounts.get(key) ?? initialViews) + (added ? 1 : 0))
+      viewWrites.push(body)
+      await route.fulfill({
+        status: added ? 201 : 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          likes: likeCounts.get(key) ?? initialLikes,
+          views: viewCounts.get(key),
+          added,
+        }),
+      })
+      return
+    }
+
+    const pageVisitors = likeVisitors.get(key) ?? new Set<string>()
     const added = !pageVisitors.has(body.visitor)
     if (added) pageVisitors.add(body.visitor)
-    visitors.set(key, pageVisitors)
-    counts.set(key, (counts.get(key) ?? initialCount) + (added ? 1 : 0))
-    writes.push(body)
+    likeVisitors.set(key, pageVisitors)
+    likeCounts.set(key, (likeCounts.get(key) ?? initialLikes) + (added ? 1 : 0))
+    likeWrites.push(body)
     await route.fulfill({
       status: added ? 201 : 200,
       contentType: "application/json",
-      body: JSON.stringify({ count: counts.get(key), liked: true, added }),
+      body: JSON.stringify({
+        count: likeCounts.get(key),
+        likes: likeCounts.get(key),
+        views: viewCounts.get(key) ?? initialViews,
+        liked: true,
+        added,
+      }),
     })
   })
 
-  return { counts, writes }
+  return { likeCounts, viewCounts, likeWrites, viewWrites }
 }
 
 for (const target of pages) {
@@ -152,6 +182,19 @@ for (const target of pages) {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
           )
         })
+
+        if (target.id.startsWith("notes") && viewport.width <= 800) {
+          await expect
+            .poll(
+              () =>
+                page
+                  .locator(".explorer-content")
+                  .first()
+                  .evaluate((element) => element.getBoundingClientRect().right),
+              { timeout: 2_000 },
+            )
+            .toBeLessThanOrEqual(1)
+        }
 
         const brand = page.locator(".brand-mark").first()
         await expect(brand).toBeVisible()
@@ -242,8 +285,13 @@ for (const target of pages) {
         if (target.id.endsWith("-article")) {
           await expect(reactionRoot).toHaveCount(1)
           const reactionButton = reactionRoot.locator("button")
+          const viewMetric = reactionRoot.locator("[data-reaction-views]")
           await expect(reactionRoot).toHaveAttribute("aria-busy", "false")
           await expect(reactionRoot).toBeInViewport()
+          await expect(reactionRoot.locator('svg[data-lucide="eye"]')).toHaveCount(1)
+          await expect(reactionRoot.locator('svg[data-lucide="thumbs-up"]')).toHaveCount(1)
+          await expect(viewMetric.locator("[data-view-count]")).toHaveText("33")
+          await expect(viewMetric).toHaveAttribute("aria-label", "33 次浏览")
           await expect(reactionButton).toBeEnabled()
           await expect(reactionButton).toHaveAttribute("aria-pressed", "false")
           await expect(reactionButton).toHaveAttribute("aria-disabled", "false")
@@ -254,7 +302,7 @@ for (const target of pages) {
           )
           expect(await page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
 
-          const bounds = await reactionButton.boundingBox()
+          const bounds = await reactionRoot.boundingBox()
           expect(bounds).not.toBeNull()
           expect(bounds!.width).toBeGreaterThanOrEqual(44)
           expect(bounds!.height).toBeGreaterThanOrEqual(44)
@@ -267,16 +315,38 @@ for (const target of pages) {
           await page.keyboard.press("Enter")
           await expect(reactionButton).toHaveAttribute("aria-pressed", "true")
           await expect(reactionButton).toHaveAttribute("aria-disabled", "true")
-          await expect(reactionButton.locator("[data-reaction-label]")).toHaveText("已赞")
           await expect(reactionButton.locator("[data-reaction-count]")).toHaveText("13")
-          await expect(reactionRoot.locator("[data-reaction-message]")).toHaveText("谢谢")
+          await expect(reactionRoot.locator("[data-reaction-status]")).toHaveText("点赞成功")
+          const statusStyle = await reactionRoot
+            .locator("[data-reaction-status]")
+            .evaluate((element) => {
+              const style = getComputedStyle(element)
+              return {
+                width: style.width,
+                height: style.height,
+                overflow: style.overflow,
+                clipPath: style.clipPath,
+              }
+            })
+          expect(statusStyle).toEqual({
+            width: "1px",
+            height: "1px",
+            overflow: "hidden",
+            clipPath: "inset(50%)",
+          })
           await expect(reactionRoot).toBeInViewport()
-          expect(reactions.writes).toHaveLength(1)
-          expect(reactions.writes[0]).toMatchObject({
+          expect(reactions.viewWrites).toHaveLength(1)
+          expect(reactions.likeWrites).toHaveLength(1)
+          expect(reactions.viewWrites[0]).toMatchObject({
             site: target.id.startsWith("blog") ? "blog" : "notes",
             slug: await page.locator("body").getAttribute("data-slug"),
           })
-          expect(reactions.writes[0].visitor).toMatch(
+          expect(reactions.likeWrites[0]).toMatchObject({
+            site: target.id.startsWith("blog") ? "blog" : "notes",
+            slug: await page.locator("body").getAttribute("data-slug"),
+          })
+          expect(reactions.likeWrites[0].visitor).toBe(reactions.viewWrites[0].visitor)
+          expect(reactions.likeWrites[0].visitor).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
           )
 
@@ -304,14 +374,16 @@ for (const target of pages) {
 }
 
 test.describe("article reactions", () => {
-  test("liked state survives reload and SPA navigation keeps page keys separate", async ({
+  test("likes survive reload while unique views and SPA page keys stay separate", async ({
     page,
   }) => {
     const mock = await mockReactions(page, 4)
     await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
 
     const button = page.locator("[data-article-reaction] button")
+    const viewCount = page.locator("[data-article-reaction] [data-view-count]")
     await expect(button).toHaveAttribute("aria-pressed", "false")
+    await expect(viewCount).toHaveText("33")
     await button.click()
     await expect(button).toHaveAttribute("aria-pressed", "true")
     const firstSlug = await page.locator("body").getAttribute("data-slug")
@@ -321,7 +393,10 @@ test.describe("article reactions", () => {
       "aria-pressed",
       "true",
     )
-    expect(mock.writes).toHaveLength(1)
+    await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
+    expect(mock.likeWrites).toHaveLength(1)
+    expect(mock.viewWrites).toHaveLength(2)
+    expect(mock.viewWrites[1].visitor).toBe(mock.viewWrites[0].visitor)
 
     await page.evaluate(() =>
       window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
@@ -332,6 +407,8 @@ test.describe("article reactions", () => {
       "aria-pressed",
       "false",
     )
+    await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
+    expect(mock.viewWrites).toHaveLength(3)
     expect(firstSlug).not.toBe("blog/macos-network-automount")
   })
 
@@ -529,63 +606,67 @@ test.describe("image lightbox", () => {
   })
 })
 
-for (const viewport of manifest.requiredViewports) {
-  for (const theme of manifest.requiredThemes) {
-    test(`notes linked graph ${viewport.name} ${theme}`, async ({ page }, testInfo) => {
-      test.skip(
-        !existsSync(path.join(root, "public-notes", `${linkedGraphSlug}.html`)),
-        "The private note fixture is only available in publishing builds",
-      )
+test.describe("notes linked graph", () => {
+  test.describe.configure({ mode: "serial" })
 
-      await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
-      await page.goto(`http://127.0.0.1:4174${linkedGraphRoute}`, {
-        waitUntil: "domcontentloaded",
-      })
-
-      await expect(page.locator("body")).toHaveAttribute("data-slug", linkedGraphSlug)
-      const neighbourhood = await page.evaluate(async (slug) => {
-        const response = await fetch("/static/contentIndex.json")
-        const index = (await response.json()) as Record<string, { links?: string[] }>
-        const edges: Array<{ source: string; target: string }> = []
-        for (const [source, entry] of Object.entries(index)) {
-          for (const target of entry.links ?? []) {
-            if (source === slug || target === slug) edges.push({ source, target })
-          }
-        }
-        return {
-          edges: edges.length,
-          nodes: new Set(edges.flatMap(({ source, target }) => [source, target])).size,
-          outgoing: index[slug]?.links?.length ?? 0,
-        }
-      }, linkedGraphSlug)
-
-      expect(neighbourhood.outgoing).toBeGreaterThanOrEqual(4)
-      expect(neighbourhood.edges).toBeGreaterThanOrEqual(4)
-      expect(neighbourhood.nodes).toBeGreaterThanOrEqual(5)
-
-      const graphCanvas = page.locator(".graph-container canvas")
-      await expect(graphCanvas).toHaveCount(1, { timeout: 20_000 })
-      await expect(graphCanvas).toBeVisible()
-
-      await expect
-        .poll(
-          async () => {
-            return page.evaluate(() => JSON.parse(localStorage.getItem("graph-visited") ?? "[]"))
-          },
-          { timeout: 20_000 },
+  for (const viewport of manifest.requiredViewports) {
+    for (const theme of manifest.requiredThemes) {
+      test(`${viewport.name} ${theme}`, async ({ page }, testInfo) => {
+        test.skip(
+          !existsSync(path.join(root, "public-notes", `${linkedGraphSlug}.html`)),
+          "The private note fixture is only available in publishing builds",
         )
-        .toContain(linkedGraphSlug)
 
-      const visited = await page.evaluate(
-        () => JSON.parse(localStorage.getItem("graph-visited") ?? "[]") as string[],
-      )
-      expect(visited.some((slug) => slug.includes("%E5"))).toBe(false)
+        await page.setViewportSize({ width: viewport.width, height: viewport.height })
+        await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+        await page.goto(`http://127.0.0.1:4174${linkedGraphRoute}`, {
+          waitUntil: "domcontentloaded",
+        })
 
-      await testInfo.attach(`notes-linked-graph-${viewport.name}-${theme}`, {
-        body: await page.locator(".graph-outer").screenshot(),
-        contentType: "image/png",
+        await expect(page.locator("body")).toHaveAttribute("data-slug", linkedGraphSlug)
+        const neighbourhood = await page.evaluate(async (slug) => {
+          const response = await fetch("/static/contentIndex.json")
+          const index = (await response.json()) as Record<string, { links?: string[] }>
+          const edges: Array<{ source: string; target: string }> = []
+          for (const [source, entry] of Object.entries(index)) {
+            for (const target of entry.links ?? []) {
+              if (source === slug || target === slug) edges.push({ source, target })
+            }
+          }
+          return {
+            edges: edges.length,
+            nodes: new Set(edges.flatMap(({ source, target }) => [source, target])).size,
+            outgoing: index[slug]?.links?.length ?? 0,
+          }
+        }, linkedGraphSlug)
+
+        expect(neighbourhood.outgoing).toBeGreaterThanOrEqual(4)
+        expect(neighbourhood.edges).toBeGreaterThanOrEqual(4)
+        expect(neighbourhood.nodes).toBeGreaterThanOrEqual(5)
+
+        const graphCanvas = page.locator(".graph-container canvas")
+        await expect(graphCanvas).toHaveCount(1, { timeout: 20_000 })
+        await expect(graphCanvas).toBeVisible()
+
+        await expect
+          .poll(
+            async () => {
+              return page.evaluate(() => JSON.parse(localStorage.getItem("graph-visited") ?? "[]"))
+            },
+            { timeout: 20_000 },
+          )
+          .toContain(linkedGraphSlug)
+
+        const visited = await page.evaluate(
+          () => JSON.parse(localStorage.getItem("graph-visited") ?? "[]") as string[],
+        )
+        expect(visited.some((slug) => slug.includes("%E5"))).toBe(false)
+
+        await testInfo.attach(`notes-linked-graph-${viewport.name}-${theme}`, {
+          body: await page.locator(".graph-outer").screenshot(),
+          contentType: "image/png",
+        })
       })
-    })
+    }
   }
-}
+})

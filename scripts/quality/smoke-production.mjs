@@ -59,23 +59,41 @@ try {
   failures.push(`note graph index failed: ${error.message}`)
 }
 
-try {
-  const response = await fetch("https://markz.fun/api/reactions", {
+const smokeInteraction = {
+  site: "blog",
+  slug: "blog/__reaction-smoke__",
+  visitor: "00000000-0000-4000-8000-000000000001",
+}
+
+async function writeInteraction(pathname) {
+  const response = await fetch(`https://markz.fun${pathname}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      site: "blog",
-      slug: "blog/__reaction-smoke__",
-      visitor: "00000000-0000-4000-8000-000000000001",
-    }),
+    body: JSON.stringify(smokeInteraction),
     signal: AbortSignal.timeout(15000),
   })
-  const reaction = await response.json()
-  if (!response.ok || reaction.liked !== true || reaction.count < 1) {
+  return { response, body: await response.json() }
+}
+
+try {
+  const firstView = await writeInteraction("/api/reactions/view")
+  const duplicateView = await writeInteraction("/api/reactions/view")
+  if (
+    !firstView.response.ok ||
+    !duplicateView.response.ok ||
+    firstView.body.views < 1 ||
+    duplicateView.body.views !== firstView.body.views ||
+    duplicateView.body.added !== false
+  ) {
+    failures.push("production unique view write is not idempotently available")
+  }
+
+  const { response, body: reaction } = await writeInteraction("/api/reactions")
+  if (!response.ok || reaction.liked !== true || reaction.likes < 1) {
     failures.push("production reactions write is not idempotently available")
   }
 } catch (error) {
-  failures.push(`production reactions write failed: ${error.message}`)
+  failures.push(`production interaction write failed: ${error.message}`)
 }
 
 if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
