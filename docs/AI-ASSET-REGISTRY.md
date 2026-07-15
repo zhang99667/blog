@@ -29,7 +29,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `docs/OPERATIONS.md`                           | 发布、故障和回退手册           | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `docs/SYSTEM-BENCHMARKS.md`                    | 顶尖系统对标与取舍             | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `docs/AI-DECISIONS.md`                         | 用户纠偏和架构决策             | 权威       | `npm run ai:check`                  | 2026-07-15 |
-| `docs/DESIGN-SYSTEM.md`                        | 人类和 AI 共用视觉规范         | 权威       | `npm run design:check`              | 2026-07-11 |
+| `docs/DESIGN-SYSTEM.md`                        | 人类和 AI 共用视觉规范         | 权威       | `npm run design:check`              | 2026-07-15 |
 | `design-system/tokens.json`                    | 设计令牌唯一来源               | 权威       | `npm run design:check`              | 2026-07-11 |
 | `design-system/manifest.json`                  | 站点身份与验收矩阵             | 权威       | `npm run design:check`              | 2026-07-11 |
 | `design-system/reference/markz-wordmark.png`   | 用户确认的视觉参考             | 权威参考   | 人工视觉检查                        | 2026-07-10 |
@@ -44,7 +44,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-11 |
 | `scripts/quality/content-security-policy.mjs`  | CSP 解析与单一策略读取         | 权威       | `npm test`、`npm run quality:build` | 2026-07-14 |
 | `playwright.config.ts`                         | 浏览器质量运行配置             | 权威       | `npm run quality:web`               | 2026-07-11 |
-| `tests/quality/`                               | 布局、主题、WCAG 与 CSP 门禁   | 权威       | `npm run quality:web`               | 2026-07-14 |
+| `tests/quality/`                               | 布局、主题、WCAG 与 CSP 门禁   | 权威       | `npm run quality:web`               | 2026-07-15 |
 | `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `evals/design-system/outcomes.jsonl`           | 真实执行结果账本               | 追加式证据 | `npm run ai:check`                  | 2026-07-10 |
 

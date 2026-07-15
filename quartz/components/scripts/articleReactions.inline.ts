@@ -1,4 +1,4 @@
-import { Eye, ThumbsUp, type IconNode } from "lucide"
+import { ArrowUp, Eye, ThumbsUp, type IconNode } from "lucide"
 import { readVisitorStorage, visitorId, writeVisitorStorage } from "./visitorIdentity"
 
 type ReactionSite = "blog" | "notes"
@@ -68,7 +68,7 @@ function reactionUrl(identity: PageIdentity): URL {
   return url
 }
 
-function icon(name: "eye" | "thumbs-up", node: IconNode) {
+function icon(name: "arrow-up" | "eye" | "thumbs-up", node: IconNode) {
   const namespace = "http://www.w3.org/2000/svg"
   const svg = document.createElementNS(namespace, "svg")
   const attributes = {
@@ -103,8 +103,25 @@ function createReactionRoot() {
   root.className = "article-reaction"
   root.dataset.articleReaction = ""
   root.setAttribute("role", "group")
-  root.setAttribute("aria-label", "文章数据")
+  root.setAttribute("aria-label", "文章阅读工具")
   root.setAttribute("aria-busy", "true")
+
+  const scrollTop = document.createElement("button")
+  scrollTop.className = "article-reaction__scroll-top"
+  scrollTop.type = "button"
+  scrollTop.hidden = true
+  scrollTop.tabIndex = -1
+  scrollTop.dataset.scrollToTop = ""
+  scrollTop.title = "回到顶部"
+  scrollTop.setAttribute("aria-label", "回到文章顶部")
+  scrollTop.setAttribute("aria-hidden", "true")
+  scrollTop.append(icon("arrow-up", ArrowUp))
+
+  const panel = document.createElement("div")
+  panel.className = "article-reaction__panel"
+  panel.dataset.reactionPanel = ""
+  panel.setAttribute("role", "group")
+  panel.setAttribute("aria-label", "文章数据")
 
   const views = document.createElement("span")
   views.className = "article-reaction__metric"
@@ -122,6 +139,7 @@ function createReactionRoot() {
   button.type = "button"
   button.disabled = true
   button.dataset.state = "loading"
+  button.dataset.reactionLike = ""
   button.title = "点赞"
   button.setAttribute("aria-pressed", "false")
   button.setAttribute("aria-label", "正在读取点赞数")
@@ -137,8 +155,9 @@ function createReactionRoot() {
   status.setAttribute("role", "status")
   status.setAttribute("aria-live", "polite")
 
-  root.append(views, button, status)
-  return { root, views, viewCount, button, likeCount, status }
+  panel.append(views, button)
+  root.append(scrollTop, panel, status)
+  return { root, scrollTop, views, viewCount, button, likeCount, status }
 }
 
 function positionReaction(root: HTMLElement, article: HTMLElement) {
@@ -183,6 +202,55 @@ function trackReactionPosition(root: HTMLElement, article: HTMLElement, signal: 
   positionReaction(root, article)
 }
 
+function setScrollTopVisibility(button: HTMLButtonElement, visible: boolean) {
+  button.hidden = !visible
+  button.tabIndex = visible ? 0 : -1
+  button.setAttribute("aria-hidden", String(!visible))
+}
+
+function updateScrollTop(button: HTMLButtonElement, article: HTMLElement) {
+  const threshold = Math.max(360, Math.min(640, window.innerHeight * 0.65))
+  const articleTop = window.scrollY + article.getBoundingClientRect().top
+  const isLongArticle = article.scrollHeight - window.innerHeight >= threshold
+  setScrollTopVisibility(button, isLongArticle && window.scrollY >= articleTop + threshold)
+}
+
+function trackScrollTop(button: HTMLButtonElement, article: HTMLElement, signal: AbortSignal) {
+  let frame = 0
+  const schedule = () => {
+    if (frame !== 0) return
+    frame = window.requestAnimationFrame(() => {
+      frame = 0
+      updateScrollTop(button, article)
+    })
+  }
+  const observer = new ResizeObserver(schedule)
+  observer.observe(article)
+  window.addEventListener("scroll", schedule, { passive: true, signal })
+  window.addEventListener("resize", schedule, { signal })
+  signal.addEventListener(
+    "abort",
+    () => {
+      observer.disconnect()
+      if (frame !== 0) window.cancelAnimationFrame(frame)
+    },
+    { once: true },
+  )
+  updateScrollTop(button, article)
+}
+
+function focusReadingStart(article: HTMLElement) {
+  const main = article.closest<HTMLElement>("main.center")
+  if (!main) return
+
+  const hadTabIndex = main.hasAttribute("tabindex")
+  if (!hadTabIndex) main.tabIndex = -1
+  main.focus({ preventScroll: true })
+  if (!hadTabIndex) {
+    main.addEventListener("blur", () => main.removeAttribute("tabindex"), { once: true })
+  }
+}
+
 function unmountReactions() {
   activeController?.abort()
   activeController = undefined
@@ -207,6 +275,19 @@ function mountReactions() {
   activePageKey = pageKey
   identity.article.insertAdjacentElement("afterend", elements.root)
   trackReactionPosition(elements.root, identity.article, controller.signal)
+  trackScrollTop(elements.scrollTop, identity.article, controller.signal)
+
+  elements.scrollTop.addEventListener(
+    "click",
+    () => {
+      window.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      })
+      focusReadingStart(identity.article)
+    },
+    { signal: controller.signal },
+  )
 
   const render = (likes: number, views: number | undefined, liked: boolean) => {
     if (views !== undefined) currentViews = views

@@ -6,14 +6,52 @@
   display: flex;
   width: max-content;
   min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--brand-space-2);
+  margin: 0;
+}
+
+.article-reaction__panel {
+  display: flex;
+  width: max-content;
+  min-width: 0;
   min-height: var(--brand-target-comfortable);
   align-items: stretch;
-  margin: 0;
   overflow: hidden;
   border: 1px solid var(--gray);
   border-radius: var(--brand-control-radius);
   background: var(--light);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--dark) 12%, transparent);
+}
+
+.article-reaction__scroll-top {
+  display: inline-flex;
+  width: var(--brand-target-comfortable);
+  height: var(--brand-target-comfortable);
+  flex: 0 0 var(--brand-target-comfortable);
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--gray);
+  border-radius: var(--brand-control-radius);
+  color: var(--darkgray);
+  background: var(--light);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--dark) 12%, transparent);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color var(--brand-motion-fast) var(--brand-motion-easing),
+    color var(--brand-motion-fast) var(--brand-motion-easing);
+}
+
+.article-reaction__scroll-top[hidden] {
+  display: none;
+}
+
+.article-reaction[data-anchor="article"] .article-reaction__scroll-top {
+  align-self: flex-start;
 }
 
 .article-reaction__metric,
@@ -48,12 +86,15 @@
 }
 
 .article-reaction__button:hover,
-.article-reaction__button:focus-visible {
+.article-reaction__button:focus-visible,
+.article-reaction__scroll-top:hover,
+.article-reaction__scroll-top:focus-visible {
   background: var(--highlight);
   color: var(--secondary);
 }
 
-.article-reaction__button:focus-visible {
+.article-reaction__button:focus-visible,
+.article-reaction__scroll-top:focus-visible {
   outline: var(--brand-focus-width) solid var(--brand-accent);
   outline-offset: calc(var(--brand-focus-width) * -1);
 }
@@ -103,7 +144,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .article-reaction__button {
+  .article-reaction__button,
+  .article-reaction__scroll-top {
     transition: none;
   }
 }

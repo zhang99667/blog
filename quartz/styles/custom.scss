@@ -701,6 +701,15 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   height: calc(var(--brand-target-comfortable) + var(--brand-space-4));
 }
 
+.page[data-frame="default"]:has([data-scroll-to-top]:not([hidden]))
+  ul.toc-content.overflow
+  > li.overflow-end {
+  height: calc(
+    var(--brand-target-comfortable) + var(--brand-target-comfortable) + var(--brand-space-2) +
+      var(--brand-space-4)
+  );
+}
+
 .page[data-frame="default"] .search-button {
   min-width: 0;
   width: 100%;

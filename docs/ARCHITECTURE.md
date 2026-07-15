@@ -170,6 +170,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
 - 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
+- 长文回顶与文章互动栏共用 `ArticleReactions` 的 SPA 生命周期和正文边缘定位；回顶是纯前端阅读辅助，不访问互动 API，短文与目录页不挂载可见入口。
 - 成熟度能力、评分、用户处置和风险边界归 `ai/evolution.json`；探针只报告可观察事实，明确不采纳项保持未达成但退出排序，定时工作流不能直接修改代码、部署或处理密钥。
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
 - HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。

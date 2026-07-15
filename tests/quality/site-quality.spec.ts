@@ -445,12 +445,18 @@ for (const target of pages) {
         const reactionRoot = page.locator("[data-article-reaction]")
         if (target.id.endsWith("-article")) {
           await expect(reactionRoot).toHaveCount(1)
-          const reactionButton = reactionRoot.locator("button")
+          const reactionButton = reactionRoot.locator("[data-reaction-like]")
+          const reactionPanel = reactionRoot.locator("[data-reaction-panel]")
+          const scrollTopButton = reactionRoot.locator("[data-scroll-to-top]")
           const viewMetric = reactionRoot.locator("[data-reaction-views]")
           await expect(reactionRoot).toHaveAttribute("aria-busy", "false")
           await expect(reactionRoot).toBeInViewport()
           await expect(reactionRoot.locator('svg[data-lucide="eye"]')).toHaveCount(1)
           await expect(reactionRoot.locator('svg[data-lucide="thumbs-up"]')).toHaveCount(1)
+          await expect(reactionRoot.locator('svg[data-lucide="arrow-up"]')).toHaveCount(1)
+          await expect(scrollTopButton).toBeHidden()
+          await expect(scrollTopButton).toHaveAttribute("aria-hidden", "true")
+          await expect(scrollTopButton).toHaveAttribute("tabindex", "-1")
           await expect(viewMetric.locator("[data-view-count]")).toHaveText("33")
           await expect(viewMetric).toHaveAttribute("aria-label", "33 次浏览")
           await expect(reactionButton).toBeEnabled()
@@ -486,6 +492,55 @@ for (const target of pages) {
             await expect(reactionRoot).toHaveAttribute("data-anchor", "viewport")
             expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
           }
+
+          const readingState = await page.evaluate(() => {
+            const article = document.querySelector<HTMLElement>(
+              "main.center > article.popover-hint",
+            )
+            if (!article) return null
+            const threshold = Math.max(360, Math.min(640, window.innerHeight * 0.65))
+            const articleTop = window.scrollY + article.getBoundingClientRect().top
+            return {
+              longEnough: article.scrollHeight - window.innerHeight >= threshold,
+              revealAt: Math.ceil(articleTop + threshold + 8),
+            }
+          })
+          expect(readingState).not.toBeNull()
+          expect(readingState!.longEnough).toBe(true)
+          await page.evaluate((top) => window.scrollTo(0, top), readingState!.revealAt)
+          await expect
+            .poll(() => page.evaluate(() => window.scrollY))
+            .toBeGreaterThanOrEqual(readingState!.revealAt - 1)
+          await expect(scrollTopButton).toBeVisible()
+          await expect(scrollTopButton).toHaveAttribute("aria-hidden", "false")
+          await expect(scrollTopButton).toHaveAttribute("tabindex", "0")
+          await expect(scrollTopButton).toHaveAttribute("title", "回到顶部")
+
+          const scrollTopBounds = await scrollTopButton.boundingBox()
+          const panelBounds = await reactionPanel.boundingBox()
+          const expandedBounds = await reactionRoot.boundingBox()
+          expect(scrollTopBounds).not.toBeNull()
+          expect(panelBounds).not.toBeNull()
+          expect(expandedBounds).not.toBeNull()
+          expect(scrollTopBounds!.width).toBeGreaterThanOrEqual(44)
+          expect(scrollTopBounds!.height).toBeGreaterThanOrEqual(44)
+          if (hasSideRoom) {
+            expect(Math.abs(scrollTopBounds!.x - panelBounds!.x)).toBeLessThanOrEqual(1)
+          } else {
+            expect(
+              Math.abs(
+                scrollTopBounds!.x + scrollTopBounds!.width - (panelBounds!.x + panelBounds!.width),
+              ),
+            ).toBeLessThanOrEqual(1)
+          }
+          expect(
+            panelBounds!.y - (scrollTopBounds!.y + scrollTopBounds!.height),
+          ).toBeGreaterThanOrEqual(7)
+          expect(
+            panelBounds!.y - (scrollTopBounds!.y + scrollTopBounds!.height),
+          ).toBeLessThanOrEqual(9)
+          expect(expandedBounds!.y).toBeGreaterThanOrEqual(0)
+          expect(expandedBounds!.y + expandedBounds!.height).toBeLessThanOrEqual(viewport.height)
 
           if (target.id === "notes-article" && viewport.width >= 1200) {
             const tocClearance = await page.evaluate(async () => {
@@ -588,6 +643,12 @@ for (const target of pages) {
             body: await page.screenshot({ fullPage: false }),
             contentType: "image/png",
           })
+
+          await scrollTopButton.focus()
+          await page.keyboard.press("Enter")
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
+          await expect(scrollTopButton).toBeHidden()
+          await expect(page.locator("main.center")).toBeFocused()
         } else {
           await expect(reactionRoot).toHaveCount(0)
         }
@@ -691,7 +752,7 @@ test.describe("article reactions", () => {
     const mock = await mockReactions(page, 4)
     await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
 
-    const button = page.locator("[data-article-reaction] button")
+    const button = page.locator("[data-reaction-like]")
     const viewCount = page.locator("[data-article-reaction] [data-view-count]")
     await expect(button).toHaveAttribute("aria-pressed", "false")
     await expect(viewCount).toHaveText("33")
@@ -704,10 +765,7 @@ test.describe("article reactions", () => {
     const firstSlug = await page.locator("body").getAttribute("data-slug")
 
     await page.reload({ waitUntil: "domcontentloaded" })
-    await expect(page.locator("[data-article-reaction] button")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    )
+    await expect(page.locator("[data-reaction-like]")).toHaveAttribute("aria-pressed", "true")
     await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
     await expect(page.locator("[data-blog-visitor-copy]")).toHaveText(
       "今天您是第 8 位访客 · 累计 128 位访客",
@@ -722,10 +780,7 @@ test.describe("article reactions", () => {
     )
     await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
     await expect(page.locator("[data-article-reaction]")).toHaveCount(1)
-    await expect(page.locator("[data-article-reaction] button")).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    )
+    await expect(page.locator("[data-reaction-like]")).toHaveAttribute("aria-pressed", "false")
     await expect(page.locator("[data-article-reaction] [data-view-count]")).toHaveText("33")
     expect(mock.viewWrites).toHaveLength(3)
     expect(mock.visitorWrites).toHaveLength(2)
@@ -737,6 +792,7 @@ test.describe("article reactions", () => {
     await page.goto("http://127.0.0.1:4174/ai/", { waitUntil: "domcontentloaded" })
     await expect(page.locator(".page-listing")).toBeVisible()
     await expect(page.locator("[data-article-reaction]")).toHaveCount(0)
+    await expect(page.locator("[data-scroll-to-top]")).toHaveCount(0)
     await expect(page.locator("[data-blog-visitors]")).toHaveCount(0)
   })
 })
