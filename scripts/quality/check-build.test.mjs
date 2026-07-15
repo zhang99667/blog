@@ -21,10 +21,11 @@ import {
 
 test("HTML inspection uses structured document data", () => {
   const facts = inspectHtml(
-    `<!doctype html><html lang="zh-CN"><head><title>MarkZ</title><meta name="description" content="Blog"><meta property="og:image:type" content="image/png"></head><body><a href="/blog/hello">Hello</a></body></html>`,
+    `<!doctype html><html lang="zh-CN"><head><title data-page-title="MarkZ">MarkZ</title><meta name="description" content="Blog"><meta property="og:image:type" content="image/png"></head><body><a href="/blog/hello">Hello</a></body></html>`,
   )
   assert.equal(facts.lang, "zh-CN")
   assert.equal(facts.title, "MarkZ")
+  assert.equal(facts.titleAuthority, "MarkZ")
   assert.equal(facts.meta.get("description"), "Blog")
   assert.deepEqual(facts.references, ["/blog/hello"])
 })

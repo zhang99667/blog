@@ -229,6 +229,19 @@ for (const target of pages) {
         await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
         const reactions = await mockReactions(page)
         await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
+        const expectedTitleSuffix = target.id.startsWith("blog") ? " · 个人博客" : " · 公开笔记"
+        const browserTitle = await page.title()
+        expect(browserTitle).not.toMatch(/json\s*utils/i)
+        expect(browserTitle.endsWith(expectedTitleSuffix)).toBe(true)
+        await expect(page.locator("head title")).toHaveAttribute("data-page-title", browserTitle)
+        await expect(page.locator('meta[name="application-name"]')).toHaveAttribute(
+          "content",
+          "MarkZ",
+        )
+        await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
+          "content",
+          "MarkZ",
+        )
         await page.evaluate(() =>
           Promise.race([
             document.fonts.ready,
@@ -743,6 +756,29 @@ test("404 canonical-case recovery works with external scripts under CSP", async 
   })
   await expect(page).toHaveURL("http://127.0.0.1:4173/blog/agent-skills")
   await expect(page.locator('body[data-slug="blog/agent-skills"]')).toHaveCount(1)
+})
+
+test("browser title self-heals after stale product history and SPA navigation", async ({
+  page,
+}) => {
+  await mockReactions(page)
+  await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded" })
+  await expect(page).toHaveTitle("MarkZ · 个人博客")
+
+  await page.evaluate(() => {
+    document.title = "JSONUtils - 专业版"
+    window.dispatchEvent(new Event("pageshow"))
+  })
+  await expect(page).toHaveTitle("MarkZ · 个人博客")
+
+  await page.evaluate(() =>
+    window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
+  )
+  await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
+  const articleTitle = await page.title()
+  expect(articleTitle).not.toMatch(/json\s*utils/i)
+  expect(articleTitle.endsWith(" · 个人博客")).toBe(true)
+  await expect(page.locator("head title")).toHaveAttribute("data-page-title", articleTitle)
 })
 
 test.describe("article reactions", () => {

@@ -145,7 +145,9 @@ GitHub 仓库需要以下 Actions 配置：
 1. 检查 `docker inspect` 的宿主机端口绑定。
 2. 如果 JSONUtils 绑定了 `80/443`，先修复其 Compose，再重建 `markz-edge`。
 3. 检查 `deploy/nginx.conf` 的 `server_name` 与默认 server。
-4. 对所有域名执行 HTTPS smoke，不以单个首页 `200` 作为恢复证据。
+4. 读取真实 HTML 的 `<title>`、`application-name` 和页面身份标记；正文正确但标题仍是 JSONUtils 时，检查历史恢复与 SPA 标题校正，不能把标签缓存误判为路由已恢复。
+5. 对所有域名执行 HTTPS smoke，精确比较博客、笔记、JSONUtils、后台和装箱单标题；不以单个首页 `200` 作为恢复证据。
+6. 若站点标题和当前浏览器标签均正确，但书签栏仍显示旧名称，书签自定义标题属于浏览器本地数据，需要在浏览器中重命名；站点不能静默修改用户书签。
 
 ### 首页或静态资源缺少安全响应头
 

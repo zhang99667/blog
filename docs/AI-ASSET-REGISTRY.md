@@ -41,7 +41,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/runtime-backup/`                      | 密钥引导、加密打包与安全恢复   | 权威       | `npm test`、真实临时密钥恢复演练    | 2026-07-14 |
 | `services/reactions/`                          | 匿名互动、快照及异地包完整性   | 权威       | `npm test`、生产 smoke              | 2026-07-14 |
 | `quality/`                                     | 构建质量与性能预算             | 权威       | `npm run quality:build`             | 2026-07-11 |
-| `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-11 |
+| `scripts/quality/`                             | 构建、浏览器和生产 smoke 工具  | 权威       | `npm test`                          | 2026-07-15 |
 | `scripts/quality/content-security-policy.mjs`  | CSP 解析与单一策略读取         | 权威       | `npm test`、`npm run quality:build` | 2026-07-14 |
 | `playwright.config.ts`                         | 浏览器质量运行配置             | 权威       | `npm run quality:web`               | 2026-07-11 |
 | `tests/quality/`                               | 布局、主题、WCAG 与 CSP 门禁   | 权威       | `npm run quality:web`               | 2026-07-15 |

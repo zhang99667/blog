@@ -68,6 +68,8 @@ synchronized article frontmatter + design tokens + pinned build fonts
 
 博客、笔记和工具可以互相链接，但不能因为都属于同一域名就做成一个视觉和信息架构混合体。
 
+浏览器标签和系统级站点名称也属于身份边界。博客与笔记的完整页面标题必须保留独立权威值，分别使用“个人博客”与“公开笔记”后缀，并声明 `application-name=MarkZ`；历史恢复和 SPA 切页后必须重新校正。JSONUtils、后台和装箱单继续使用各自产品标题，生产 smoke 必须精确比较，不能只看正文或状态码。
+
 ## 5. 排版与布局
 
 - 品牌字标：`Noto Sans SC ExtraBold`。

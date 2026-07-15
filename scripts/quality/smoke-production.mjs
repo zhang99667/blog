@@ -24,16 +24,33 @@ const expectedSecurityHeaders = new Map([
   ["referrer-policy", ["strict-origin-when-cross-origin", "no-referrer"]],
 ])
 const routes = [
-  { url: "https://markz.fun/", evidence: brandEvidence },
-  { url: "https://www.markz.fun/", evidence: brandEvidence },
-  { url: "https://note.markz.fun/", evidence: brandEvidence },
+  {
+    url: "https://markz.fun/",
+    evidence: brandEvidence,
+    title: "MarkZ · 个人博客",
+    applicationName: "MarkZ",
+  },
+  {
+    url: "https://www.markz.fun/",
+    evidence: brandEvidence,
+    title: "MarkZ · 个人博客",
+    applicationName: "MarkZ",
+  },
+  {
+    url: "https://note.markz.fun/",
+    evidence: brandEvidence,
+    title: "Notes · 公开笔记",
+    applicationName: "MarkZ",
+  },
   {
     url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
     evidence: [`data-slug="${linkedGraphSlug}"`],
+    title: "Agent MCP 完全指南 · 公开笔记",
+    applicationName: "MarkZ",
   },
-  { url: "https://jsonutils.markz.fun/" },
-  { url: "https://jsonutils.markz.fun/admin" },
-  { url: "https://zhangjihao.markz.fun/" },
+  { url: "https://jsonutils.markz.fun/", title: "JSONUtils - 专业版" },
+  { url: "https://jsonutils.markz.fun/admin", title: "JSON Utils - 后台管理" },
+  { url: "https://zhangjihao.markz.fun/", title: "智能装箱单生成器" },
   { url: "https://jsonutils.markz.fun/api/health" },
   {
     url: "https://markz.fun/api/visitors",
@@ -70,7 +87,7 @@ function validateSecurityHeaders(label, response) {
 }
 
 await Promise.all(
-  routes.map(async ({ url, evidence = [], status = 200 }) => {
+  routes.map(async ({ url, evidence = [], status = 200, title, applicationName }) => {
     try {
       const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15000) })
       const body = await response.text()
@@ -79,6 +96,18 @@ await Promise.all(
       validateSecurityHeaders(url, response)
       for (const snippet of evidence) {
         if (!body.includes(snippet)) failures.push(`${url} is missing ${snippet}`)
+      }
+      if (title || applicationName) {
+        const facts = inspectHtml(body)
+        if (title && facts.title !== title) {
+          failures.push(`${url} has title ${JSON.stringify(facts.title)}, expected ${title}`)
+        }
+        if (applicationName && facts.meta.get("application-name") !== applicationName) {
+          failures.push(`${url} has invalid application-name`)
+        }
+        if (applicationName && facts.meta.get("apple-mobile-web-app-title") !== applicationName) {
+          failures.push(`${url} has invalid apple-mobile-web-app-title`)
+        }
       }
     } catch (error) {
       failures.push(`${url} failed: ${error.message}`)

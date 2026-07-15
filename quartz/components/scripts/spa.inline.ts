@@ -8,6 +8,15 @@ const NODE_TYPE_ELEMENT = 1
 let announcer = document.createElement("route-announcer")
 const isElement = (target: EventTarget | null): target is Element =>
   (target as Node)?.nodeType === NODE_TYPE_ELEMENT
+
+function restoreCanonicalTitle() {
+  const title = document.head.querySelector<HTMLTitleElement>("title[data-page-title]")
+  const canonicalTitle = title?.dataset.pageTitle?.trim()
+  if (canonicalTitle) document.title = canonicalTitle
+}
+
+window.addEventListener("pageshow", restoreCanonicalTitle)
+
 const isLocalUrl = (href: string) => {
   try {
     const url = new URL(href)
@@ -94,7 +103,8 @@ async function _navigate(url: URL, isBack: boolean = false) {
   const html = p.parseFromString(contents, "text/html")
   normalizeRelativeURLs(html, url)
 
-  let title = html.querySelector("title")?.textContent
+  const titleElement = html.querySelector<HTMLTitleElement>("title")
+  let title = titleElement?.dataset.pageTitle ?? titleElement?.textContent
   if (title) {
     document.title = title
   } else {
@@ -125,6 +135,7 @@ async function _navigate(url: URL, isBack: boolean = false) {
   elementsToRemove.forEach((el) => el.remove())
   const elementsToAdd = html.head.querySelectorAll(":not([data-persist])")
   elementsToAdd.forEach((el) => document.head.appendChild(el))
+  restoreCanonicalTitle()
 
   // delay setting the url until now
   // at this point everything is loaded so changing the url should resolve to the correct addresses

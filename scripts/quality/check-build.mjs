@@ -43,6 +43,7 @@ export function inspectHtml(source) {
   const facts = {
     lang: "",
     title: "",
+    titleAuthority: "",
     meta: new Map(),
     references: [],
     canonical: "",
@@ -66,11 +67,12 @@ export function inspectHtml(source) {
   function visit(node, parentNodeName = "") {
     const attrs = attributes(node)
     if (node.nodeName === "html") facts.lang = attrs.lang ?? ""
-    if (node.nodeName === "title") {
+    if (node.nodeName === "title" && parentNodeName === "head") {
       facts.title = (node.childNodes ?? [])
         .map((child) => child.value ?? "")
         .join("")
         .trim()
+      facts.titleAuthority = attrs["data-page-title"] ?? ""
     }
     if (node.nodeName === "meta") {
       const key = attrs.name ?? attrs.property
@@ -725,6 +727,19 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       }
       const facts = inspectHtml(source)
       failures.push(...validateHtmlMetadata(relativePath, facts))
+      if (!facts.refresh) {
+        if (facts.titleAuthority !== facts.title) {
+          failures.push(`${relativePath} page title must match its independent title authority`)
+        }
+        for (const name of ["application-name", "apple-mobile-web-app-title"]) {
+          if (facts.meta.get(name) !== tokens.brand.name) {
+            failures.push(`${relativePath} ${name} must identify ${tokens.brand.name}`)
+          }
+        }
+        if (/json\s*utils/i.test(facts.title)) {
+          failures.push(`${relativePath} must not inherit the JSONUtils title`)
+        }
+      }
       failures.push(
         ...validateContentSecurityPolicy(
           relativePath,

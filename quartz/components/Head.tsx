@@ -81,7 +81,7 @@ export default (() => {
 
     return (
       <head>
-        <title>{title}</title>
+        <title data-page-title={title}>{title}</title>
         <meta charSet="utf-8" />
         {coreStylesheet && <link rel="preload" href={coreStylesheet} as="style" />}
         {coreScript && coreScript.contentType === "external" && (
@@ -98,6 +98,8 @@ export default (() => {
           </>
         )}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="application-name" content={cfg.pageTitle} />
+        <meta name="apple-mobile-web-app-title" content={cfg.pageTitle} />
         <meta name="author" content={brandIdentity.name} />
         {noIndex && <meta name="robots" content="noindex, follow" />}
         {!isNotFound && <link rel="canonical" href={canonicalUrl} />}
