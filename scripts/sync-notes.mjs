@@ -29,17 +29,21 @@ const defaultCollections = new Map([
   ["AI", { slug: "ai", title: "AI 工程" }],
   ["Android", { slug: "android", title: "Android" }],
   ["网络", { slug: "network", title: "网络" }],
+  ["硕士", { slug: "master", title: "硕士" }],
 ])
-const includeCollections = splitList(process.env.BLOG_INCLUDE_DIRS, ["AI", "Android", "网络"]).map(
-  (source) => {
-    const defaults = defaultCollections.get(source)
-    return {
-      source,
-      slug: defaults?.slug ?? slugifySegment(source),
-      title: defaults?.title ?? source,
-    }
-  },
-)
+const includeCollections = splitList(process.env.BLOG_INCLUDE_DIRS, [
+  "AI",
+  "Android",
+  "网络",
+  "硕士",
+]).map((source) => {
+  const defaults = defaultCollections.get(source)
+  return {
+    source,
+    slug: defaults?.slug ?? slugifySegment(source),
+    title: defaults?.title ?? source,
+  }
+})
 const includeDirs = includeCollections.map((collection) => collection.source)
 const excludeDirs = new Set(splitList(process.env.BLOG_EXCLUDE_DIRS, ["Tasks", "promotion docs"]))
 const allowedAssetExts = new Set([
