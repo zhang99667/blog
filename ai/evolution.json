@@ -1,6 +1,6 @@
 {
   "$schema": "./evolution.schema.json",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "objective": "持续把 MarkZ 建设成克制、可靠、易发现、愿意继续阅读的成熟个人博客，并让 AI 协作从当前证据自动选择下一项改进。",
   "cadence": {
     "schedule": "weekly and after evolution-source changes",
@@ -20,6 +20,7 @@
     "A gap is evidence for prioritization, not permission to bypass repository boundaries.",
     "Generated output, third-party plugin caches, and independent product identities remain read-only boundaries.",
     "Every completed capability must have a deterministic check and the validation commands listed here.",
+    "A user-declined capability stays visible and unachieved but leaves the automated queue until an explicit later decision reverses it.",
     "The report may update an issue automatically; code and production changes still use the governed review and deployment flow."
   ],
   "capabilities": [
@@ -103,6 +104,12 @@
       "track": "runtime",
       "name": "互动数据自动备份",
       "description": "SQLite 互动数据具备自动、一致性校验、保留策略和服务器故障之外的恢复副本。",
+      "disposition": {
+        "status": "declined",
+        "decidedAt": "2026-07-15",
+        "decision": "D-022",
+        "reason": "用户明确认为异地 GitHub Artifact 备份没有必要；保留服务器本机可验证快照，不创建密钥或启用外部存储"
+      },
       "impact": 5,
       "urgency": 5,
       "confidence": 5,

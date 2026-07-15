@@ -425,6 +425,11 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
 
 export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
   const failures = []
+  const evolution = await readJson(root, "ai/evolution.json")
+  const runtimeBackup = evolution.capabilities?.find(
+    (capability) => capability.id === "runtime-backup",
+  )
+  const isDeclined = runtimeBackup?.disposition?.status === "declined"
   const backup = await readText(root, "services/reactions/backup.mjs")
   const offsite = await readText(root, "services/reactions/offsite-backup.mjs")
   const compose = await readText(root, "deploy/docker-compose.edge.yml")
@@ -506,7 +511,6 @@ export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
   try {
     const workflow = await fs.readFile(workflowPath, "utf8")
     for (const snippet of [
-      "schedule:",
       "workflow_dispatch:",
       "contents: read",
       "deploy/known_hosts",
@@ -525,6 +529,12 @@ export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
       failures.push("off-site workflow must not trust a live SSH key scan")
     }
     const parsed = parseYaml(workflow)
+    if (isDeclined && parsed.on?.schedule !== undefined) {
+      failures.push("a declined off-site backup must not keep an automatic schedule")
+    }
+    if (!isDeclined && parsed.on?.schedule === undefined) {
+      failures.push("an active off-site backup must define an automatic schedule")
+    }
     const upload = parsed.jobs?.backup?.steps?.find((step) =>
       String(step.uses ?? "").startsWith("actions/upload-artifact@"),
     )
@@ -534,6 +544,83 @@ export async function collectRuntimeBackupBoundaryFailures(root = defaultRoot) {
   } catch (error) {
     if (error.code === "ENOENT") failures.push("off-site backup workflow is missing")
     else throw error
+  }
+  return failures
+}
+
+export async function collectEvolutionDispositionFailures(root = defaultRoot) {
+  const failures = []
+  const evolution = await readJson(root, "ai/evolution.json")
+  const runtimeBackup = evolution.capabilities?.find(
+    (capability) => capability.id === "runtime-backup",
+  )
+  const expectedScoring = {
+    impact: 5,
+    urgency: 5,
+    confidence: 5,
+    effort: 4,
+    risk: "critical",
+    check: "runtime-backup",
+  }
+  if (!runtimeBackup) {
+    failures.push("runtime-backup must remain visible in the evolution model")
+  } else {
+    for (const [field, expected] of Object.entries(expectedScoring)) {
+      if (runtimeBackup[field] !== expected) {
+        failures.push(`runtime-backup.${field} must remain ${expected}`)
+      }
+    }
+    const disposition = runtimeBackup.disposition
+    if (
+      disposition?.status !== "declined" ||
+      disposition?.decidedAt !== "2026-07-15" ||
+      disposition?.decision !== "D-022" ||
+      !disposition?.reason
+    ) {
+      failures.push("runtime-backup must preserve the explicit D-022 decline")
+    }
+  }
+
+  const evolutionScript = await readText(root, "scripts/ai/evolve.mjs")
+  for (const snippet of [
+    'capability.disposition?.status === "declined"',
+    '.filter((capability) => capability.status === "gap")',
+    "## 已明确不采纳",
+    "现有探针保持原判定",
+  ]) {
+    if (!evolutionScript.includes(snippet)) {
+      failures.push(`evolution reporting is missing ${snippet}`)
+    }
+  }
+
+  const schema = await readText(root, "ai/evolution.schema.json")
+  for (const snippet of ['"disposition"', '"const": "declined"', '"decision"']) {
+    if (!schema.includes(snippet)) failures.push(`evolution schema is missing ${snippet}`)
+  }
+
+  const evolvePrompt = await readText(root, ".github/prompts/evolve-site.prompt.md")
+  const backupPrompt = await readText(root, ".github/prompts/runtime-backup.prompt.md")
+  for (const [source, label] of [
+    [evolvePrompt, "evolution prompt"],
+    [backupPrompt, "runtime backup prompt"],
+  ]) {
+    if (!source.includes("D-022") || !source.includes("明确反转")) {
+      failures.push(`${label} must honor D-022 until an explicit reversal`)
+    }
+  }
+
+  const decisions = await readText(root, "docs/AI-DECISIONS.md")
+  if (!decisions.includes("## D-022")) failures.push("AI decisions must record D-022")
+
+  const workflow = parseYaml(await readText(root, ".github/workflows/markz-backup.yaml"))
+  if (workflow.on?.schedule !== undefined) {
+    failures.push("the declined runtime backup workflow must not be scheduled")
+  }
+  if (workflow.on?.workflow_dispatch === undefined) {
+    failures.push("the dormant runtime backup workflow must remain manually dispatchable")
+  }
+  if (workflow.jobs?.backup?.if !== "vars.MARKZ_RUNTIME_BACKUP_ENABLED == 'true'") {
+    failures.push("manual runtime backup must retain the explicit enable gate")
   }
   return failures
 }
@@ -654,6 +741,7 @@ const providers = {
   "content-boundary": collectContentBoundaryFailures,
   "browser-contract": collectBrowserContractFailures,
   "runtime-backup-boundary": collectRuntimeBackupBoundaryFailures,
+  "evolution-decision-boundary": collectEvolutionDispositionFailures,
   "graph-runtime-boundary": collectGraphRuntimeBoundaryFailures,
   "article-social-image-boundary": collectArticleSocialImageFailures,
   "ci-action-lifecycle": collectCiActionLifecycleFailures,

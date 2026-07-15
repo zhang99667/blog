@@ -1,8 +1,6 @@
 name: MarkZ Runtime Backup
 
 on:
-  schedule:
-    - cron: "29 3 * * *"
   workflow_dispatch:
 
 permissions:

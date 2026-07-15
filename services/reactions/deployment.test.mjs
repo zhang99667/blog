@@ -138,8 +138,8 @@ describe("reactions deployment boundary", () => {
     assert.match(backup, /runRestoreDrill/)
   })
 
-  test("prepares a daily encrypted off-site artifact and proves recovery before upload", () => {
-    assert.ok(backupWorkflow.on.schedule)
+  test("keeps encrypted off-site recovery manual and proves recovery before upload", () => {
+    assert.equal(backupWorkflow.on.schedule, undefined)
     assert.ok(backupWorkflow.on.workflow_dispatch !== undefined)
     assert.equal(backupWorkflow.permissions.contents, "read")
     assert.equal(backupWorkflow.jobs.backup["timeout-minutes"], 15)

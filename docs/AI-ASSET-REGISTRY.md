@@ -4,17 +4,17 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 
 | 资产                                           | 职责                           | 权威或生成 | 验证                                | 最近复核   |
 | ---------------------------------------------- | ------------------------------ | ---------- | ----------------------------------- | ---------- |
-| `AGENTS.md`                                    | Codex 和通用 coding agent 入口 | 权威       | `npm run ai:check`                  | 2026-07-10 |
+| `AGENTS.md`                                    | Codex 和通用 coding agent 入口 | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `CLAUDE.md`                                    | Claude Code 薄入口             | 权威       | `npm run ai:check`                  | 2026-07-10 |
 | `GEMINI.md`                                    | Gemini 与兼容 Agent 薄入口     | 权威       | `npm run ai:check`                  | 2026-07-11 |
-| `ai/`                                          | 机器可读权威、流程与评测清单   | 权威       | `npm run ai:check`                  | 2026-07-11 |
-| `ai/evolution.json`                            | 成熟度能力、探针与优先级模型   | 权威       | `npm run evolve:check`              | 2026-07-14 |
-| `ai/evolution.schema.json`                     | 进化模型机器契约               | 权威       | `npm run evolve:check`              | 2026-07-14 |
+| `ai/`                                          | 机器可读权威、流程与评测清单   | 权威       | `npm run ai:check`                  | 2026-07-15 |
+| `ai/evolution.json`                            | 成熟度能力、探针、处置与优先级 | 权威       | `npm run evolve:check`              | 2026-07-15 |
+| `ai/evolution.schema.json`                     | 进化模型与明确处置机器契约     | 权威       | `npm run evolve:check`              | 2026-07-15 |
 | `.codex/README.md`                             | 项目 Codex 资产说明            | 权威       | `npm run ai:check`                  | 2026-07-10 |
-| `.codex/skills/markz-site-maintainer/SKILL.md` | 项目维护工作流                 | 权威       | skill validator、`npm run ai:check` | 2026-07-14 |
+| `.codex/skills/markz-site-maintainer/SKILL.md` | 项目维护工作流                 | 权威       | skill validator、`npm run ai:check` | 2026-07-15 |
 | `.github/copilot-instructions.md`              | Copilot 薄入口                 | 权威       | `npm run ai:check`                  | 2026-07-10 |
 | `.github/instructions/`                        | 路径级设计、内容和部署规则     | 权威       | `npm run ai:check`                  | 2026-07-11 |
-| `.github/prompts/`                             | 可复用任务流程                 | 权威       | `npm run ai:check`                  | 2026-07-11 |
+| `.github/prompts/`                             | 可复用任务流程                 | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `.github/pull_request_template.md`             | 证据与 AI 来源审查模板         | 权威       | `npm run ai:check`                  | 2026-07-11 |
 | `.github/dependabot.yml`                       | npm 与 CI Action 依赖更新策略  | 权威       | `npm run evals:check`               | 2026-07-14 |
 | `deploy/security-headers.inc`                  | edge 安全响应头单一权威        | 权威       | `npm run evals:check`               | 2026-07-14 |
@@ -22,13 +22,13 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `.github/workflows/markz-verify.yaml`          | 公开源码静态门禁               | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-publish.yaml`         | 私有内容同步与生产发布         | 权威       | `npm run ai:check`                  | 2026-07-14 |
 | `.github/workflows/markz-evolve.yaml`          | 定时刷新唯一成熟度改进任务     | 权威       | `npm run evolve:check`              | 2026-07-14 |
-| `.github/workflows/markz-backup.yaml`          | 审批门控的加密异地备份         | 权威       | `npm run evals:check`               | 2026-07-14 |
+| `.github/workflows/markz-backup.yaml`          | 用户不采纳后休眠的手动恢复工具 | 权威       | `npm run evals:check`               | 2026-07-15 |
 | `deploy/known_hosts`                           | 生产 SSH 主机身份固定值        | 权威       | `npm test`、`npm run evals:check`   | 2026-07-14 |
-| `docs/AI-ENGINEERING-PLAYBOOK.md`              | 跨 AI 工具执行闭环             | 权威       | `npm run ai:check`                  | 2026-07-14 |
-| `docs/ARCHITECTURE.md`                         | 系统边界、数据流和所有权       | 权威       | `npm run ai:check`                  | 2026-07-14 |
-| `docs/OPERATIONS.md`                           | 发布、故障和回退手册           | 权威       | `npm run ai:check`                  | 2026-07-14 |
-| `docs/SYSTEM-BENCHMARKS.md`                    | 顶尖系统对标与取舍             | 权威       | `npm run ai:check`                  | 2026-07-14 |
-| `docs/AI-DECISIONS.md`                         | 用户纠偏和架构决策             | 权威       | `npm run ai:check`                  | 2026-07-14 |
+| `docs/AI-ENGINEERING-PLAYBOOK.md`              | 跨 AI 工具执行闭环             | 权威       | `npm run ai:check`                  | 2026-07-15 |
+| `docs/ARCHITECTURE.md`                         | 系统边界、数据流和所有权       | 权威       | `npm run ai:check`                  | 2026-07-15 |
+| `docs/OPERATIONS.md`                           | 发布、故障和回退手册           | 权威       | `npm run ai:check`                  | 2026-07-15 |
+| `docs/SYSTEM-BENCHMARKS.md`                    | 顶尖系统对标与取舍             | 权威       | `npm run ai:check`                  | 2026-07-15 |
+| `docs/AI-DECISIONS.md`                         | 用户纠偏和架构决策             | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `docs/DESIGN-SYSTEM.md`                        | 人类和 AI 共用视觉规范         | 权威       | `npm run design:check`              | 2026-07-11 |
 | `design-system/tokens.json`                    | 设计令牌唯一来源               | 权威       | `npm run design:check`              | 2026-07-11 |
 | `design-system/manifest.json`                  | 站点身份与验收矩阵             | 权威       | `npm run design:check`              | 2026-07-11 |
@@ -36,8 +36,8 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `quartz/brand.generated.ts`                    | 运行时品牌与主题               | 生成       | `npm run design:check`              | 2026-07-11 |
 | `quartz/styles/_brand.generated.scss`          | CSS 语义令牌                   | 生成       | `npm run design:check`              | 2026-07-11 |
 | `scripts/design-system/`                       | 设计生成和漂移门禁             | 权威       | `npm test`                          | 2026-07-11 |
-| `scripts/ai/`                                  | AI 资产治理门禁                | 权威       | `npm test`                          | 2026-07-14 |
-| `scripts/ai/evolve.mjs`                        | 探测、评分和生成实时进化报告   | 权威       | `npm run evolve:check`、`npm test`  | 2026-07-14 |
+| `scripts/ai/`                                  | AI 资产治理与处置门禁          | 权威       | `npm test`                          | 2026-07-15 |
+| `scripts/ai/evolve.mjs`                        | 探测、评分、处置和进化报告     | 权威       | `npm run evolve:check`、`npm test`  | 2026-07-15 |
 | `scripts/runtime-backup/`                      | 密钥引导、加密打包与安全恢复   | 权威       | `npm test`、真实临时密钥恢复演练    | 2026-07-14 |
 | `services/reactions/`                          | 匿名互动、快照及异地包完整性   | 权威       | `npm test`、生产 smoke              | 2026-07-14 |
 | `quality/`                                     | 构建质量与性能预算             | 权威       | `npm run quality:build`             | 2026-07-11 |
@@ -45,7 +45,7 @@ AI 协作资产必须在这里登记，避免规则、Skill、评测和门禁成
 | `scripts/quality/content-security-policy.mjs`  | CSP 解析与单一策略读取         | 权威       | `npm test`、`npm run quality:build` | 2026-07-14 |
 | `playwright.config.ts`                         | 浏览器质量运行配置             | 权威       | `npm run quality:web`               | 2026-07-11 |
 | `tests/quality/`                               | 布局、主题、WCAG 与 CSP 门禁   | 权威       | `npm run quality:web`               | 2026-07-14 |
-| `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-14 |
+| `evals/design-system/cases.json`               | 代表性 AI 迭代场景             | 权威       | `npm run ai:check`                  | 2026-07-15 |
 | `evals/design-system/outcomes.jsonl`           | 真实执行结果账本               | 追加式证据 | `npm run ai:check`                  | 2026-07-10 |
 
 新增、移动或删除 AI 协作资产时，必须同步更新本表和治理脚本。

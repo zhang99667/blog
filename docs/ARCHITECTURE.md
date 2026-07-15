@@ -14,8 +14,8 @@
 | 发现与分发      | canonical、结构化数据、RSS、robots   | `Head.tsx`、`build-site-extras.mjs` | HTML 元数据与站点发现文件         |
 | 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`               | SQLite 数据文件                   |
 | 运行时本机备份  | 在线一致快照、校验、保留与恢复演练   | `services/reactions/backup.mjs`     | 加密前的本机私有快照              |
-| 异地恢复层      | 审批门控、加密、恢复验证与外部保留   | `markz-backup.yaml`、备份工具       | 仅含密文的 Actions Artifact       |
-| AI 演进控制面   | 能力盘点、证据探针、排序和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
+| 异地恢复层      | 用户不采纳后的手动休眠恢复工具       | `markz-backup.yaml`、备份工具       | 当前不生成外部 Artifact           |
+| AI 演进控制面   | 能力盘点、证据探针、处置和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
 | CI 供应链       | Action 不可变引用、运行时与依赖更新  | 工作流、`.github/dependabot.yml`    | 可审计的验证与发布运行            |
 | 边缘安全策略    | HTTPS 响应头的一致性与继承边界       | `deploy/security-headers.inc`       | 页面、API、静态资源和错误响应     |
 | 可执行内容策略  | 博客与笔记的脚本、样式和资源源站边界 | `deploy/nginx.conf` 的 CSP host map | 域名级 Content Security Policy    |
@@ -70,7 +70,7 @@ live reactions.sqlite (WAL remains writable by markz-reactions)
   -> production restore drill into an isolated temporary database
 ```
 
-异地链路在源码中保持审批门控：
+异地链路在源码中仅作为手动、双重门控的休眠工具保留：
 
 ```text
 latest verified local snapshot + companion manifest
@@ -81,10 +81,10 @@ latest verified local snapshot + companion manifest
   -> decrypt round trip + isolated SQLite restore
   -> plaintext and ephemeral identity removal
   -> .age ciphertext + SHA-256 only
-  -> GitHub Actions Artifact / daily / 90-day retention
+  -> GitHub Actions Artifact / manual dispatch only / 90-day retention
 ```
 
-`MARKZ_RUNTIME_BACKUP_ENABLED` 不是 `true` 或 `deploy/runtime-backup-recipient.txt` 不存在时，工作流必须跳过或失败关闭，成熟度保持未完成。私钥只能位于用户控制的仓库外位置，不能进入生产服务器、GitHub Secret、日志或提交历史。当前链路在用户确认专用密钥与 GitHub Artifact 存储前不会激活，因此本机快照仍只覆盖误操作、坏快照和数据库级恢复，不能宣称已覆盖整台服务器或磁盘丢失。
+D-022 记录用户明确认为这条异地 Artifact 链路没有必要，因此工作流没有定时触发，也不创建 recipient、identity 或激活证据。`runtime-backup` 仍由原探针判定为未达成并保留原评分，但其 disposition 为 `declined`，不进入自动改进队列。只有用户以后明确反转 D-022，才允许手动 dispatch 且仍需 `MARKZ_RUNTIME_BACKUP_ENABLED == 'true'` 与 public recipient 双重门控。私钥只能位于用户控制的仓库外位置，不能进入生产服务器、GitHub Secret、日志或提交历史。本机快照仍只覆盖误操作、坏快照和数据库级恢复，不能宣称已覆盖整台服务器或磁盘丢失。
 
 设计数据走单独的生成链：
 
@@ -106,6 +106,7 @@ tokens.json + pinned Noto Sans SC WOFF + synchronized article frontmatter
 ```text
 ai/evolution.json
   -> deterministic source probes + eval cases
+  -> achieved / active gap / explicitly declined disposition
   -> Markdown / JSON maturity report
   -> one scheduled GitHub backlog issue
   -> bounded human-reviewed implementation
@@ -169,7 +170,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
 - 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
-- 成熟度能力、评分和风险边界归 `ai/evolution.json`；探针只报告可观察事实，定时工作流不能直接修改代码、部署或处理密钥。
+- 成熟度能力、评分、用户处置和风险边界归 `ai/evolution.json`；探针只报告可观察事实，明确不采纳项保持未达成但退出排序，定时工作流不能直接修改代码、部署或处理密钥。
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
 - HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。
 - 博客与笔记 CSP 的唯一策略值归 `deploy/nginx.conf` 中的 `$markz_content_security_policy` host map；`security-headers.inc` 只负责统一发射。默认映射必须为空，不能隐藏或覆盖 JSONUtils、后台和装箱单自行提供的 CSP。

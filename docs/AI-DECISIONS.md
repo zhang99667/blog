@@ -190,3 +190,12 @@
 - 反例：因为工作流文件存在就把成熟度改成 15/15；复用个人或部署 SSH 私钥加密；把 age 私钥放进 GitHub Secret；上传明文 SQLite、manifest 或 staging 目录；使用未校验的安装脚本或浮动 age 版本；只测试解密而不恢复数据库；主机 key 变化时自动接受；恢复时直接覆盖在线数据库。
 - 边界：创建专用 identity、提交 public recipient、设置启用变量和首次外部上传都需要用户明确同意；未授权时工作流保持跳过，演进报告必须继续显示 14/15。首次成功还要登记与当前 recipient 哈希绑定的 run、artifact digest 和下载恢复证据，不能只凭源码升为完成。Artifact 是现有 GitHub 平台内的加密恢复层，不替代用户保存私钥，也不覆盖 GitHub 账号丢失、超过 90 天保留或多区域灾备。把恢复文件放入生产仍是单独的破坏性审批。
 - 锁定证据：`markz-backup.yaml` 审批条件、只读权限、固定 Action 和 90 天密文路径；`age-tool.sh` 版本与三平台校验和；bootstrap 私钥仓库外与拒绝覆盖；最新快照机器输出、包文件集与 checksum 篡改测试；临时长期 recipient 的真实加密解密、SQLite 恢复端到端演练；固定 `known_hosts` 与 live fingerprint 比对；`runtime-backup-boundary` eval，以及在 recipient 缺失时仍保持 14/15 的演进报告。
+
+## D-022 用户明确不采纳的能力退出自动队列但不冒充完成
+
+- 日期：2026-07-15
+- 触发：异地 Artifact 备份因缺少用户批准连续成为唯一演进建议；用户明确纠偏“不要这么做了，这个是没必要的”。继续把它列为下一项或反复请求批准，会让自动演进违背产品判断。
+- 决策：保留服务器本机每 6 小时的一致性快照、校验、32 份保留和真实恢复演练；不创建 age identity 或 recipient，不设置启用变量，不上传外部 Artifact，并移除休眠工作流的定时触发。`runtime-backup` 仍保留原探针、`5/5/5/4` 评分输入和 `critical` 风险，证据仍判定未完成；通过 `disposition.status = declined` 单独展示并排除自动优先队列。AI 不再主动询问或尝试激活，只有用户以后明确反转 D-022 才能恢复审批流程。
+- 反例：删除 `runtime-backup` 能力或把它标成 achieved；降低影响、紧急度、置信度或削弱运行证据探针来得到 15/15；保留每日 schedule 制造无意义的 skipped run；继续反复请求授权；未经明确反转就创建密钥、recipient、激活证据或 Artifact。
+- 边界：本机快照与源数据库仍在同一服务器，不能描述成异地灾备。D-021 的加密、固定主机身份、上传前真实恢复和生产替换审批规则仍保留在手动工具中，但当前不是待办，也没有自动 RPO。用户未来明确反转时，需要新决策移除 declined disposition，并从密钥创建开始重新完成全部证据。
+- 锁定证据：`ai/evolution.schema.json` 的 disposition 契约、`evolve.mjs` 的 achieved/gap/declined 三态报告与排序测试、保持原评分和失败探针的集成测试、无 schedule 且仍需 manual dispatch 与变量门控的工作流测试、`user-declined-evolution-capability` eval、项目 Skill 与两个 GitHub prompt，以及报告中的 14/15 已达成、0 个活跃缺口和 1 个明确不采纳。

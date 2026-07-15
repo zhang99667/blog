@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
+  "version": "2.9.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -108,6 +108,19 @@
       ],
       "validation": ["npm test", "npm run evolve:check", "npm run smoke:production"],
       "automatedChecks": ["ai-contract", "runtime-backup-boundary"]
+    },
+    {
+      "id": "user-declined-evolution-capability",
+      "risk": "high",
+      "prompt": "异地备份不要做了，这个没必要。",
+      "mustRead": ["ai/evolution.json", "docs/AI-ENGINEERING-PLAYBOOK.md", "docs/AI-DECISIONS.md"],
+      "invariants": [
+        "Keep the failed detector, original score, and capability visible instead of deleting it or marking it achieved",
+        "Exclude an explicit decline from the automatic queue and do not ask again or reactivate it without an explicit later reversal",
+        "Remove the external backup schedule while retaining verified server-local snapshots"
+      ],
+      "validation": ["npm run evolve:check", "npm run evals:check", "npm test"],
+      "automatedChecks": ["ai-contract", "evolution-decision-boundary"]
     },
     {
       "id": "graph-runtime-resilience",

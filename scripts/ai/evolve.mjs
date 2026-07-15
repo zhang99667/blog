@@ -454,6 +454,15 @@ export function validateEvolutionProgram(program) {
     }
     if (!risks.includes(capability.risk)) failures.push(`${capability.id} has invalid risk`)
     if (
+      capability.disposition !== undefined &&
+      (capability.disposition.status !== "declined" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(capability.disposition.decidedAt ?? "") ||
+        !/^D-\d{3}$/.test(capability.disposition.decision ?? "") ||
+        !capability.disposition.reason)
+    ) {
+      failures.push(`${capability.id} has an invalid disposition`)
+    }
+    if (
       !capability.nextAction ||
       !Array.isArray(capability.validation) ||
       !capability.validation.length
@@ -475,6 +484,11 @@ export function rankGaps(capabilities) {
     )
 }
 
+export function classifyCapability(capability, evidence) {
+  if (capability.disposition?.status === "declined") return "declined"
+  return evidence.passed ? "achieved" : "gap"
+}
+
 function decisionCount(source) {
   return [...source.matchAll(/^## D-\d{3}\s+/gm)].length
 }
@@ -490,7 +504,7 @@ export async function auditEvolution(root = defaultRoot) {
         const evidence = await providers[capability.check](root)
         capabilities.push({
           ...capability,
-          status: evidence.passed ? "achieved" : "gap",
+          status: classifyCapability(capability, evidence),
           score: scoreCapability(capability),
           evidence,
         })
@@ -511,6 +525,7 @@ export async function auditEvolution(root = defaultRoot) {
       achieved: capabilities.filter((capability) => capability.status === "achieved").length,
       total: capabilities.length,
       gaps: gaps.length,
+      declined: capabilities.filter((capability) => capability.status === "declined").length,
       decisions,
       evalsPassed: evalReport.passed,
       evalsTotal: evalReport.total,
@@ -518,6 +533,7 @@ export async function auditEvolution(root = defaultRoot) {
     next: gaps[0] ?? null,
     gaps,
     achieved: capabilities.filter((capability) => capability.status === "achieved"),
+    declined: capabilities.filter((capability) => capability.status === "declined"),
     evalReport,
     validationFailures,
     probeErrors,
@@ -531,7 +547,7 @@ function evidenceLines(capability) {
 export function renderEvolutionMarkdown(report) {
   const next = report.next
     ? `## 下一项\n\n### ${report.next.name}\n\n${report.next.description}\n\n- 评分：${report.next.score}\n- 风险：${report.next.risk}\n- 证据：${report.next.evidence.summary}\n- 动作：${report.next.nextAction}\n- 验证：${report.next.validation.map((item) => `\`${item}\``).join("、")}\n\n${evidenceLines(report.next)}`
-    : "## 下一项\n\n当前能力模型没有未完成项；应先复核模型并新增有证据的成熟度目标。"
+    : "## 下一项\n\n当前没有进入自动执行队列的未完成项；定时巡检应复核能力模型并新增有证据的成熟度目标。"
   const queue = report.gaps
     .slice(1)
     .map(
@@ -542,6 +558,12 @@ export function renderEvolutionMarkdown(report) {
   const achieved = report.achieved
     .map((capability) => `- **${capability.name}**：${capability.evidence.summary}`)
     .join("\n")
+  const declined = (report.declined ?? [])
+    .map(
+      (capability) =>
+        `- **${capability.name}**（${capability.disposition.decision}，${capability.disposition.decidedAt}）：${capability.disposition.reason}；该能力不计入已达成，现有探针保持原判定。`,
+    )
+    .join("\n")
   return `# MarkZ Evolution Report
 
 生成时间：${report.generatedAt}
@@ -550,7 +572,7 @@ ${report.objective}
 
 ## 当前状态
 
-- 能力：${report.summary.achieved}/${report.summary.total} 已达成，${report.summary.gaps} 项待改进
+- 能力：${report.summary.achieved}/${report.summary.total} 已达成，${report.summary.gaps} 项待改进，${report.summary.declined ?? 0} 项明确不采纳
 - 实时评测：${report.summary.evalsPassed}/${report.summary.evalsTotal} 通过
 - 架构决策：${report.summary.decisions} 条
 
@@ -563,6 +585,10 @@ ${queue || "无"}
 ## 已达成
 
 ${achieved || "无"}
+
+## 已明确不采纳
+
+${declined || "无"}
 
 ## 自动化边界
 
@@ -585,7 +611,7 @@ if (isCli) {
   if (process.argv.includes("--check")) {
     if (failures.length === 0) {
       console.log(
-        `Evolution program is valid: ${report.summary.achieved}/${report.summary.total} capabilities achieved; next is ${report.next?.id ?? "model review"}.`,
+        `Evolution program is valid: ${report.summary.achieved}/${report.summary.total} capabilities achieved; ${report.summary.declined} declined; next is ${report.next?.id ?? "model review"}.`,
       )
     }
   } else {

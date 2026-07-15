@@ -28,6 +28,7 @@ Keep every change aligned with the repository's design source, content pipeline,
 8. After deployment, verify blog, notes, JSONUtils, admin, packing-list, and API routes.
 9. Turn user corrections or repeated incidents into a decision entry and deterministic check.
 10. For autonomous maturity work, implement the first eligible gap from `npm run evolve:report`, then rerun the report and prove that capability moved to achieved. Do not lower its score or detector.
+11. Keep explicitly declined capabilities visible and unachieved, but outside the automatic queue. Do not ask again or reactivate one unless the user explicitly reverses its recorded decision.
 
 ## Command map
 
@@ -70,7 +71,7 @@ npm run deploy
 - Do not use generated Markdown, HTML, TS, SCSS, or PNG as an editing source.
 - Do not claim visual completion from one viewport, one theme, or one screenshot.
 - Do not let scheduled automation change code, production, privacy scope, or secrets without the governed agent and approval flow.
-- Do not create or rotate backup identities, enable off-site artifacts, or replace production data without explicit approval. Keep private age identities outside the repository, server, and Actions.
+- D-022 records that the user does not want the off-site Artifact backup. Do not create or rotate backup identities, schedule or enable the workflow, or repeatedly request approval unless the user explicitly reverses D-022. Keep private age identities outside the repository, server, and Actions.
 - Do not restore executable inline scripts, serialized function callbacks, public runtime CDNs, or unsafe script CSP sources; prove runtime compatibility with the complete browser gate.
 
 ## Rule evolution

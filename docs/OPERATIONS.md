@@ -13,7 +13,7 @@ npm run build
 
 博客和笔记分别使用 `npm run preview`、`npm run preview:notes`。视觉改动还必须运行 `npm run quality:web`。
 
-广义成熟度迭代先运行 `npm run evolve:report`。报告按 `ai/evolution.json` 的固定评分公式列出已具备能力、证据不足项和下一优先项；实现完成后运行 `npm run evolve:check` 和 `npm run evolve:report`，确认探针状态已改变。
+广义成熟度迭代先运行 `npm run evolve:report`。报告按 `ai/evolution.json` 的固定评分公式列出已具备能力、活跃缺口、明确不采纳项和下一优先项；实现完成后运行 `npm run evolve:check` 和 `npm run evolve:report`，确认探针状态已改变。明确不采纳项保留失败证据但不进入自动队列。
 
 `quality/link-baseline.json` 的公开断链债务必须保持为零。同步器只为本轮确认公开的笔记生成链接，私有或缺失目标降级成普通文字；`quality:build` 会拒绝任何新增断链。只有修复权威源并确认完整构建结果后，才运行 `node scripts/quality/check-build.mjs --update-link-baseline`，不能把新断链登记成“已知问题”绕过门禁。
 
@@ -60,15 +60,17 @@ npm run build
 3. 把已验证的 `recovered.sqlite` 安装到数据目录，权限设为 `0600`，属主保持服务器 `markz` 用户；不要把旧 WAL/SHM 配到新主文件。
 4. 使用 `docker compose up -d --force-recreate --wait reactions reactions-backup` 重启，依次检查 API 健康、备份健康和恢复演练，再重建 edge。
 
-### 审批门控的异地备份
+### 用户已拒绝的异地备份（手动休眠）
 
-`.github/workflows/markz-backup.yaml` 已定义每日 `03:29 UTC` 的异地恢复链，但默认由 `MARKZ_RUNTIME_BACKUP_ENABLED` 关闭。它复用服务器部署 SSH 访问能力，却用 `deploy/known_hosts` 固定生产 Ed25519 主机身份；不使用动态 `ssh-keyscan`。只有用户明确同意新增专用密钥和 GitHub Artifact 存储后，才能执行以下激活步骤：
+D-022 记录用户明确认为异地 GitHub Artifact 备份没有必要。`.github/workflows/markz-backup.yaml` 因此没有定时触发，不创建专用密钥、不设置 `MARKZ_RUNTIME_BACKUP_ENABLED`、不上传外部 Artifact，也不再主动请求批准。本机每 6 小时的已验证快照继续运行，这是当前接受的恢复边界。
+
+源码只保留手动、双重门控的恢复工具供未来选择；只有用户以后明确反转 D-022，才能执行以下激活步骤。工作流使用 `deploy/known_hosts` 固定生产 Ed25519 主机身份，不使用动态 `ssh-keyscan`：
 
 1. 运行 `bash scripts/runtime-backup/bootstrap-key.sh --confirm-create-key`。默认把私钥写到仓库外的 `~/.config/markz/runtime-backup.agekey`，权限 `0600`；仓库只得到 `deploy/runtime-backup-recipient.txt` 公钥。
 2. 把私钥另存到用户控制的密码管理器或离线介质。服务器、GitHub Secrets、Actions 日志和提交历史都不能保存它。
 3. 提交公钥并运行完整门禁后，设置仓库变量：`gh variable set MARKZ_RUNTIME_BACKUP_ENABLED -R zhang99667/blog --body true`。
 4. 手动触发首次运行：`gh workflow run markz-backup.yaml -R zhang99667/blog`，等待成功并确认 Artifact 只包含一个 `.age` 和一个 `.sha256`。
-5. 下载首次 Artifact，按下述命令恢复到新文件；把 run、artifact ID、digest、source commit、recipient SHA-256 和恢复结论写入 `ai/runtime-backup-activation.json`。只有该证据与当前公钥匹配后，`runtime-backup` 才能从 14/15 升为完成。
+5. 下载首次 Artifact，按下述命令恢复到新文件；把 run、artifact ID、digest、source commit、recipient SHA-256 和恢复结论写入 `ai/runtime-backup-activation.json`。只有新的决策移除 declined disposition 且该证据与当前公钥匹配后，`runtime-backup` 才能标为完成。
 
 激活证据格式固定为：
 
@@ -87,9 +89,9 @@ npm run build
 }
 ```
 
-该文件是人工确认后的首次激活证据，不由定时任务自动提交。recipient 变化会让探针重新变为未完成，直到新旧 recipient 重叠轮换和下载恢复重新得到证明。
+该文件是未来明确反转 D-022 后的首次激活证据，不由任务自动提交。当前不应创建该文件；recipient 变化会让探针重新变为未完成，直到新旧 recipient 重叠轮换和下载恢复重新得到证明。
 
-启用后的工作流读取最新本机快照并再次执行 health 与 drill；Runner 只在临时目录保存明文。`age 1.3.1` 发布包与平台 SHA-256 固定，实际密文同时写给长期公钥和本次运行的临时公钥。上传前必须用临时私钥解密同一密文、验证精确文件集并真实恢复 SQLite；随后清除 staging、临时私钥和恢复文件。Artifact 关闭二次压缩，每日一份，保留 90 天，因此启用后的服务器故障 RPO 上限约为 24 小时。
+未来手动启用时，工作流读取最新本机快照并再次执行 health 与 drill；Runner 只在临时目录保存明文。`age 1.3.1` 发布包与平台 SHA-256 固定，实际密文同时写给长期公钥和本次运行的临时公钥。上传前必须用临时私钥解密同一密文、验证精确文件集并真实恢复 SQLite；随后清除 staging、临时私钥和恢复文件。Artifact 关闭二次压缩并保留 90 天。因为没有自动计划，不能声称具备固定异地 RPO。
 
 下载并恢复异地副本：
 
@@ -118,7 +120,7 @@ GitHub 仓库需要以下 Actions 配置：
 | Secret   | `NOTE_REPO_SSH_KEY`            | `note` 仓库专用只读 deploy key 私钥 |
 | Secret   | `MARKZ_SSH_PRIVATE_KEY`        | CI 专用服务器部署私钥               |
 | Variable | `BLOG_SSH_HOST`                | 可选，默认 `markz@39.97.237.248`    |
-| Variable | `MARKZ_RUNTIME_BACKUP_ENABLED` | 异地备份审批开关，默认关闭          |
+| Variable | `MARKZ_RUNTIME_BACKUP_ENABLED` | 休眠异地工具审批开关，当前不设置    |
 
 不要把个人日常 SSH 私钥上传到 GitHub。两把 CI 密钥独立生成、独立撤销；`note` deploy key 不授予写权限。
 
@@ -189,10 +191,10 @@ GitHub 仓库需要以下 Actions 配置：
 4. 若校验失败，保留失败文件与日志用于分析，不手改 `latest.json` 冒充健康；从最近一份通过校验的快照恢复。
 5. 若整台服务器或磁盘不可用，本机快照也会同时丢失。当前必须明确报告“无异地副本”，不能把本机 32 份保留描述成完整灾备。
 
-### MarkZ Runtime Backup 跳过或失败
+### MarkZ Runtime Backup 手动运行或失败
 
-1. 未经批准时，job 因 `MARKZ_RUNTIME_BACKUP_ENABLED` 缺失而跳过是正确状态；不要为消除黄色状态擅自启用。
-2. 已批准但仍跳过时，检查仓库变量是否精确为 `true`，并确认主分支包含仅公钥的 `deploy/runtime-backup-recipient.txt`。
+1. D-022 生效期间没有定时运行是正确状态；不要手动触发、设置启用变量或为报告数字创建密钥。
+2. 只有用户明确反转 D-022 后，手动 job 仍跳过时才检查仓库变量是否精确为 `true`，并确认主分支包含仅公钥的 `deploy/runtime-backup-recipient.txt`。
 3. SSH 失败先比对可信控制台中的主机 Ed25519 指纹与 `deploy/known_hosts`；不要现场执行 `ssh-keyscan` 覆盖固定值。
 4. age 下载失败或校验不符时保留失败，核验官方发布与三平台 SHA 后通过代码审查升级；不能跳过 checksum。
 5. 打包失败时区分本机快照健康、精确文件集、临时接收者解密和 SQLite 恢复哪一步失败。任何一步失败都不能上传旧密文冒充新恢复点。
