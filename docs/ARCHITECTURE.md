@@ -193,6 +193,8 @@ deploy/nginx.conf CSP host map (one policy literal)
 1. `sync-notes.mjs` 对输出计算 SHA-256，仅重写变化文件，并删除源端已移除的公开文件。
 2. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物。
 
+笔记站在私有仓库签出完成后自动发现 Vault 的一级内容目录，不为每个新分类维护代码白名单。隐藏目录、工具目录以及 `Tasks`、`promotion docs` 等显式排除目录不进入发布集合；Markdown 只有明确声明 `publish: true` 才公开。已知中文分类可以保留稳定的公网 slug，其他分类从目录名确定 slug；归一化后发生冲突时同步必须失败，不能把两个目录静默合并。文件或目录改名会生成新路径，并由 manifest 与 `rsync --delete` 清理旧路径；这不等于自动建立旧 URL 重定向。`BLOG_INCLUDE_DIRS` 只作为需要收窄范围时的显式覆盖。
+
 公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。同步器把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。列表和正文头部统一显示作者指定的 `date/created` 编辑日期，`modified` 保留用于更新元数据，不能悄悄替换公开显示日期。
 
 公开链接使用两阶段生成：第一阶段先确定全部可公开记录，第二阶段才重写正文。目标已公开时输出带完整公开路径的 Quartz 双链，保留关系图谱和回链；目标私有、被过滤或不存在时只保留可读标题，不生成假链接。代码块、外部 URL 和真实公开资产不参与降级。

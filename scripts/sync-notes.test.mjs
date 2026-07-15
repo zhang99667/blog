@@ -4,8 +4,11 @@ import { test } from "node:test"
 import { parse as parseYaml } from "yaml"
 import {
   createNoteLookup,
+  findStaleGeneratedPaths,
+  isPublicFrontmatter,
   parseGitDateLog,
   rankRelatedPosts,
+  resolveCollections,
   resolveSourceDates,
   rewritePublicNoteMarkdown,
   withStableDates,
@@ -20,6 +23,52 @@ function readFrontmatter(markdown) {
   const match = markdown.match(/^---\n([\s\S]*?)\n---/)
   return parseYaml(match?.[1] ?? "")
 }
+
+test("public note collections follow top-level Vault directories", () => {
+  const collections = resolveCollections(
+    ["硕士", "网络", "AI", "Android", "新分类", "Tasks", "promotion docs", ".obsidian", "scripts"],
+    { excludedDirs: new Set(["Tasks", "promotion docs"]) },
+  )
+
+  assert.deepEqual(collections, [
+    { source: "AI", slug: "ai", title: "AI 工程" },
+    { source: "Android", slug: "android", title: "Android" },
+    { source: "网络", slug: "network", title: "网络" },
+    { source: "硕士", slug: "master", title: "硕士" },
+    { source: "新分类", slug: "新分类", title: "新分类" },
+  ])
+})
+
+test("collection and note renames replace old generated paths", () => {
+  const before = resolveCollections(["硕士"])
+  const after = resolveCollections(["master"])
+  assert.equal(before[0].slug, "master")
+  assert.equal(after[0].slug, "master")
+
+  assert.deepEqual(
+    findStaleGeneratedPaths(
+      { "master/旧名字.md": { hash: "before" }, "master/img/keep.png": { hash: "asset" } },
+      { "master/新名字.md": { hash: "after" }, "master/img/keep.png": { hash: "asset" } },
+    ),
+    ["master/旧名字.md"],
+  )
+})
+
+test("automatic collection discovery rejects ambiguous public slugs", () => {
+  assert.throws(
+    () => resolveCollections(["网络", "network"]),
+    /slug "network" is shared by "网络" and "network"/,
+  )
+})
+
+test("public note sync requires an explicit publish marker", () => {
+  assert.equal(isPublicFrontmatter({ publish: true }), true)
+  assert.equal(isPublicFrontmatter({ publish: "yes" }), true)
+  assert.equal(isPublicFrontmatter({}), false)
+  assert.equal(isPublicFrontmatter({ publish: false }), false)
+  assert.equal(isPublicFrontmatter({ publish: true, draft: true }), false)
+  assert.equal(isPublicFrontmatter({ publish: true, private: true }), false)
+})
 
 test("Git history provides stable created and modified dates", () => {
   const dates = parseGitDateLog(
