@@ -292,6 +292,12 @@ for (const target of pages) {
         const brand = page.locator(".brand-mark").first()
         await expect(brand).toBeVisible()
         await expect(brand).toHaveAttribute("data-brand-version", tokens.version)
+        if (target.id.startsWith("blog")) {
+          await expect(
+            page.locator('.blog-nav a[href="https://zhangjihao.markz.fun/"]'),
+          ).toHaveText("装箱单")
+          await expect(page.locator('.blog-nav a[href^="/zhangjihao"]')).toHaveCount(0)
+        }
         const brandStyle = await brand.evaluate((element) => {
           const style = getComputedStyle(element)
           return { family: style.fontFamily, weight: style.fontWeight }

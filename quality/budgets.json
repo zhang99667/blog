@@ -10,7 +10,7 @@
       "maxHtmlBytes": 500000,
       "maxSocialImageBytes": 180000,
       "maxTotalSocialImageBytes": 1200000,
-      "allowedExternalRoutes": ["/zhangjihao/"]
+      "allowedExternalRoutes": []
     },
     {
       "id": "notes",

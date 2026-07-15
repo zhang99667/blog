@@ -70,6 +70,8 @@ synchronized article frontmatter + design tokens + pinned build fonts
 
 浏览器标签和系统级站点名称也属于身份边界。博客与笔记的完整页面标题必须保留独立权威值，分别使用“个人博客”与“公开笔记”后缀，并声明 `application-name=MarkZ`；历史恢复和 SPA 切页后必须重新校正。JSONUtils、后台和装箱单继续使用各自产品标题，生产 smoke 必须精确比较，不能只看正文或状态码。
 
+独立工具只保留子域名正式入口。博客导航直接链接 `zhangjihao.markz.fun`；历史 `/zhangjihao` 路径只能永久跳转，不能在博客域名下继续挂载第二份装箱单页面。
+
 ## 5. 排版与布局
 
 - 品牌字标：`Noto Sans SC ExtraBold`。

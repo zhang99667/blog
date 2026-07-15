@@ -155,6 +155,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - `markz.fun/api/visitors`：博客专属站点访客接口；`GET` 只读返回北京时间当天与累计访客数，`POST` 为匿名浏览器登记稳定的当天序号。笔记和工具域名不暴露该接口。
 - `jsonutils.markz.fun`：JSONUtils 前端与 `/api/` 代理；`/admin` 进入后台。
 - `zhangjihao.markz.fun`：装箱单产品。
+- `markz.fun/zhangjihao` 与其子路径：只保留到 `zhangjihao.markz.fun` 的永久兼容跳转，不直接读取装箱单静态卷。
 - 只有 `markz-edge` 可以绑定宿主机 `80/443`。
 - `markz-reactions` 只加入 edge 内部网络，不发布宿主机端口，也不加入 JSONUtils 网络。
 - `markz-reactions-backup` 不加入任何 Docker 网络，只读挂载运行时数据库目录；它只能写独立备份目录，也不发布宿主机端口。

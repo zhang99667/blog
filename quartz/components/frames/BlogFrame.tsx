@@ -22,7 +22,7 @@ export const BlogFrame: PageFrame = {
               </a>
               <a href="https://note.markz.fun/">笔记</a>
               <a href="https://jsonutils.markz.fun/">JSONUtils</a>
-              <a href="/zhangjihao/">装箱单</a>
+              <a href="https://zhangjihao.markz.fun/">装箱单</a>
               <a href="https://github.com/zhang99667">GitHub</a>
             </nav>
           </header>

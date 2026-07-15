@@ -60,6 +60,16 @@ const routes = [
   { url: "https://note.markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
   { url: "https://markz.fun/static/__security-header-smoke__.png", status: 404 },
 ]
+const legacyPackingListRedirects = [
+  {
+    url: "https://markz.fun/zhangjihao",
+    location: "https://zhangjihao.markz.fun/",
+  },
+  {
+    url: "https://markz.fun/zhangjihao/guide?source=legacy",
+    location: "https://zhangjihao.markz.fun/guide?source=legacy",
+  },
+]
 
 const failures = []
 
@@ -111,6 +121,28 @@ await Promise.all(
       }
     } catch (error) {
       failures.push(`${url} failed: ${error.message}`)
+    }
+  }),
+)
+
+await Promise.all(
+  legacyPackingListRedirects.map(async ({ url, location }) => {
+    try {
+      const response = await fetch(url, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(15000),
+      })
+      validateSecurityHeaders(url, response)
+      if (response.status !== 301) {
+        failures.push(`${url} returned ${response.status}, expected 301`)
+      }
+      if (response.headers.get("location") !== location) {
+        failures.push(
+          `${url} redirects to ${response.headers.get("location")}, expected ${location}`,
+        )
+      }
+    } catch (error) {
+      failures.push(`${url} redirect failed: ${error.message}`)
     }
   }),
 )
@@ -257,6 +289,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, canonical legacy redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

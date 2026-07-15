@@ -358,6 +358,8 @@ export async function collectRoutingContractFailures(root = defaultRoot) {
   const compose = await readText(root, "deploy/docker-compose.edge.yml")
   const nginx = await readText(root, "deploy/nginx.conf")
   const deploy = await readText(root, "scripts/deploy.mjs")
+  const blogFrame = await readText(root, "quartz/components/frames/BlogFrame.tsx")
+  const budgets = await readJson(root, "quality/budgets.json")
   for (const snippet of [
     "container_name: markz-edge",
     '"${EDGE_HTTP_PORT:-80}:80"',
@@ -377,6 +379,32 @@ export async function collectRoutingContractFailures(root = defaultRoot) {
   }
   if (deploy.includes("docker-compose.override") || deploy.includes("JSONUTILS_REMOTE_DIR")) {
     failures.push("deployment is coupled to the JSONUtils Compose lifecycle")
+  }
+  const exactPackingRedirect = nginx.match(/location = \/zhangjihao\s*\{([\s\S]*?)\}/)?.[1] ?? ""
+  const nestedPackingRedirect =
+    nginx.match(/location \^~ \/zhangjihao\/\s*\{([\s\S]*?)\}/)?.[1] ?? ""
+  if (!exactPackingRedirect.includes("return 301 https://zhangjihao.markz.fun/;")) {
+    failures.push("legacy packing-list root must redirect to its canonical subdomain")
+  }
+  if (
+    !nestedPackingRedirect.includes(
+      "rewrite ^/zhangjihao/(.*)$ https://zhangjihao.markz.fun/$1 permanent;",
+    )
+  ) {
+    failures.push("legacy packing-list paths must preserve suffixes on the canonical subdomain")
+  }
+  if (/\b(?:alias|root|try_files)\b/.test(nestedPackingRedirect)) {
+    failures.push("legacy packing-list paths must not serve a second copy of the product")
+  }
+  if (
+    !blogFrame.includes('href="https://zhangjihao.markz.fun/"') ||
+    blogFrame.includes('href="/zhangjihao')
+  ) {
+    failures.push("blog navigation must use the canonical packing-list subdomain")
+  }
+  const blogBudget = budgets.outputs?.find((output) => output.id === "blog")
+  if (blogBudget?.allowedExternalRoutes?.includes("/zhangjihao/")) {
+    failures.push("build quality must not retain the retired packing-list path exception")
   }
   return failures
 }
