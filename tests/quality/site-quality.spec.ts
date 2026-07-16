@@ -299,6 +299,15 @@ for (const target of pages) {
           ).toHaveText("装箱单")
           await expect(page.locator('.blog-nav a[href^="/zhangjihao"]')).toHaveCount(0)
         }
+        if (target.id === "blog-home") {
+          await expect(page.locator(".hero-copy, .home-actions")).toHaveCount(0)
+          const hero = await page.locator(".blog-hero").boundingBox()
+          const firstPost = await page.locator(".post-row").first().boundingBox()
+          expect(hero).not.toBeNull()
+          expect(firstPost).not.toBeNull()
+          expect(hero!.height).toBeLessThan(viewport.width <= 800 ? 250 : 220)
+          expect(firstPost!.y).toBeLessThan(viewport.height)
+        }
         const brandStyle = await brand.evaluate((element) => {
           const style = getComputedStyle(element)
           return { family: style.fontFamily, weight: style.fontWeight }

@@ -761,14 +761,14 @@ description: ${brand.name} 的个人博客，记录 AI 工程、Android、工具
 
 <div class="blog-home">
   <section class="blog-hero">
-    <p class="eyebrow">${brand.tagline}</p>
-    <h1 class="brand-mark brand-mark--hero" data-brand-version="${designTokens.version}">${brand.name}<span class="brand-dot" aria-hidden="true"></span></h1>
-    <p class="hero-lede">${brand.description}</p>
-    <p class="hero-copy">关注 AI 工程、Android 与系统设计。这里放经过整理、值得长期保留的文章。</p>
-    <nav class="home-actions" aria-label="主要入口">
-      <a class="primary" href="/blog/">浏览全部文章</a>
-      <a href="${noteOrigin}/">打开公开笔记</a>
-    </nav>
+    <div class="hero-identity">
+      <p class="eyebrow">${brand.tagline}</p>
+      <h1 class="brand-mark brand-mark--hero" data-brand-version="${designTokens.version}">${brand.name}<span class="brand-dot" aria-hidden="true"></span></h1>
+    </div>
+    <div class="hero-intro">
+      <p class="hero-lede">${brand.description}</p>
+      <p class="hero-scope">AI 工程、Android、系统设计。</p>
+    </div>
   </section>
 
   <section class="home-writing">
