@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { DatabaseSync } from "node:sqlite"
 
 const MAX_BODY_BYTES = 2_048
-const VALID_SITES = new Set(["blog", "notes"])
+const PUBLIC_SITES = new Set(["blog", "notes"])
+const CONTENT_ID = /^v1\/[a-f0-9]{64}$/
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const VISITOR_TIME_ZONE = "Asia/Shanghai"
 const VISITOR_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
@@ -23,8 +24,8 @@ class HttpError extends Error {
   }
 }
 
-function normalizePage(site, slug) {
-  if (!VALID_SITES.has(site)) throw new HttpError(400, "Invalid site")
+function normalizePageInput(site, slug) {
+  if (!PUBLIC_SITES.has(site)) throw new HttpError(400, "Invalid site")
   if (typeof slug !== "string") throw new HttpError(400, "Invalid slug")
 
   const normalized = slug
@@ -42,6 +43,84 @@ function normalizePage(site, slug) {
   }
 
   return { site, slug: normalized }
+}
+
+function normalizeContentTarget(id) {
+  if (typeof id !== "string" || !CONTENT_ID.test(id)) {
+    throw new Error("Invalid reactions content ID")
+  }
+  return { site: "content", slug: id }
+}
+
+function pageKey({ site, slug }) {
+  return `${site}\0${slug}`
+}
+
+export function parseReactionAliases(value = { version: 1, pages: [] }) {
+  if (!value || value.version !== 1 || !Array.isArray(value.pages)) {
+    throw new Error("Invalid reactions alias manifest")
+  }
+
+  const aliasMap = new Map()
+  const migrations = []
+  for (const entry of value.pages) {
+    if (!entry || !Array.isArray(entry.aliases)) {
+      throw new Error("Invalid reactions alias entry")
+    }
+    const target = normalizeContentTarget(entry.id)
+    for (const candidate of entry.aliases) {
+      const alias = normalizePageInput(candidate?.site, candidate?.slug)
+      const key = pageKey(alias)
+      const existing = aliasMap.get(key)
+      if (existing && pageKey(existing) !== pageKey(target)) {
+        throw new Error(`Reaction alias ${alias.site}:${alias.slug} has multiple owners`)
+      }
+      aliasMap.set(key, target)
+      migrations.push({ alias, target })
+    }
+  }
+  return { aliasMap, migrations }
+}
+
+export function loadReactionAliases(filePath) {
+  return JSON.parse(readFileSync(filePath, "utf8"))
+}
+
+function normalizePage(site, slug, aliasMap) {
+  const page = normalizePageInput(site, slug)
+  return aliasMap.get(pageKey(page)) ?? page
+}
+
+function migrateReactionAliases(database, migrations) {
+  if (migrations.length === 0) return
+
+  const copies = ["reactions", "views"].map((table) =>
+    database.prepare(`
+      INSERT OR IGNORE INTO ${table} (site, slug, visitor_hash, created_at)
+      SELECT ?, ?, visitor_hash, created_at
+      FROM ${table}
+      WHERE site = ? AND slug = ?
+    `),
+  )
+  const removals = ["reactions", "views"].map((table) =>
+    database.prepare(`DELETE FROM ${table} WHERE site = ? AND slug = ?`),
+  )
+
+  database.exec("BEGIN IMMEDIATE")
+  try {
+    for (const { alias, target } of migrations) {
+      for (const copy of copies) {
+        copy.run(target.site, target.slug, alias.site, alias.slug)
+      }
+      for (const remove of removals) {
+        remove.run(alias.site, alias.slug)
+      }
+    }
+    database.exec("COMMIT")
+  } catch (error) {
+    database.exec("ROLLBACK")
+    throw error
+  }
 }
 
 function normalizeVisitor(visitor) {
@@ -104,10 +183,11 @@ async function readJson(request) {
   }
 }
 
-export function createReactionStore(databasePath) {
+export function createReactionStore(databasePath, { reactionAliases } = {}) {
   if (databasePath !== ":memory:") mkdirSync(path.dirname(databasePath), { recursive: true })
 
   const database = new DatabaseSync(databasePath)
+  const { aliasMap, migrations } = parseReactionAliases(reactionAliases)
   database.exec(`
     PRAGMA busy_timeout = 5000;
     PRAGMA journal_mode = WAL;
@@ -147,6 +227,7 @@ export function createReactionStore(databasePath) {
     )
     GROUP BY visitor_hash;
   `)
+  migrateReactionAliases(database, migrations)
 
   const likeCountStatement = database.prepare(
     "SELECT COUNT(*) AS count FROM reactions WHERE site = ? AND slug = ?",
@@ -159,6 +240,9 @@ export function createReactionStore(databasePath) {
   )
   const insertViewStatement = database.prepare(
     "INSERT OR IGNORE INTO views (site, slug, visitor_hash) VALUES (?, ?, ?)",
+  )
+  const likedStatement = database.prepare(
+    "SELECT 1 AS liked FROM reactions WHERE site = ? AND slug = ? AND visitor_hash = ?",
   )
   const visitorCountStatement = database.prepare("SELECT COUNT(*) AS count FROM visitors")
   const dailyVisitorCountStatement = database.prepare(
@@ -184,10 +268,14 @@ export function createReactionStore(databasePath) {
   }
 
   function add(insertStatement, site, slug, visitor) {
-    const page = normalizePage(site, slug)
+    const page = normalizePage(site, slug, aliasMap)
     const visitorHash = normalizeVisitor(visitor)
     const result = insertStatement.run(page.site, page.slug, visitorHash)
-    return { added: Number(result.changes) === 1, ...countsFor(page) }
+    return {
+      added: Number(result.changes) === 1,
+      ...countsFor(page),
+      liked: Boolean(likedStatement.get(page.site, page.slug, visitorHash)),
+    }
   }
 
   function visitorCountsFor(visitDate) {
@@ -200,7 +288,7 @@ export function createReactionStore(databasePath) {
 
   return {
     counts(site, slug) {
-      const page = normalizePage(site, slug)
+      const page = normalizePage(site, slug, aliasMap)
       return countsFor(page)
     },
     addLike(site, slug, visitor) {
@@ -240,8 +328,12 @@ export function createReactionStore(databasePath) {
   }
 }
 
-export function createReactionService({ databasePath = ":memory:", now = () => new Date() } = {}) {
-  const store = createReactionStore(databasePath)
+export function createReactionService({
+  databasePath = ":memory:",
+  now = () => new Date(),
+  reactionAliases,
+} = {}) {
+  const store = createReactionStore(databasePath, { reactionAliases })
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://reactions.internal")
@@ -352,8 +444,10 @@ const isMain =
 
 if (isMain) {
   const databasePath = process.env.REACTIONS_DB_PATH ?? "/data/reactions.sqlite"
+  const aliasesPath = process.env.REACTIONS_ALIASES_PATH
+  const reactionAliases = aliasesPath ? loadReactionAliases(aliasesPath) : undefined
   const port = Number(process.env.PORT ?? 3000)
-  const service = createReactionService({ databasePath })
+  const service = createReactionService({ databasePath, reactionAliases })
   await service.listen({ host: "0.0.0.0", port })
   console.log(`MarkZ reactions listening on port ${port}`)
 

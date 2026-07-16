@@ -10,6 +10,7 @@ const nginxConfig = path.join(root, "deploy/nginx.conf")
 const securityHeaders = path.join(root, "deploy/security-headers.inc")
 const edgeCompose = path.join(root, "deploy/docker-compose.edge.yml")
 const reactionsDir = path.join(root, "services/reactions")
+const reactionAliases = path.join(root, ".cache/reaction-aliases.json")
 
 const host = process.env.BLOG_SSH_HOST ?? "markz@39.97.237.248"
 const key = process.env.BLOG_SSH_KEY ?? path.join(process.env.HOME ?? "", ".ssh/id_ed25519")
@@ -42,7 +43,8 @@ if (
   !existsSync(nginxConfig) ||
   !existsSync(securityHeaders) ||
   !existsSync(edgeCompose) ||
-  !existsSync(reactionsDir)
+  !existsSync(reactionsDir) ||
+  !existsSync(reactionAliases)
 ) {
   throw new Error("Edge deployment configuration is missing.")
 }
@@ -69,6 +71,13 @@ run("rsync", [
   `${reactionsDir}/`,
   `${host}:${remoteReactionsDir}/`,
 ])
+run("rsync", [
+  "-az",
+  "-e",
+  ssh.join(" "),
+  reactionAliases,
+  `${host}:${remoteReactionsDir}/reaction-aliases.json`,
+])
 run("rsync", ["-az", "-e", ssh.join(" "), nginxConfig, `${host}:${remoteAppDir}/nginx.conf`])
 run("rsync", [
   "-az",
@@ -84,10 +93,16 @@ run("rsync", [
   edgeCompose,
   `${host}:${remoteEdgeDir}/docker-compose.yml`,
 ])
+run(ssh[0], [...ssh.slice(1), host, `cd ${remoteEdgeDir} && docker compose config >/dev/null`])
 run(ssh[0], [
   ...ssh.slice(1),
   host,
-  `cd ${remoteEdgeDir} && docker compose config >/dev/null && docker compose up -d --force-recreate --wait reactions reactions-backup && docker compose run --rm --no-deps edge nginx -t`,
+  `if docker inspect markz-reactions-backup >/dev/null 2>&1; then docker exec markz-reactions-backup node /app/backup.mjs once; fi`,
+])
+run(ssh[0], [
+  ...ssh.slice(1),
+  host,
+  `cd ${remoteEdgeDir} && docker compose up -d --force-recreate --wait reactions reactions-backup && docker compose run --rm --no-deps edge nginx -t`,
 ])
 run(ssh[0], [
   ...ssh.slice(1),

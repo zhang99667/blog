@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { parse as parseYaml } from "yaml"
 import {
+  buildReactionAliases,
   createNoteLookup,
   findStaleGeneratedPaths,
   isPublicFrontmatter,
@@ -11,6 +12,7 @@ import {
   resolveCollections,
   resolveSourceDates,
   rewritePublicNoteMarkdown,
+  stableReactionId,
   withStableDates,
 } from "./sync-notes.mjs"
 
@@ -70,6 +72,37 @@ test("public note sync requires an explicit publish marker", () => {
   assert.equal(isPublicFrontmatter({ publish: true, private: true }), false)
 })
 
+test("reaction identity survives content metadata changes and joins blog with its source note", () => {
+  const sourcePath = "AI/Agent MCP 完全指南.md"
+  const reactionId = stableReactionId(sourcePath)
+  assert.equal(reactionId, stableReactionId(sourcePath))
+  assert.match(reactionId, /^v1\/[a-f0-9]{64}$/)
+
+  const manifest = buildReactionAliases(
+    [
+      {
+        sourcePath,
+        path: "ai/Agent MCP 完全指南.md",
+        reactionId,
+        title: "修改标题、日期和正文不改变身份",
+        date: "2026-07-16",
+        post: { slug: "agent-mcp" },
+      },
+    ],
+    { generatedAt: "2026-07-16T00:00:00.000Z", sourceCommit: "abc123" },
+  )
+
+  assert.deepEqual(manifest.pages, [
+    {
+      id: reactionId,
+      aliases: [
+        { site: "notes", slug: "ai/agent-mcp-完全指南" },
+        { site: "blog", slug: "blog/agent-mcp" },
+      ],
+    },
+  ])
+})
+
 test("Git history provides stable created and modified dates", () => {
   const dates = parseGitDateLog(
     [
@@ -112,6 +145,38 @@ test("frontmatter wins, then Git history, never checkout time", () => {
       modifiedAt: "2024-01-01T00:00:00.000Z",
     },
   )
+})
+
+test("frontmatter date is the canonical editorial date", () => {
+  const gitDates = {
+    createdAt: "2020-01-01T00:00:00.000Z",
+    modifiedAt: "2024-01-01T00:00:00.000Z",
+  }
+
+  const before = resolveSourceDates(
+    { date: "2026-06-07", created: "2021-02-03", modified: "2026-07-01" },
+    gitDates,
+    checkoutStat,
+  )
+  const after = resolveSourceDates(
+    { date: "2026-07-15", created: "2021-02-03", modified: "2026-07-01" },
+    gitDates,
+    checkoutStat,
+  )
+
+  assert.deepEqual(before, {
+    createdAt: "2026-06-07T00:00:00.000Z",
+    modifiedAt: "2026-07-01T00:00:00.000Z",
+  })
+  assert.deepEqual(after, {
+    createdAt: "2026-07-15T00:00:00.000Z",
+    modifiedAt: "2026-07-01T00:00:00.000Z",
+  })
+
+  assert.deepEqual(resolveSourceDates({ updated: "2026-07-15" }, gitDates, checkoutStat), {
+    createdAt: "2020-01-01T00:00:00.000Z",
+    modifiedAt: "2026-07-15T00:00:00.000Z",
+  })
 })
 
 test("generated notes carry stable Quartz date frontmatter", () => {

@@ -16,6 +16,18 @@ const brandEvidence = [
   `markz-card-${tokens.brand.assetRevision}.png`,
 ]
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
+const pairedReactionRoutes = [
+  {
+    origin: "https://markz.fun",
+    site: "blog",
+    slug: "blog/agent-mcp",
+  },
+  {
+    origin: "https://note.markz.fun",
+    site: "notes",
+    slug: linkedGraphSlug,
+  },
+]
 const { value: expectedContentSecurityPolicy } = await loadContentSecurityPolicy(root)
 const expectedSecurityHeaders = new Map([
   ["strict-transport-security", ["max-age=31536000; includeSubDomains"]],
@@ -207,6 +219,30 @@ try {
   }
 } catch (error) {
   failures.push(`note graph index failed: ${error.message}`)
+}
+
+try {
+  const metrics = await Promise.all(
+    pairedReactionRoutes.map(async ({ origin, site, slug }) => {
+      const url = new URL("/api/reactions", origin)
+      url.search = new URLSearchParams({ site, slug }).toString()
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      validateSecurityHeaders(url.toString(), response)
+      if (!response.ok) throw new Error(`${url} returned ${response.status}`)
+      const body = await response.json()
+      if (!Number.isInteger(body.likes) || !Number.isInteger(body.views)) {
+        throw new Error(`${url} returned invalid metrics`)
+      }
+      return body
+    }),
+  )
+  if (metrics[0].likes !== metrics[1].likes || metrics[0].views !== metrics[1].views) {
+    failures.push(
+      `same-source reaction metrics diverged: blog=${JSON.stringify(metrics[0])}, notes=${JSON.stringify(metrics[1])}`,
+    )
+  }
+} catch (error) {
+  failures.push(`same-source reaction metrics failed: ${error.message}`)
 }
 
 const smokeInteraction = {

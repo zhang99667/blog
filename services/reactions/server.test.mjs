@@ -35,7 +35,7 @@ function visitor(index) {
 }
 
 describe("MarkZ reactions API", () => {
-  test("counts anonymous likes and views idempotently while keeping surfaces separate", async () => {
+  test("counts anonymous likes and views idempotently without configured aliases", async () => {
     const { service, baseUrl } = await startService()
     try {
       const initial = await requestJson(
@@ -52,7 +52,7 @@ describe("MarkZ reactions API", () => {
         body: JSON.stringify({ site: "notes", slug: "ai/中文笔记", visitor: visitor(1) }),
       })
       assert.equal(firstView.response.status, 201)
-      assert.deepEqual(firstView.body, { likes: 0, views: 1, added: true })
+      assert.deepEqual(firstView.body, { likes: 0, views: 1, added: true, liked: false })
 
       const duplicateView = await requestJson(`${baseUrl}/api/reactions/view`, {
         method: "POST",
@@ -60,7 +60,7 @@ describe("MarkZ reactions API", () => {
         body: JSON.stringify({ site: "notes", slug: "ai/中文笔记", visitor: visitor(1) }),
       })
       assert.equal(duplicateView.response.status, 200)
-      assert.deepEqual(duplicateView.body, { likes: 0, views: 1, added: false })
+      assert.deepEqual(duplicateView.body, { likes: 0, views: 1, added: false, liked: false })
 
       const first = await requestJson(`${baseUrl}/api/reactions`, {
         method: "POST",
@@ -314,7 +314,7 @@ describe("MarkZ reactions API", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ site: "blog", slug: "blog/legacy", visitor: visitor(9) }),
       })
-      assert.deepEqual(view.body, { likes: 1, views: 1, added: true })
+      assert.deepEqual(view.body, { likes: 1, views: 1, added: true, liked: false })
 
       const migrated = await requestJson(`${baseUrl}/api/visitors`)
       assert.equal(migrated.body.totalVisitors, 1)
@@ -327,6 +327,103 @@ describe("MarkZ reactions API", () => {
       assert.equal(visitorResult.body.totalVisitors, 2)
     } finally {
       await service.close()
+    }
+  })
+
+  test("migrates blog and note aliases to one stable content identity", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "markz-reaction-aliases-"))
+    temporaryDirectories.push(directory)
+    const databasePath = path.join(directory, "reactions.sqlite")
+    const blogSlug = "blog/stable-article"
+    const noteSlug = "ai/stable-article"
+    const contentId = `v1/${"a".repeat(64)}`
+
+    const firstRun = await startService(databasePath)
+    for (const [site, slug, identity] of [
+      ["blog", blogSlug, visitor(21)],
+      ["notes", noteSlug, visitor(22)],
+    ]) {
+      await requestJson(`${firstRun.baseUrl}/api/reactions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site, slug, visitor: identity }),
+      })
+      await requestJson(`${firstRun.baseUrl}/api/reactions/view`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site, slug, visitor: identity }),
+      })
+    }
+    await firstRun.service.close()
+
+    const reactionAliases = {
+      version: 1,
+      pages: [
+        {
+          id: contentId,
+          aliases: [
+            { site: "blog", slug: blogSlug },
+            { site: "notes", slug: noteSlug },
+          ],
+        },
+      ],
+    }
+    const secondRun = await startService(databasePath, { reactionAliases })
+    try {
+      for (const [site, slug] of [
+        ["blog", blogSlug],
+        ["notes", noteSlug],
+      ]) {
+        const counts = await requestJson(
+          `${secondRun.baseUrl}/api/reactions?site=${site}&slug=${encodeURIComponent(slug)}`,
+        )
+        assert.deepEqual(counts.body, { count: 2, likes: 2, views: 2 })
+      }
+
+      const existingView = await requestJson(`${secondRun.baseUrl}/api/reactions/view`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ site: "notes", slug: noteSlug, visitor: visitor(21) }),
+      })
+      assert.deepEqual(existingView.body, {
+        likes: 2,
+        views: 2,
+        added: false,
+        liked: true,
+      })
+    } finally {
+      await secondRun.service.close()
+    }
+
+    const database = new DatabaseSync(databasePath)
+    assert.equal(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM reactions WHERE site = 'content' AND slug = ?")
+        .get(contentId).count,
+      2,
+    )
+    assert.equal(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM views WHERE site = 'content' AND slug = ?")
+        .get(contentId).count,
+      2,
+    )
+    assert.equal(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM reactions WHERE site IN ('blog', 'notes')")
+        .get().count,
+      0,
+    )
+    database.close()
+
+    const thirdRun = await startService(databasePath, { reactionAliases })
+    try {
+      const counts = await requestJson(
+        `${thirdRun.baseUrl}/api/reactions?site=blog&slug=${encodeURIComponent(blogSlug)}`,
+      )
+      assert.deepEqual(counts.body, { count: 2, likes: 2, views: 2 })
+    } finally {
+      await thirdRun.service.close()
     }
   })
 
@@ -344,6 +441,11 @@ describe("MarkZ reactions API", () => {
         body: JSON.stringify({ site: "notes", slug: "ai/test", visitor: "visitor" }),
       })
       assert.equal(invalidVisitor.response.status, 400)
+
+      const internalIdentity = await requestJson(
+        `${baseUrl}/api/reactions?site=content&slug=${encodeURIComponent(`v1/${"a".repeat(64)}`)}`,
+      )
+      assert.equal(internalIdentity.response.status, 400)
 
       const method = await requestJson(`${baseUrl}/api/reactions`, { method: "DELETE" })
       assert.equal(method.response.status, 405)

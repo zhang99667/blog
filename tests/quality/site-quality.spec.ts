@@ -194,6 +194,7 @@ async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
           likes: likeCounts.get(key) ?? initialLikes,
           views: viewCounts.get(key),
           added,
+          liked: likeVisitors.get(key)?.has(body.visitor) ?? false,
         }),
       })
       return
@@ -805,6 +806,11 @@ test.describe("article reactions", () => {
     await button.click()
     await expect(button).toHaveAttribute("aria-pressed", "true")
     const firstSlug = await page.locator("body").getAttribute("data-slug")
+    await page.evaluate(() => {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("markz.reactions.liked.")) localStorage.removeItem(key)
+      }
+    })
 
     await page.reload({ waitUntil: "domcontentloaded" })
     await expect(page.locator("[data-reaction-like]")).toHaveAttribute("aria-pressed", "true")

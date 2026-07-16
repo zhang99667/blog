@@ -39,7 +39,7 @@ npm run build
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
 
-部署会先同步 `services/reactions/`、`nginx.conf` 和集中式 `security-headers.inc`，启动并等待 `markz-reactions` 与 `markz-reactions-backup` 健康，再执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，检查页面、API、静态资源和 404 的安全响应头，并精确比较博客与笔记 CSP；独立工具只检查公共安全基线，不强行继承编辑站 CSP。
+部署会先同步 `services/reactions/`、同步器生成的 `.cache/reaction-aliases.json`、`nginx.conf` 和集中式 `security-headers.inc`。已有备份服务健康时，部署脚本先强制生成一份已验证在线快照，再重建并等待 `markz-reactions` 与 `markz-reactions-backup` 健康；新服务在启动事务中把旧路由计数合并到稳定 content ID，随后才执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，检查页面、API、静态资源和 404 的安全响应头，并精确比较博客与笔记 CSP；独立工具只检查公共安全基线，不强行继承编辑站 CSP。
 
 ### 互动数据维护
 
@@ -111,6 +111,8 @@ node services/reactions/backup.mjs verify .cache/recovered-reactions.sqlite
 
 匿名点赞、文章浏览和博客访客只用于轻量反馈，不是账号级统计或风控。`reactions`、`views` 分别阻止同一浏览器 ID 对同一文章重复累计；`visitors` 阻止累计访客重复，`daily_visitors` 保存北京时间当天稳定序号。Nginx 对 POST 按来源地址做短期内存限流；服务不持久化来源 IP。清空浏览器存储后可以再次计入，这是当前产品边界。
 
+文章互动的持久身份不是 URL。每次同步生成 `.cache/reaction-aliases.json`，把博客与笔记公开路由映射到由源笔记相对路径派生的稳定 content ID；同一源笔记共享计数，标题、正文、frontmatter 或博客 slug 更新不会重置。服务启动会幂等迁移旧 `site + slug` 行并按匿名哈希去重。若源文件相对路径改名，必须保留或新增显式迁移 alias，并在上线前用最新快照演练；不要靠标题相似度自动合并。
+
 访客功能首次启用时，会把已有博客文章点赞和唯一浏览中的匿名哈希合并进 `visitors`，作为累计基线；`daily_visitors` 从功能上线当天开始，不反推历史日序号。博客页面每次完整加载最多登记一次，Quartz 站内 SPA 跳转复用当前结果。接口失败时页脚计数隐藏，不能阻断静态内容。
 
 GitHub 仓库需要以下 Actions 配置：
@@ -132,7 +134,7 @@ GitHub 仓库需要以下 Actions 配置：
 2. 运行 `npm run smoke:production`。
 3. 远端确认 `markz-edge` 独占 `80/443`，JSONUtils 容器端口绑定为空。
 
-部署脚本同步 reactions 服务代码后必须使用 `--force-recreate --wait reactions reactions-backup` 重建两个进程，再校验 Nginx 并重建 edge。仅更新 bind mount 文件不会让已运行的 Node 进程加载新代码。
+部署脚本同步 reactions 服务代码与 `reaction-aliases.json` 后，必须先通过当前 backup 容器生成一份在线快照，再使用 `--force-recreate --wait reactions reactions-backup` 重建两个进程，最后校验 Nginx 并重建 edge。仅更新 bind mount 文件不会让已运行的 Node 进程加载新代码。
 
 浏览器报告和截图保存在 `playwright-report/` 与 `test-results/`，CI 保留 14 天。上线结论必须来自完整矩阵，不能用单个页面或单一主题代替。
 

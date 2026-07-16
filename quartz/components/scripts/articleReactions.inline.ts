@@ -51,7 +51,8 @@ function normalizePayload(value: unknown): ReactionPayload | undefined {
   const likes = countValue(payload.likes) ?? countValue(payload.count)
   const views = payload.views === undefined ? undefined : countValue(payload.views)
   if (likes === undefined || (payload.views !== undefined && views === undefined)) return
-  return { likes, views, liked: payload.liked === true }
+  const liked = typeof payload.liked === "boolean" ? payload.liked : undefined
+  return { likes, views, liked }
 }
 
 async function parseResponse(response: Response): Promise<ReactionPayload> {
@@ -342,7 +343,7 @@ function mountReactions() {
     }
 
     if (controller.signal.aborted) return
-    render(payload.likes, payload.views, readVisitorStorage(likedKey) === "1")
+    render(payload.likes, payload.views, payload.liked ?? readVisitorStorage(likedKey) === "1")
   }
 
   elements.button.addEventListener(

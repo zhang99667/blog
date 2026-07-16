@@ -44,6 +44,8 @@ article-reactions component
   -> same-origin /api/reactions + /api/reactions/view
   -> markz-edge write rate limit
   -> markz-reactions
+  -> generated route aliases resolve blog/note URLs to one stable source-content ID
+  -> startup migration merges legacy route-keyed rows transactionally
   -> SQLite reactions.sqlite
 ```
 
@@ -151,7 +153,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 
 - `markz.fun`：博客静态文件；`/notes/` 是笔记回退入口。
 - `note.markz.fun`：独立笔记静态文件。
-- `markz.fun/api/reactions`、`note.markz.fun/api/reactions`：同一个匿名互动服务，按 `site + canonical slug` 分开计算点赞和唯一浏览；`/api/reactions/view` 幂等登记当前浏览器的文章浏览。
+- `markz.fun/api/reactions`、`note.markz.fun/api/reactions`：同一个匿名互动服务。公开路由先通过同步器生成的 alias 映射到稳定 source-content ID，再计算点赞和唯一浏览；同一源笔记的博客成稿与公开笔记共享计数，路由、标题、正文或 frontmatter 更新不改变身份。`/api/reactions/view` 幂等登记当前浏览器的文章浏览。
 - `markz.fun/api/visitors`：博客专属站点访客接口；`GET` 只读返回北京时间当天与累计访客数，`POST` 为匿名浏览器登记稳定的当天序号。笔记和工具域名不暴露该接口。
 - `jsonutils.markz.fun`：JSONUtils 前端与 `/api/` 代理；`/admin` 进入后台。
 - `zhangjihao.markz.fun`：装箱单产品。
@@ -178,7 +180,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 博客与笔记 CSP 的唯一策略值归 `deploy/nginx.conf` 中的 `$markz_content_security_policy` host map；`security-headers.inc` 只负责统一发射。默认映射必须为空，不能隐藏或覆盖 JSONUtils、后台和装箱单自行提供的 CSP。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
-- 点赞、文章浏览和博客访客数据归 blog 系统；服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
+- 点赞、文章浏览和博客访客数据归 blog 系统；文章身份 alias 归 `sync-notes.mjs` 生成的 `.cache/reaction-aliases.json`，运行时只消费该清单并在启动事务中迁移旧 route key。服务端只保存浏览器随机 ID 的 SHA-256，不保存 IP。访客日界线固定为 `Asia/Shanghai`，同一浏览器当天和累计各计一次。数据库目录不参与静态文件 `rsync --delete`。
 - 运行时快照归 `backup.mjs`；Compose 只规定本机调度与隔离，生产 smoke 必须验证最新快照并完成一次真实恢复。异地复制不得上传明文数据库，也不得复用个人 SSH 私钥充当加密密钥。
 - 异地备份编排归 `markz-backup.yaml`，格式校验与恢复归 `offsite-backup.mjs` 和 `scripts/runtime-backup/`。专用 age 私钥归用户且必须位于仓库、服务器和 Actions 之外；仓库只允许公钥 recipient。启用变量、密钥创建、recipient 轮换和生产替换都需要明确批准。
 - 用户纠偏归 `docs/AI-DECISIONS.md`，可判定规则必须进入自动门禁。
@@ -191,11 +193,12 @@ deploy/nginx.conf CSP host map (one policy literal)
 同步分两层增量：
 
 1. `sync-notes.mjs` 对输出计算 SHA-256，仅重写变化文件，并删除源端已移除的公开文件。
-2. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物。
+2. 同步器从源笔记相对路径派生版本化稳定内容 ID，并生成博客与笔记公开路由 alias；标题、正文、frontmatter 和博客 slug 变化不改变该 ID。
+3. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物；互动服务重启前先生成一份已验证在线快照，再加载 alias 并迁移旧路由计数。
 
 笔记站在私有仓库签出完成后自动发现 Vault 的一级内容目录，不为每个新分类维护代码白名单。隐藏目录、工具目录以及 `Tasks`、`promotion docs` 等显式排除目录不进入发布集合；Markdown 只有明确声明 `publish: true` 才公开。已知中文分类可以保留稳定的公网 slug，其他分类从目录名确定 slug；归一化后发生冲突时同步必须失败，不能把两个目录静默合并。文件或目录改名会生成新路径，并由 manifest 与 `rsync --delete` 清理旧路径；这不等于自动建立旧 URL 重定向。`BLOG_INCLUDE_DIRS` 只作为需要收窄范围时的显式覆盖。
 
-公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。同步器把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。列表和正文头部统一显示作者指定的 `date/created` 编辑日期，`modified` 保留用于更新元数据，不能悄悄替换公开显示日期。
+公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。对博客成稿，`date` 是唯一首选发布日期，`created`、`createdAt` 只作兼容回退，再回退到 Git 首次提交。同步器把这一解析结果统一供给列表、正文头部、RSS、文章分享图和 SEO，并把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。`modified`、`updated`、`updatedAt` 保留用于更新元数据，不能悄悄替换公开显示日期。
 
 公开链接使用两阶段生成：第一阶段先确定全部可公开记录，第二阶段才重写正文。目标已公开时输出带完整公开路径的 Quartz 双链，保留关系图谱和回链；目标私有、被过滤或不存在时只保留可读标题，不生成假链接。代码块、外部 URL 和真实公开资产不参与降级。
 

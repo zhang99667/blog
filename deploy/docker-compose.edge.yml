@@ -35,6 +35,7 @@ services:
       NODE_ENV: production
       PORT: "3000"
       REACTIONS_DB_PATH: /data/reactions.sqlite
+      REACTIONS_ALIASES_PATH: /app/reaction-aliases.json
       TMPDIR: /tmp
     volumes:
       - ${REACTIONS_APP_DIR:-/home/markz/apps/blog/reactions}:/app:ro

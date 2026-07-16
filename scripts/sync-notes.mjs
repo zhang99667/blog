@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { slugifyFilePath } from "@quartz-community/utils"
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml"
 import { blogConfig } from "./blog.config.mjs"
 import {
@@ -21,6 +22,7 @@ const contentRoot = path.join(root, "content")
 const blogContentDir = path.join(contentRoot, "site")
 const notesContentDir = path.join(contentRoot, "notes")
 const manifestPath = path.join(cacheDir, "publish-manifest.json")
+const reactionAliasesPath = path.join(cacheDir, "reaction-aliases.json")
 const noteOrigin = "https://note.markz.fun"
 
 const noteRepo = process.env.NOTE_REPO ?? "https://github.com/zhang99667/note.git"
@@ -155,6 +157,28 @@ function hashBuffer(buffer) {
   return createHash("sha256").update(buffer).digest("hex")
 }
 
+export function stableReactionId(sourcePath) {
+  const normalized = normalizeRel(sourcePath).normalize("NFC")
+  return `v1/${hashBuffer(Buffer.from(`markz-content\0${normalized}`, "utf8"))}`
+}
+
+export function buildReactionAliases(records, { generatedAt, sourceCommit }) {
+  return {
+    version: 1,
+    generatedAt,
+    sourceCommit,
+    pages: records
+      .map((record) => ({
+        id: record.reactionId,
+        aliases: [
+          { site: "notes", slug: slugifyFilePath(record.path) },
+          ...(record.post ? [{ site: "blog", slug: `blog/${record.post.slug}` }] : []),
+        ],
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  }
+}
+
 function shouldSkipRelative(rel) {
   const parts = rel.split("/")
   if (parts.some((part) => part === ".git" || part === ".obsidian" || part === ".DS_Store")) {
@@ -239,9 +263,9 @@ export function resolveSourceDates(frontmatter, gitDates, stat) {
       ? stat.birthtime.toISOString()
       : stat.mtime.toISOString()
   const createdAt =
+    asIsoTimestamp(frontmatter.date) ??
     asIsoTimestamp(frontmatter.created) ??
     asIsoTimestamp(frontmatter.createdAt) ??
-    asIsoTimestamp(frontmatter.date) ??
     gitDates?.createdAt ??
     filesystemCreated
   const modifiedAt =
@@ -502,6 +526,10 @@ async function syncContent() {
   await writeAiFiles(records, posts, manifest)
   await fs.mkdir(cacheDir, { recursive: true })
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  await fs.writeFile(
+    reactionAliasesPath,
+    `${JSON.stringify(buildReactionAliases(records, { generatedAt, sourceCommit }), null, 2)}\n`,
+  )
 
   console.log(
     `Synced ${posts.length} posts, ${records.length} notes and ${
@@ -629,12 +657,7 @@ function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
     asString(fm.excerpt) ??
     configured?.summary ??
     extractSummary(text, fm)
-  const date =
-    asString(fm.date) ??
-    asString(fm.created) ??
-    asString(fm.createdAt) ??
-    asString(fm.updated) ??
-    sourceDates.createdAt.slice(0, 10)
+  const date = sourceDates.createdAt.slice(0, 10)
   const post = classifyPost(sourceRel, fm)
   const id = destRel.replace(/\.md$/i, "")
 
@@ -652,6 +675,7 @@ function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
     date,
     createdAt: sourceDates.createdAt,
     updatedAt: sourceDates.modifiedAt,
+    reactionId: stableReactionId(sourceRel),
     collection,
     post: post
       ? {
