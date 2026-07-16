@@ -26,6 +26,8 @@ private note repository
 
 定时同步不要求修改 `note` 仓库。发布工作流使用只读 deploy key 签出私有笔记，`sync-notes.mjs` 用 SHA-256 manifest 判断新增、变更和删除，部署再由 `rsync --delete` 传输差异。若以后需要“笔记 push 后立即发布”，可以在 `note` 中增加一个只发送 `repository_dispatch` 的小型 Action；服务器 SSH 密钥仍只属于本仓库。
 
+内容显隐直接由 Obsidian frontmatter 控制：`publish: true` 公开到笔记站；再加 `type: post` 同时进入博客。`type: note` 只进入笔记站，`publish: false`、`draft: true` 或 `private: true` 不进入公网。`scripts/blog.config.mjs` 只补充博客展示元数据，不决定文章是否发布。
+
 ## 本地开发
 
 需要 Node.js 24、npm 10，以及私有笔记仓库的读取权限。

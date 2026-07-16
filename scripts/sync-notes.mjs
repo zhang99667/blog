@@ -625,16 +625,10 @@ function extractLinks(text) {
   return [...links].sort((a, b) => a.localeCompare(b, "zh-CN"))
 }
 
-function classifyPost(sourceRel, fm) {
+export function classifyPost(sourceRel, fm) {
   const configured = configuredPosts.get(sourceRel)
   const type = asString(fm.type)?.toLowerCase()
-  const explicitPost =
-    ["post", "blog", "article", "essay"].includes(type ?? "") ||
-    asBoolean(fm.blog) ||
-    asBoolean(fm.post) ||
-    asBoolean(fm.featured)
-
-  if (!configured && !explicitPost) return undefined
+  if (type !== "post") return undefined
 
   const title = asString(fm.title) ?? configured?.title
   return {

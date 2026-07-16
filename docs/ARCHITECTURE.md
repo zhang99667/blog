@@ -196,7 +196,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 2. 同步器从源笔记相对路径派生版本化稳定内容 ID，并生成博客与笔记公开路由 alias；标题、正文、frontmatter 和博客 slug 变化不改变该 ID。
 3. `deploy.mjs` 使用 `rsync --delete`，只向服务器传输文件差异并清理过期产物；互动服务重启前先生成一份已验证在线快照，再加载 alias 并迁移旧路由计数。
 
-笔记站在私有仓库签出完成后自动发现 Vault 的一级内容目录，不为每个新分类维护代码白名单。隐藏目录、工具目录以及 `Tasks`、`promotion docs` 等显式排除目录不进入发布集合；Markdown 只有明确声明 `publish: true` 才公开。已知中文分类可以保留稳定的公网 slug，其他分类从目录名确定 slug；归一化后发生冲突时同步必须失败，不能把两个目录静默合并。文件或目录改名会生成新路径，并由 manifest 与 `rsync --delete` 清理旧路径；这不等于自动建立旧 URL 重定向。`BLOG_INCLUDE_DIRS` 只作为需要收窄范围时的显式覆盖。
+笔记站在私有仓库签出完成后自动发现 Vault 的一级内容目录，不为每个新分类维护代码白名单。隐藏目录、工具目录以及 `Tasks`、`promotion docs` 等显式排除目录不进入发布集合；Markdown 只有明确声明 `publish: true` 才公开。在已经公开的 Markdown 中，只有精确声明 `type: post` 才进入博客成稿层；`type: note` 或缺少 `type` 只进入笔记站。`blog.config.mjs` 只为已经是 post 的内容补充稳定 slug、标题、摘要、精选状态和排序，不能强制改变内容表面。已知中文分类可以保留稳定的公网 slug，其他分类从目录名确定 slug；归一化后发生冲突时同步必须失败，不能把两个目录静默合并。文件或目录改名会生成新路径，并由 manifest 与 `rsync --delete` 清理旧路径；这不等于自动建立旧 URL 重定向。`BLOG_INCLUDE_DIRS` 只作为需要收窄范围时的显式覆盖。
 
 公开日期的权威顺序是源笔记 frontmatter、note 仓库文件 Git 历史。对博客成稿，`date` 是唯一首选发布日期，`created`、`createdAt` 只作兼容回退，再回退到 Git 首次提交。同步器把这一解析结果统一供给列表、正文头部、RSS、文章分享图和 SEO，并把稳定的 `created`、`modified` 写入生成 Markdown；checkout 时间和生成文件 `mtime` 不能成为公开日期。`modified`、`updated`、`updatedAt` 保留用于更新元数据，不能悄悄替换公开显示日期。
 

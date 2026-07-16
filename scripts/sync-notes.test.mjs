@@ -4,6 +4,7 @@ import { test } from "node:test"
 import { parse as parseYaml } from "yaml"
 import {
   buildReactionAliases,
+  classifyPost,
   createNoteLookup,
   findStaleGeneratedPaths,
   isPublicFrontmatter,
@@ -70,6 +71,32 @@ test("public note sync requires an explicit publish marker", () => {
   assert.equal(isPublicFrontmatter({ publish: false }), false)
   assert.equal(isPublicFrontmatter({ publish: true, draft: true }), false)
   assert.equal(isPublicFrontmatter({ publish: true, private: true }), false)
+})
+
+test("only type post enters the blog while config remains presentation metadata", () => {
+  const configuredSource = "AI/Agent Skills 完全指南.md"
+
+  assert.equal(classifyPost(configuredSource, { type: "note" }), undefined)
+  assert.equal(classifyPost(configuredSource, {}), undefined)
+  assert.equal(classifyPost("AI/Unconfigured.md", { type: "note", featured: true }), undefined)
+  assert.deepEqual(classifyPost(configuredSource, { type: "post" }), {
+    slug: "agent-skills",
+    order: 0,
+    featured: true,
+  })
+  assert.deepEqual(
+    classifyPost("AI/新博客文章.md", {
+      type: "post",
+      title: "新博客文章",
+      slug: "new-blog-post",
+      featured: true,
+    }),
+    {
+      slug: "new-blog-post",
+      order: 1000,
+      featured: true,
+    },
+  )
 })
 
 test("reaction identity survives content metadata changes and joins blog with its source note", () => {
