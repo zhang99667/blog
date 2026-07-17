@@ -300,7 +300,9 @@ for (const target of pages) {
           await expect(page.locator('.blog-nav a[href^="/zhangjihao"]')).toHaveCount(0)
         }
         if (target.id === "blog-home") {
-          await expect(page.locator(".blog-hero, .hero-copy, .home-actions")).toHaveCount(0)
+          await expect(
+            page.locator(".blog-hero, .hero-copy, .home-actions, .notes-bridge, .bridge-link"),
+          ).toHaveCount(0)
           const firstPost = await page.locator(".post-row").first().boundingBox()
           expect(firstPost).not.toBeNull()
           expect(firstPost!.y).toBeLessThan(viewport.height)

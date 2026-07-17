@@ -772,15 +772,6 @@ description: ${brand.name} 的个人博客，记录技术、产品与日常。
 ${postRows || "<p>还没有发布文章。</p>"}
     </div>
   </section>
-
-  <section class="notes-bridge">
-    <div>
-      <p class="eyebrow">Notes</p>
-      <h2>笔记是工作台，博客是成稿。</h2>
-      <p>零散记录、资料索引和仍在生长的内容，放在独立的公开笔记库。</p>
-    </div>
-    <a class="bridge-link" href="${noteOrigin}/">进入笔记库</a>
-  </section>
 </div>
 `
 
