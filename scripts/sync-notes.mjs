@@ -756,21 +756,10 @@ async function writeHome(posts) {
 
   const body = `---
 title: ${brand.name}
-description: ${brand.name} 的个人博客，记录 AI 工程、Android、工具和系统设计。
+description: ${brand.name} 的个人博客，记录技术、产品与日常。
 ---
 
 <div class="blog-home">
-  <section class="blog-hero">
-    <div class="hero-identity">
-      <p class="eyebrow">${brand.tagline}</p>
-      <h1 class="brand-mark brand-mark--hero" data-brand-version="${designTokens.version}">${brand.name}<span class="brand-dot" aria-hidden="true"></span></h1>
-    </div>
-    <div class="hero-intro">
-      <p class="hero-lede">${brand.description}</p>
-      <p class="hero-scope">AI 工程、Android、系统设计。</p>
-    </div>
-  </section>
-
   <section class="home-writing">
     <div class="section-heading">
       <div>

@@ -94,7 +94,7 @@ export function createStructuredData({
       "@id": websiteId,
       url: websiteUrl,
       name: isBlog ? "MarkZ" : "MarkZ 公开笔记",
-      description: isBlog ? "写工程，也写工程背后的判断。" : "MarkZ 的公开笔记库。",
+      description: isBlog ? "技术、产品与日常的个人记录。" : "MarkZ 的公开笔记库。",
       inLanguage: "zh-CN",
       publisher: { "@id": personId },
     },

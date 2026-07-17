@@ -43,7 +43,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 字标结构：
 
 ```html
-<a class="brand-mark" data-brand-version="1.2.0">
+<a class="brand-mark" data-brand-version="1.3.0">
   MarkZ<span class="brand-dot" aria-hidden="true"></span>
 </a>
 ```

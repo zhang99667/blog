@@ -2,15 +2,15 @@
 import type { Theme } from "./util/theme"
 
 export const brandIdentity = {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "name": "MarkZ",
   "wordmark": "MarkZ.",
-  "tagline": "个人博客 · 工程与思考",
-  "description": "写工程，也写工程背后的判断。",
+  "tagline": "个人博客",
+  "description": "技术、产品与日常的个人记录。",
   "domain": "markz.fun",
   "assets": {
-    "icon": "markz-icon-v2.png",
-    "socialCard": "markz-card-v2.png"
+    "icon": "markz-icon-v3.png",
+    "socialCard": "markz-card-v3.png"
   }
 } as const
 

@@ -307,9 +307,11 @@ export async function collectDesignSystemFailures(root = defaultRoot) {
   requireSnippet(head, "quartz/components/Head.tsx", "brandIdentity.assets.socialCard", failures)
   requireSnippet(head, "quartz/components/Head.tsx", 'replace(/^\\./, "")', failures)
 
+  const brandMark = await readText(root, "quartz/components/BrandMark.tsx")
+  requireSnippet(brandMark, "quartz/components/BrandMark.tsx", "data-brand-version", failures)
+
   const sync = await readText(root, "scripts/sync-notes.mjs")
   requireSnippet(sync, "scripts/sync-notes.mjs", "design-system/tokens.json", failures)
-  requireSnippet(sync, "scripts/sync-notes.mjs", "data-brand-version", failures)
   requireSnippet(sync, "scripts/sync-notes.mjs", "articleSocialImageDescriptor", failures)
 
   const articleSocialImages = await readText(
