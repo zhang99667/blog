@@ -5,6 +5,7 @@ import sharp from "sharp"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const defaultRoot = path.resolve(scriptDir, "../..")
+const wordmarkFontSource = "design-system/fonts/noto-sans-sc-latin-800-normal.woff"
 
 export async function readDesignTokens(root = defaultRoot) {
   const source = await fs.readFile(path.join(root, "design-system/tokens.json"), "utf8")
@@ -16,6 +17,7 @@ function assetNames(tokens) {
   return {
     icon: `markz-icon-${revision}.png`,
     socialCard: `markz-card-${revision}.png`,
+    wordmarkFont: `fonts/markz-wordmark-latin-${revision}.woff`,
   }
 }
 
@@ -39,6 +41,15 @@ export function renderBrandStyles(tokens) {
   const { shape, layout, motion, interaction } = tokens
   const lines = [
     "// Generated from design-system/tokens.json. Do not edit by hand.",
+    "@font-face {",
+    '  font-family: "MarkZ Wordmark";',
+    `  src: url("/static/${assetNames(tokens).wordmarkFont}") format("woff");`,
+    `  font-weight: ${tokens.brand.wordmarkWeight};`,
+    "  font-style: normal;",
+    "  font-display: swap;",
+    "  unicode-range: U+0020-007E;",
+    "}",
+    "",
     `$breakpoint-compact: ${tokens.breakpoints.compact};`,
     `$breakpoint-wide: ${tokens.breakpoints.wide};`,
     `$breakpoint-reading-rail: ${tokens.breakpoints.readingRail};`,
@@ -55,7 +66,7 @@ export function renderBrandStyles(tokens) {
     `  --brand-fixed-muted: ${tokens.fixedColors.brandMuted};`,
     `  --brand-fixed-accent: ${tokens.fixedColors.brandAccent};`,
     `  --brand-fixed-line: ${tokens.fixedColors.brandLine};`,
-    `  --brand-wordmark-font: ${JSON.stringify(tokens.brand.wordmarkFont)}, sans-serif;`,
+    `  --brand-wordmark-font: "MarkZ Wordmark", ${JSON.stringify(tokens.brand.wordmarkFont)}, sans-serif;`,
     `  --brand-wordmark-weight: ${tokens.brand.wordmarkWeight};`,
     `  --brand-dot-size: ${tokens.brand.dotScale}em;`,
     `  --brand-control-radius: ${shape.controlRadius};`,
@@ -140,11 +151,19 @@ async function writeImageArtifacts(root, tokens) {
   ])
 }
 
+async function writeFontArtifact(root, tokens) {
+  const source = path.join(root, wordmarkFontSource)
+  const target = path.join(root, "quartz/static", assetNames(tokens).wordmarkFont)
+  await fs.mkdir(path.dirname(target), { recursive: true })
+  await fs.copyFile(source, target)
+}
+
 export async function generateDesignSystem(root = defaultRoot) {
   const tokens = await readDesignTokens(root)
   await Promise.all([
     writeTextArtifact(root, "quartz/brand.generated.ts", renderBrandModule(tokens)),
     writeTextArtifact(root, "quartz/styles/_brand.generated.scss", renderBrandStyles(tokens)),
+    writeFontArtifact(root, tokens),
   ])
   await writeImageArtifacts(root, tokens)
 }
@@ -169,6 +188,18 @@ async function checkImage(root, relativePath, expectedWidth, expectedHeight, fai
   }
 }
 
+async function checkFontArtifact(root, tokens, failures) {
+  try {
+    const [source, generated] = await Promise.all([
+      fs.readFile(path.join(root, wordmarkFontSource)),
+      fs.readFile(path.join(root, "quartz/static", assetNames(tokens).wordmarkFont)),
+    ])
+    if (!source.equals(generated)) failures.push("generated wordmark font is stale")
+  } catch {
+    failures.push("generated wordmark font is missing or unreadable")
+  }
+}
+
 export async function checkGeneratedDesignSystem(root = defaultRoot) {
   const tokens = await readDesignTokens(root)
   const assets = assetNames(tokens)
@@ -186,6 +217,7 @@ export async function checkGeneratedDesignSystem(root = defaultRoot) {
     checkImage(root, `quartz/static/${assets.icon}`, 512, 512, failures),
     checkImage(root, "quartz/static/og-image.png", 1200, 630, failures),
     checkImage(root, `quartz/static/${assets.socialCard}`, 1200, 630, failures),
+    checkFontArtifact(root, tokens, failures),
   ])
 
   return failures

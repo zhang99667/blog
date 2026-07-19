@@ -92,7 +92,7 @@ test("canonical URL expectations collapse index pages and deduplicate notes fall
   )
 })
 
-test("article SEO contract requires canonical discovery, dates, JSON-LD, and one font source", () => {
+test("article SEO contract requires canonical discovery, dates, JSON-LD, and local fonts", () => {
   const facts = inspectHtml(`<!doctype html><html lang="zh-CN"><head>
     <title>Agent MCP</title>
     <meta name="description" content="MCP guide">
@@ -102,7 +102,6 @@ test("article SEO contract requires canonical discovery, dates, JSON-LD, and one
     <meta property="article:modified_time" content="2026-07-13T00:00:00.000Z">
     <link rel="canonical" href="https://markz.fun/blog/agent-mcp">
     <link rel="alternate" type="application/rss+xml" href="https://markz.fun/index.xml">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":"BreadcrumbList"},{"@type":"BlogPosting","publisher":{"@id":"https://markz.fun/#person"}}]}</script>
   </head><body><img src="diagram.svg" alt="MCP 调用流程"></body></html>`)
 
@@ -155,12 +154,11 @@ test("article social metadata rejects a generic or split-brain image", () => {
   assert.ok(failures.some((failure) => failure.includes("1200x630")))
 })
 
-test("SEO contract rejects duplicate ungoverned font stylesheets", () => {
+test("SEO contract rejects remote font stylesheets", () => {
   const facts = inspectHtml(`<!doctype html><html><head>
     <meta property="og:type" content="website">
     <link rel="canonical" href="https://markz.fun/">
     <link rel="alternate" type="application/rss+xml" href="https://markz.fun/index.xml">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source%20Sans%20Pro">
     <script type="application/ld+json">{"@graph":[{"@type":"WebPage"}]}</script>
   </head></html>`)
@@ -168,8 +166,7 @@ test("SEO contract rejects duplicate ungoverned font stylesheets", () => {
     expectedCanonical: "https://markz.fun/",
     expectedFeed: "https://markz.fun/index.xml",
   })
-  assert.ok(failures.some((failure) => failure.includes("exactly one")))
-  assert.ok(failures.some((failure) => failure.includes("ungoverned fallback font")))
+  assert.ok(failures.some((failure) => failure.includes("must not load remote Google Fonts")))
 })
 
 test("clean URL references map to file and directory candidates", () => {
@@ -212,10 +209,9 @@ test("initial JS budget follows literal imports but excludes variable on-demand 
   }
 })
 
-test("CSP validation accepts governed local, font, note-image, and structured-data resources", async () => {
+test("CSP validation accepts governed local, note-image, and structured-data resources", async () => {
   const policy = await loadContentSecurityPolicy()
   const facts = inspectHtml(`<!doctype html><html><head>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC">
     <script src="/prescript.js"></script>
     <script type="application/ld+json">{"@type":"WebPage"}</script>
   </head><body style="color: black">

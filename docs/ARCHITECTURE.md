@@ -179,6 +179,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
 - HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。
 - 公网文本压缩归 `deploy/nginx.conf` 的 HTTP 级 gzip 配置，覆盖博客、笔记、JSONUtils 和装箱单的文本型响应；各产品不通过复制 Nginx 片段争夺压缩所有权，生产 smoke 必须携带 `Accept-Encoding: gzip` 验证真实响应。
+- 博客和笔记的运行时字体归 `design-system/tokens.json` 与设计生成器：正文、标题和代码采用系统优先回退栈，品牌字标只发布仓库内校验的 18 KB 拉丁 WOFF 子集。页面 HTML 和 CSP 都禁止远程字体样式表，避免中文分片 CSS 阻塞首屏；完整中文字体仍仅供文章分享图在构建期使用。
 - 博客与笔记 CSP 的唯一策略值归 `deploy/nginx.conf` 中的 `$markz_content_security_policy` host map；`security-headers.inc` 只负责统一发射。默认映射必须为空，不能隐藏或覆盖 JSONUtils、后台和装箱单自行提供的 CSP。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。

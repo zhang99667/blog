@@ -160,6 +160,7 @@ GitHub 仓库需要以下 Actions 配置：
 5. 若摘要继续退化成功能词拼盘，先检查 JSONUtils 原始 HTML 首段是否仍是自然语言用途说明，以及 React 渲染后是否保留可见的 JSONUtils 一级标题；不要用 `meta keywords` 或更多重复词掩盖正文缺失。
 6. 检查 `/guides/` 与各任务指南的可见正文、唯一 title/description/canonical、面包屑、内部链接和 sitemap 收录；这些页面必须对读者独立有用，不能只换关键词生成近似门页。
 7. 使用 `curl --compressed -sSI https://jsonutils.markz.fun/` 和代表性指南页验证 `Content-Encoding: gzip`，并与发布前 Lighthouse 对照；SEO 分数满分不代表传输性能或搜索意图已经优化。
+8. 若博客 Lighthouse 首屏时间回退，先检查页面不能出现 `fonts.googleapis.com`/`fonts.gstatic.com`，再确认 `/static/fonts/markz-wordmark-latin-v3.woff` 可访问；不要通过增加更多远程预连接掩盖中文字体分片开销。
 
 ### 装箱单出现路径和子域双入口
 

@@ -2,7 +2,7 @@
 import type { Theme } from "./util/theme"
 
 export const brandIdentity = {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "name": "MarkZ",
   "wordmark": "MarkZ.",
   "tagline": "个人博客",
@@ -10,13 +10,14 @@ export const brandIdentity = {
   "domain": "markz.fun",
   "assets": {
     "icon": "markz-icon-v3.png",
-    "socialCard": "markz-card-v3.png"
+    "socialCard": "markz-card-v3.png",
+    "wordmarkFont": "fonts/markz-wordmark-latin-v3.woff"
   }
 } as const
 
 export const brandTheme = {
-  "fontOrigin": "googleFonts",
-  "cdnCaching": true,
+  "fontOrigin": "local",
+  "cdnCaching": false,
   "typography": {
     "header": {
       "name": "Noto Serif SC",

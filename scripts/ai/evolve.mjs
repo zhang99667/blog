@@ -95,10 +95,11 @@ async function fontAuthority(root) {
     (plugin) => plugin.source === "github:quartz-community/fonts",
   )
   const quality = await readText(root, "scripts/quality/check-build.mjs")
-  const passed = fonts?.enabled === false && quality.includes("exactly one governed Google Fonts")
-  return probe(passed, "Typography has one generated authority and one runtime stylesheet.", [
+  const passed =
+    fonts?.enabled === false && quality.includes("must not load remote Google Fonts stylesheets")
+  return probe(passed, "Typography has one generated authority and no remote font stylesheet.", [
     `fonts plugin enabled=${String(fonts?.enabled)}`,
-    "build HTML font-count contract",
+    "build HTML remote-font rejection contract",
   ])
 }
 

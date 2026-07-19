@@ -56,14 +56,14 @@
       "id": "font-single-source",
       "track": "reader",
       "name": "字体单一权威来源",
-      "description": "页面只加载设计令牌声明的字体，不重复请求 Quartz 默认字体。",
+      "description": "页面使用设计令牌声明的系统优先字体栈与自托管字标字体，不请求远程字体样式表。",
       "impact": 4,
       "urgency": 4,
       "confidence": 5,
       "effort": 1,
       "risk": "low",
       "check": "font-authority",
-      "nextAction": "停用重复字体插件并在构建 HTML 中断言只有一条受治理字体样式表。",
+      "nextAction": "停用远程字体并在构建 HTML 中拒绝 Google Fonts 样式表，同时校验自托管字标字体生成物。",
       "validation": ["npm run design:check", "npm run build", "npm run quality:build"]
     },
     {

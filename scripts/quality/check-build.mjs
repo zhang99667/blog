@@ -425,15 +425,8 @@ export function validateSeoMetadata(relativePath, facts, options) {
   if (noindex && !facts.meta.get("robots")?.toLowerCase().includes("noindex")) {
     failures.push(`${relativePath} fallback content must be noindex`)
   }
-  if (facts.fontStylesheets.length !== 1) {
-    failures.push(
-      `${relativePath} must load exactly one governed Google Fonts stylesheet, found ${facts.fontStylesheets.length}`,
-    )
-  }
-  for (const stylesheet of facts.fontStylesheets) {
-    if (/Schibsted|Source%20Sans|IBM%20Plex/i.test(stylesheet)) {
-      failures.push(`${relativePath} loads an ungoverned fallback font family`)
-    }
+  if (facts.fontStylesheets.length !== 0) {
+    failures.push(`${relativePath} must not load remote Google Fonts stylesheets`)
   }
   return failures
 }

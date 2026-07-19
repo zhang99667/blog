@@ -1,4 +1,13 @@
 // Generated from design-system/tokens.json. Do not edit by hand.
+@font-face {
+  font-family: "MarkZ Wordmark";
+  src: url("/static/fonts/markz-wordmark-latin-v3.woff") format("woff");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E;
+}
+
 $breakpoint-compact: 800px;
 $breakpoint-wide: 1200px;
 $breakpoint-reading-rail: 1400px;
@@ -15,7 +24,7 @@ $breakpoint-reading-rail: 1400px;
   --brand-fixed-muted: #454842;
   --brand-fixed-accent: #1759b6;
   --brand-fixed-line: #e3e2dc;
-  --brand-wordmark-font: "Noto Sans SC", sans-serif;
+  --brand-wordmark-font: "MarkZ Wordmark", "Noto Sans SC", sans-serif;
   --brand-wordmark-weight: 800;
   --brand-dot-size: 0.23em;
   --brand-control-radius: 4px;

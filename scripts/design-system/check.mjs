@@ -193,6 +193,7 @@ export async function collectDesignSystemFailures(root = defaultRoot) {
   for (const asset of [
     `quartz/static/markz-icon-${tokens.brand.assetRevision}.png`,
     `quartz/static/markz-card-${tokens.brand.assetRevision}.png`,
+    `quartz/static/fonts/markz-wordmark-latin-${tokens.brand.assetRevision}.woff`,
   ]) {
     if (!manifest.generatedArtifacts?.includes(asset)) {
       failures.push(`design-system/manifest.json must register ${asset}`)

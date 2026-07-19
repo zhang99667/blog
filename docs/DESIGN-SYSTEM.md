@@ -74,10 +74,11 @@ synchronized article frontmatter + design tokens + pinned build fonts
 
 ## 5. 排版与布局
 
-- 品牌字标：`Noto Sans SC ExtraBold`。
-- 中文标题与文章标题：`Noto Serif SC`。
-- 正文与界面文字：`Noto Sans SC`。
-- 代码：`JetBrains Mono`。
+- 品牌字标：仓库内固定的 `Noto Sans SC ExtraBold` 拉丁子集，以 `MarkZ Wordmark` 别名自托管。
+- 中文标题与文章标题：优先使用本机 `Noto Serif SC`，否则回退到系统中文衬线字体栈。
+- 正文与界面文字：优先使用本机 `Noto Sans SC`，否则回退到系统无衬线字体栈。
+- 代码：优先使用本机 `JetBrains Mono`，否则回退到系统等宽字体栈。
+- 页面不得请求 Google Fonts 或其他远程字体服务；字体不可用时立即使用系统栈，不能阻塞首屏文字。
 - 字号只使用 `typeScale` 的 display、headline、title、body、label 层级；新增层级必须先说明现有层级为何不够。
 - 间距优先使用 `spacing` 比例尺，组件内部只保留确实不能复用的几何值。
 - 博客外壳、首页、文章和归档宽度必须使用生成的语义变量，不在组件里重新写像素值。
@@ -120,7 +121,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 - favicon 和普通页面使用的通用分享图由 `npm run design:generate` 生成。
 - 每篇博客成稿使用自己的 1200x630 分享图：左上角是紧凑 `MarkZ.`，主体只突出文章标题，分类、日期和域名保持次要；使用分隔线建立编辑感，不增加渐变、插画、卡片边框或装饰背景。
 - 文章分享图从设计令牌和 frontmatter 生成，最多三行标题并动态选择离散字号。文件名必须包含内容哈希；标题、颜色、字体或渲染器变化时生成新 URL，未变化时复用缓存。
-- 分享图构建固定使用仓库内已校验的 Noto Sans SC WOFF，不从系统字体或远程字体服务取字。字体是构建输入，不作为页面资源发布。
+- 分享图构建固定使用仓库内已校验的 Noto Sans SC WOFF，不从系统字体或远程字体服务取字。完整中文字体只作为构建输入；页面仅发布 18 KB 的拉丁字标子集。
 - 修改字标或通用品牌图后递增 `brand.assetRevision`；修改文章卡片布局时递增文章渲染器版本，避免旧缓存继续生效。
 - 产品截图必须展示真实界面，不使用模糊的氛围图代替产品状态。
 

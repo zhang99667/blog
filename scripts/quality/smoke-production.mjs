@@ -50,7 +50,11 @@ const routes = [
     siteName: "MarkZ 个人博客",
     structuredTypes: ["WebSite", "Blog", "WebPage"],
     compressed: true,
-    forbiddenEvidence: ["JSONUtils - 在线 JSON 格式化、校验与智能修复工具"],
+    forbiddenEvidence: [
+      "JSONUtils - 在线 JSON 格式化、校验与智能修复工具",
+      "fonts.googleapis.com",
+      "fonts.gstatic.com",
+    ],
   },
   {
     url: "https://www.markz.fun/",
@@ -63,6 +67,7 @@ const routes = [
     evidence: brandEvidence,
     title: "Notes · 公开笔记",
     applicationName: "MarkZ 公开笔记",
+    forbiddenEvidence: ["fonts.googleapis.com", "fonts.gstatic.com"],
   },
   {
     url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
@@ -133,6 +138,10 @@ const routes = [
     ],
     forbiddenEvidence: ["<loc>https://markz.fun/"],
     contentType: "xml",
+  },
+  {
+    url: `https://markz.fun/static/fonts/markz-wordmark-latin-${tokens.brand.assetRevision}.woff`,
+    contentType: "font/woff",
   },
   { url: "https://markz.fun/static/__security-header-smoke__.png", status: 404 },
 ]
