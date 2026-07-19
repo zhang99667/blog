@@ -960,7 +960,11 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
   }
 
   .page[data-frame="default"] .explorer .explorer-content {
-    left: calc(var(--brand-space-4) * -1);
+    position: fixed;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
   }
 
   .page[data-frame="default"] .page-title {

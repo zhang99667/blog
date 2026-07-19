@@ -283,16 +283,26 @@ for (const target of pages) {
         })
 
         if (target.id.startsWith("notes") && viewport.width <= 800) {
+          const explorerContent = page.locator(".explorer-content").first()
           await expect
             .poll(
               () =>
-                page
-                  .locator(".explorer-content")
-                  .first()
-                  .evaluate((element) => element.getBoundingClientRect().right),
+                explorerContent.evaluate((content) => {
+                  const bounds = content.getBoundingClientRect()
+                  const viewportWidth = document.documentElement.clientWidth
+                  return {
+                    position: getComputedStyle(content).position,
+                    collapsedAtViewportEdge: bounds.right <= 1,
+                    fillsViewport: Math.abs(bounds.width - viewportWidth) <= 1,
+                  }
+                }),
               { timeout: 2_000 },
             )
-            .toBeLessThanOrEqual(1)
+            .toEqual({
+              position: "fixed",
+              collapsedAtViewportEdge: true,
+              fillsViewport: true,
+            })
         }
 
         const brand = page.locator(".brand-mark").first()
