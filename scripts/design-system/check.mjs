@@ -124,10 +124,13 @@ export function validateDesignTokens(tokens) {
 
   const compactBreakpoint = Number.parseFloat(tokens.breakpoints?.compact)
   const wideBreakpoint = Number.parseFloat(tokens.breakpoints?.wide)
+  const readingRailBreakpoint = Number.parseFloat(tokens.breakpoints?.readingRail)
   if (
     !/^\d+px$/.test(tokens.breakpoints?.compact ?? "") ||
     !/^\d+px$/.test(tokens.breakpoints?.wide ?? "") ||
-    compactBreakpoint >= wideBreakpoint
+    !/^\d+px$/.test(tokens.breakpoints?.readingRail ?? "") ||
+    compactBreakpoint >= wideBreakpoint ||
+    wideBreakpoint >= readingRailBreakpoint
   ) {
     failures.push("breakpoints must be ordered pixel values")
   }
@@ -221,6 +224,7 @@ export async function collectDesignSystemFailures(root = defaultRoot) {
     "var(--brand-target-comfortable)",
     "brand.$breakpoint-compact",
     "brand.$breakpoint-wide",
+    "brand.$breakpoint-reading-rail",
     'article img[src$=".svg"]',
     "color-scheme: light",
   ]) {

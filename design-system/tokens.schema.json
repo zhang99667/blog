@@ -85,7 +85,7 @@
     },
     "breakpoints": {
       "type": "object",
-      "required": ["compact", "wide"]
+      "required": ["compact", "wide", "readingRail"]
     },
     "interaction": {
       "type": "object",

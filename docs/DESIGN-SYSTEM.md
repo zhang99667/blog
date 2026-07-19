@@ -43,7 +43,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 字标结构：
 
 ```html
-<a class="brand-mark" data-brand-version="1.3.0">
+<a class="brand-mark" data-brand-version="1.3.1">
   MarkZ<span class="brand-dot" aria-hidden="true"></span>
 </a>
 ```
@@ -81,6 +81,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 - 字号只使用 `typeScale` 的 display、headline、title、body、label 层级；新增层级必须先说明现有层级为何不够。
 - 间距优先使用 `spacing` 比例尺，组件内部只保留确实不能复用的几何值。
 - 博客外壳、首页、文章和归档宽度必须使用生成的语义变量，不在组件里重新写像素值。
+- 博客正文右侧目录只在 `breakpoints.readingRail` 提供足够的目录与互动栏净空后启用；普通 `wide` 断点仍归笔记三栏布局，不能混用。
 - 页面文字不随视口连续缩放。只在明确断点调整字号和布局。
 - 320px 和 390px 宽度下，字标、导航、按钮和标题不得重叠或溢出。
 
@@ -112,6 +113,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 - 不在卡片里再嵌套卡片。
 - 文章“继续阅读”沿用紧凑行与分隔线，最多三项；显示短摘要和可解释关系，不做卡片墙，也不为了填满数量展示无关文章。
 - 博客访客统计属于页脚次要信息，使用一行文本和表格数字，不做成卡片、徽章或悬浮控件；接口不可用时安静隐藏。
+- 博客长文只复用公开笔记的目录能力，不复用关系图谱、回链或笔记树。桌面目录作为正文右侧无卡片吸顶栏；窄屏目录位于标题信息与正文之间，内容过长时内部滚动且可折叠，不能把正文长期推离首屏。
 
 ### 图片与品牌资产
 
@@ -128,6 +130,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 - 正文代码使用 GitHub High Contrast 浅色和深色主题，不能为了接近编辑器原色而降低可读性。
 - 每个页面必须有且只有一个 `<main>`；页头、主导航和页脚使用对应语义元素。
 - 横向滚动的表格和代码必须可由键盘聚焦，并使用统一焦点样式。
+- 目录折叠按钮必须暴露 `aria-expanded` 与受控列表关系，键盘焦点清晰；目录链接的当前阅读状态不能只靠低对比透明度表达。
 - 页面初次打开不得被侧栏组件带离顶部；带锚点的深链接必须仍能定位目标标题。
 - 固定悬浮的文章互动栏不得让目录末尾不可达；可滚动目录必须在末尾保留至少“互动栏高度 + 16px”的安全区，使最后一项滚动到互动栏上方后完整可见。
 - 长文回顶只在正文高度超过约一屏半且读者离开正文顶部后出现；使用 Lucide 向上箭头，与互动栏共享正文边缘锚点但保持独立边界。激活后同时移动视觉位置和键盘焦点，平滑滚动必须尊重 `prefers-reduced-motion`，展开后的整组控件仍不得遮住目录末项。

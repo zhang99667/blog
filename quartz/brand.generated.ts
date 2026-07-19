@@ -2,7 +2,7 @@
 import type { Theme } from "./util/theme"
 
 export const brandIdentity = {
-  "version": "1.3.0",
+  "version": "1.3.1",
   "name": "MarkZ",
   "wordmark": "MarkZ.",
   "tagline": "个人博客",

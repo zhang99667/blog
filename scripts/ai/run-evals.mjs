@@ -448,6 +448,29 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     if (!manifest.requiredThemes?.includes(theme))
       failures.push(`browser matrix is missing ${theme}`)
   }
+  const blogFrame = await readText(root, "quartz/components/frames/BlogFrame.tsx")
+  const browserSuite = await readText(root, "tests/quality/site-quality.spec.ts")
+  const customStyles = await readText(root, "quartz/styles/custom.scss")
+  for (const snippet of [
+    "renderBlogTableOfContents",
+    'hasClassName(rendered, "toc")',
+    "blog-article-toc",
+  ]) {
+    if (!blogFrame.includes(snippet)) failures.push(`blog reading frame is missing ${snippet}`)
+  }
+  for (const snippet of [
+    'page.locator(".blog-article-toc")',
+    "page.locator('.page[data-frame=\"blog\"] .graph')",
+    'toHaveAttribute("aria-expanded", "false")',
+  ]) {
+    if (!browserSuite.includes(snippet)) failures.push(`browser matrix is missing ${snippet}`)
+  }
+  if (
+    !customStyles.includes('.blog-main[data-has-toc="true"]') ||
+    !customStyles.includes("position: sticky")
+  ) {
+    failures.push("blog table of contents must keep its governed responsive layout")
+  }
   return failures
 }
 

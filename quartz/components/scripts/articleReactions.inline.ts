@@ -171,7 +171,9 @@ function positionReaction(root: HTMLElement, article: HTMLElement) {
   const reactionBounds = root.getBoundingClientRect()
   const preferredLeft = articleBounds.right + safeEdge
   const viewportLeft = window.innerWidth - reactionBounds.width - safeEdge
-  const anchorsToArticle = preferredLeft <= viewportLeft
+  const readingRail = document.querySelector<HTMLElement>(".blog-article-toc")
+  const hasSideReadingRail = readingRail && getComputedStyle(readingRail).position === "sticky"
+  const anchorsToArticle = !hasSideReadingRail && preferredLeft <= viewportLeft
   const left = Math.max(safeEdge, anchorsToArticle ? preferredLeft : viewportLeft)
 
   root.style.left = `${left}px`

@@ -41,6 +41,7 @@ export function renderBrandStyles(tokens) {
     "// Generated from design-system/tokens.json. Do not edit by hand.",
     `$breakpoint-compact: ${tokens.breakpoints.compact};`,
     `$breakpoint-wide: ${tokens.breakpoints.wide};`,
+    `$breakpoint-reading-rail: ${tokens.breakpoints.readingRail};`,
     "",
     ":root {",
     `  --brand-canvas: ${lightMode.light};`,

@@ -368,6 +368,55 @@ for (const target of pages) {
         ).toBeLessThanOrEqual(documentState.clientWidth + 1)
         expect(documentState.scrollY).toBeLessThanOrEqual(1)
 
+        const blogArticleToc = page.locator(".blog-article-toc")
+        if (target.id === "blog-article") {
+          await expect(blogArticleToc).toHaveCount(1)
+          await expect(page.locator('.page[data-frame="blog"] .graph')).toHaveCount(0)
+
+          const toc = blogArticleToc.locator(".toc")
+          const tocHeader = toc.locator(".toc-header")
+          const tocContent = toc.locator(".toc-content")
+          const tocLinks = tocContent.locator("li:not(.overflow-end) > a")
+          await expect(toc).toBeVisible()
+          await expect(tocHeader).toHaveAttribute("aria-expanded", "true")
+          expect(await tocLinks.count()).toBeGreaterThan(0)
+
+          const article = page.locator("main.center > article.popover-hint")
+          const [tocBounds, articleBounds] = await Promise.all([
+            blogArticleToc.boundingBox(),
+            article.boundingBox(),
+          ])
+          expect(tocBounds).not.toBeNull()
+          expect(articleBounds).not.toBeNull()
+          expect(tocBounds!.x).toBeGreaterThanOrEqual(0)
+          expect(tocBounds!.x + tocBounds!.width).toBeLessThanOrEqual(viewport.width)
+
+          if (viewport.width >= 1400) {
+            const pageHeaderY = await page
+              .locator(".page-header")
+              .first()
+              .evaluate((element) => element.getBoundingClientRect().y)
+            expect(
+              await blogArticleToc.evaluate((element) => getComputedStyle(element).position),
+            ).toBe("sticky")
+            expect(tocBounds!.x).toBeGreaterThan(articleBounds!.x + articleBounds!.width)
+            expect(Math.abs(tocBounds!.y - pageHeaderY)).toBeLessThanOrEqual(1)
+          } else {
+            expect(tocBounds!.y + tocBounds!.height).toBeLessThanOrEqual(articleBounds!.y)
+            expect(tocBounds!.height).toBeLessThanOrEqual(viewport.height * 0.5)
+          }
+
+          await tocHeader.focus()
+          await page.keyboard.press("Enter")
+          await expect(tocHeader).toHaveAttribute("aria-expanded", "false")
+          await expect(tocContent).toBeHidden()
+          await page.keyboard.press("Enter")
+          await expect(tocHeader).toHaveAttribute("aria-expanded", "true")
+          await expect(tocContent).toBeVisible()
+        } else if (target.id === "blog-home") {
+          await expect(blogArticleToc).toHaveCount(0)
+        }
+
         const vectorImage = page.locator('article img[src$=".svg"]').first()
         if ((await vectorImage.count()) > 0) {
           expect(await vectorImage.evaluate((image) => getComputedStyle(image).colorScheme)).toBe(
@@ -513,7 +562,16 @@ for (const target of pages) {
           const safeEdge = viewport.width <= 600 ? 12 : 16
           const hasSideRoom =
             viewport.width - articleBounds!.x - articleBounds!.width >= bounds!.width + safeEdge
-          if (hasSideRoom) {
+          const hasBlogReadingRail = target.id === "blog-article" && viewport.width >= 1400
+          if (hasBlogReadingRail) {
+            const readingRailBounds = await blogArticleToc.boundingBox()
+            expect(readingRailBounds).not.toBeNull()
+            await expect(reactionRoot).toHaveAttribute("data-anchor", "viewport")
+            expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
+            expect(
+              bounds!.x - (readingRailBounds!.x + readingRailBounds!.width),
+            ).toBeGreaterThanOrEqual(8)
+          } else if (hasSideRoom) {
             await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
             expect(bounds!.x - articleBounds!.x - articleBounds!.width).toBeCloseTo(safeEdge, 0)
           } else {
@@ -552,7 +610,7 @@ for (const target of pages) {
           expect(expandedBounds).not.toBeNull()
           expect(scrollTopBounds!.width).toBeGreaterThanOrEqual(44)
           expect(scrollTopBounds!.height).toBeGreaterThanOrEqual(44)
-          if (hasSideRoom) {
+          if (hasSideRoom && !hasBlogReadingRail) {
             expect(Math.abs(scrollTopBounds!.x - panelBounds!.x)).toBeLessThanOrEqual(1)
           } else {
             expect(

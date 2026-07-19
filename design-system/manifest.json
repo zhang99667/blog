@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
-  "tokenVersion": "1.3.0",
+  "version": "1.3.1",
+  "tokenVersion": "1.3.1",
   "sourceOfTruth": "design-system/tokens.json",
   "generatedArtifacts": [
     "quartz/brand.generated.ts",

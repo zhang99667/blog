@@ -56,7 +56,7 @@ const validTokens = {
       (name) => [name, { fontSize: "1rem", lineHeight: 1.4, weight: 700 }],
     ),
   ),
-  breakpoints: { compact: "800px", wide: "1200px" },
+  breakpoints: { compact: "800px", wide: "1200px", readingRail: "1400px" },
   interaction: { targetMinimum: "24px", targetComfortable: "44px" },
   accessibility: { textContrast: 4.5, largeTextContrast: 3, nonTextContrast: 3 },
 }
@@ -115,4 +115,11 @@ test("foundation scales reject invalid values", () => {
     "breakpoints must be ordered pixel values",
     "interaction targets must preserve a 24px minimum",
   ])
+})
+
+test("reading rail breakpoint must follow the wide layout", () => {
+  const tokens = structuredClone(validTokens)
+  tokens.breakpoints.readingRail = "1100px"
+
+  assert.deepEqual(validateDesignTokens(tokens), ["breakpoints must be ordered pixel values"])
 })

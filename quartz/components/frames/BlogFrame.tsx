@@ -1,15 +1,37 @@
-import { PageFrame, PageFrameProps } from "./types"
+import { JSX } from "preact"
+import { QuartzComponent, QuartzComponentProps } from "../types"
 import { BrandMark } from "../BrandMark"
 import { brandIdentity } from "../../brand.generated"
+import { PageFrame, PageFrameProps } from "./types"
 
 function isBlogSection(slug: string): boolean {
   return slug === "blog/index" || slug.startsWith("blog/")
 }
 
+function hasClassName(element: JSX.Element, expected: string): boolean {
+  const className = element.props?.class ?? element.props?.className
+  return typeof className === "string" && className.split(/\s+/).filter(Boolean).includes(expected)
+}
+
+export function renderBlogTableOfContents(
+  components: QuartzComponent[],
+  componentData: QuartzComponentProps,
+): JSX.Element | null {
+  for (const Component of components) {
+    const rendered = Component(componentData)
+    if (rendered && hasClassName(rendered, "toc")) return rendered
+  }
+  return null
+}
+
 export const BlogFrame: PageFrame = {
   name: "blog",
-  render({ componentData, beforeBody, pageBody: Content, afterBody }: PageFrameProps) {
+  render({ componentData, beforeBody, pageBody: Content, afterBody, right }: PageFrameProps) {
     const slug = String(componentData.fileData.slug ?? "")
+    const tableOfContents =
+      slug.startsWith("blog/") && slug !== "blog/index"
+        ? renderBlogTableOfContents(right, componentData)
+        : null
 
     return (
       <>
@@ -27,7 +49,7 @@ export const BlogFrame: PageFrame = {
             </nav>
           </header>
 
-          <main class="center blog-main">
+          <main class="center blog-main" data-has-toc={tableOfContents ? "true" : undefined}>
             <div class="page-header">
               <div class="popover-hint">
                 {beforeBody.map((BodyComponent) => (
@@ -35,6 +57,11 @@ export const BlogFrame: PageFrame = {
                 ))}
               </div>
             </div>
+            {tableOfContents && (
+              <aside class="blog-article-toc" aria-label="文章目录">
+                {tableOfContents}
+              </aside>
+            )}
             <Content {...componentData} />
             <div class="page-footer">
               {afterBody.map((BodyComponent) => (

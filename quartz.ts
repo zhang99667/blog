@@ -24,7 +24,7 @@ const layoutOverrides: QuartzLayoutOverrides | undefined =
   site === "blog"
     ? {
         byPageType: {
-          content: { frame: "blog", left: [], right: [] },
+          content: { frame: "blog", left: [] },
           folder: { frame: "blog", left: [], right: [] },
           tag: { frame: "blog", left: [], right: [] },
         },
