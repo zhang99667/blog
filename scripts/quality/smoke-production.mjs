@@ -75,7 +75,7 @@ const routes = [
     applicationName: "JSONUtils",
     canonical: "https://jsonutils.markz.fun/",
     description:
-      "JSONUtils 是面向开发者的在线 JSON 工具，支持格式化、语法校验与错误定位、智能修复、JSONPath 查询、差异对比和 TypeScript 类型生成。",
+      "JSONUtils 是面向开发者的在线 JSON 格式化与校验工具，可定位语法错误、智能修复异常 JSON，并支持 JSONPath 查询、差异对比、JSON Schema 校验和 TypeScript 类型生成；常规处理在浏览器本地完成。",
     siteName: "JSONUtils",
     structuredTypes: ["WebSite", "WebApplication"],
     forbiddenEvidence: ["MarkZ 个人博客"],

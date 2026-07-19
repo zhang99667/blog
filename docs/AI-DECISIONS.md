@@ -288,7 +288,7 @@
 - 决策：`markz.fun` 只声明“MarkZ 个人博客”的站点名、自然语言摘要、Blog 结构化数据、robots 与 sitemap；`jsonutils.markz.fun` 只声明“JSONUtils”的工具标题、开发者用途摘要、WebApplication 能力和自己的发现文件。搜索文案使用“品牌 + 核心用途”和可读句子，不用关键词堆砌。JSONUtils 配置不得再把博客裸域或 `www` 当作主站别名；后台入口必须发送 noindex 响应头。
 - 反例：让两个站共享 `og:site_name`、canonical 或 sitemap；把 `markz.fun` 继续列进 JSONUtils `server_name`；只添加 `keywords` 元标签；把几十个功能名无语法地塞进 description；因为旧搜索结果尚未刷新就回滚正确的新身份。
 - 边界：搜索引擎何时重抓和最终展示的标题、摘要不由站点保证；本决策锁定的是可抓取源、域名归属和提交入口。文章自己的标题与摘要继续来自 frontmatter，公开笔记仍保持独立 `note.markz.fun` 身份。
-- 锁定证据：`seo.test.ts`、构建质量门禁的站点名与 sitemap host 断言、生产 smoke 的两站标题/摘要/canonical/结构化数据/robots/sitemap 精确检查，以及 Nginx 后台 `X-Robots-Tag`。
+- 锁定证据：博客 `seo.test.ts`、构建质量门禁的站点名与 sitemap host 断言、JSONUtils `seoMetadata.test.ts` 的原始 HTML 与独立发现文件契约、生产 smoke 的两站标题/摘要/canonical/结构化数据/robots/sitemap 精确检查，以及 Nginx 后台 `X-Robots-Tag`。
 
 ## D-033 博客与笔记互动栏统一贴正文右缘
 

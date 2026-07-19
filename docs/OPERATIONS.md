@@ -151,6 +151,14 @@ GitHub 仓库需要以下 Actions 配置：
 5. 对所有域名执行 HTTPS smoke，精确比较博客、笔记、JSONUtils、后台和装箱单标题；不以单个首页 `200` 作为恢复证据。
 6. 若站点标题和当前浏览器标签均正确，但书签栏仍显示旧名称，书签自定义标题属于浏览器本地数据，需要在浏览器中重命名；站点不能静默修改用户书签。
 
+### 搜索结果仍串站或摘要陈旧
+
+1. 分别抓取 `https://markz.fun/` 与 `https://jsonutils.markz.fun/` 的原始 HTML，核对 title、description、canonical、`og:site_name` 和 JSON-LD；博客只能出现 `MarkZ 个人博客` 与 `Blog`，工具站只能出现 `JSONUtils` 与 `WebApplication`。
+2. 分别抓取两站 robots 与 sitemap，确认每份 sitemap 只包含自己的 hostname；JSONUtils 后台不进入 sitemap，并通过页面 meta 与 `X-Robots-Tag` 双重 noindex。
+3. 在百度搜索资源平台把裸域博客和 JSONUtils 子域作为两个独立站点维护，分别提交各自 sitemap、站点名称与 Logo；不要把两个 sitemap 提交到同一个站点属性下。
+4. 发布并通过生产 smoke 后，分别对两个首页发起抓取诊断或更新提交。搜索引擎会自动选择标题和摘要，旧结果可能继续保留到下一次重抓，不能因为短期未刷新而恢复错误的跨站身份。
+5. 若摘要继续退化成功能词拼盘，先检查 JSONUtils 原始 HTML 首段是否仍是自然语言用途说明，以及 React 渲染后是否保留可见的 JSONUtils 一级标题；不要用 `meta keywords` 或更多重复词掩盖正文缺失。
+
 ### 装箱单出现路径和子域双入口
 
 1. 正式入口固定为 `https://zhangjihao.markz.fun/`，博客导航不得链接 `/zhangjihao/`。

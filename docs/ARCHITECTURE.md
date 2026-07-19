@@ -171,6 +171,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 品牌值归 `design-system/tokens.json`。
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
 - 页面标题、应用名和社交元数据归 `quartz/components/Head.tsx`；SPA 只按标题元素保存的独立权威值恢复浏览器标题，不能从旧工具状态或可变正文猜测。canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
+- JSONUtils 的标题、自然语言简介、canonical、`WebApplication` 结构化数据、robots 与 sitemap 归 JSONUtils 仓库的 `frontend/index.html` 和 `frontend/public/`；本仓库只拥有 edge 路由、后台响应头和跨站生产 smoke，不能在博客构建里复制工具站 SEO 内容。
 - 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
 - 长文回顶与文章互动栏共用 `ArticleReactions` 的 SPA 生命周期和正文边缘定位；博客右侧目录吸顶时整组工具固定在正文左侧近邻，无阅读栏时优先贴正文右侧。回顶是纯前端阅读辅助，不访问互动 API，短文与目录页不挂载可见入口。
