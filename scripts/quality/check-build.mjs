@@ -59,6 +59,8 @@ export function inspectHtml(source) {
     javascriptUrls: [],
     inlineStyleAttributes: 0,
     inlineStyleElements: 0,
+    h1Count: 0,
+    images: [],
   }
 
   function addCspReference(directive, value, nodeName, attribute) {
@@ -129,7 +131,9 @@ export function inspectHtml(source) {
       const body = (node.childNodes ?? []).map((child) => child.value ?? "").join("")
       if (body.trim()) facts.inlineStyleElements += 1
     }
+    if (node.nodeName === "h1") facts.h1Count += 1
     if (node.nodeName === "img") {
+      facts.images.push({ src: attrs.src ?? "", alt: attrs.alt ?? "" })
       addCspReference("img-src", attrs.src, "img", "src")
       for (const reference of srcsetReferences(attrs.srcset ?? "")) {
         addCspReference("img-src", reference, "img", "srcset")
@@ -401,6 +405,20 @@ export function validateSeoMetadata(relativePath, facts, options) {
     if (!hasStructuredType(facts.structuredData, "BlogPosting")) {
       failures.push(`${relativePath} needs BlogPosting structured data`)
     }
+    if (!hasStructuredType(facts.structuredData, "BreadcrumbList")) {
+      failures.push(`${relativePath} needs BreadcrumbList structured data`)
+    }
+    const articleNode = structuredDataNodes(facts.structuredData).find(
+      (node) => node?.["@type"] === "BlogPosting",
+    )
+    if (!articleNode?.publisher) {
+      failures.push(`${relativePath} BlogPosting needs publisher identity`)
+    }
+    for (const image of facts.images) {
+      if (!image.alt.trim()) {
+        failures.push(`${relativePath} content image needs descriptive alt text: ${image.src}`)
+      }
+    }
   } else if (facts.meta.get("og:type") !== "website") {
     failures.push(`${relativePath} must use the website Open Graph type`)
   }
@@ -564,7 +582,11 @@ async function validateDiscoveryFiles(outputRoot, outputId, failures) {
 
   try {
     const sitemap = await fs.readFile(path.join(outputRoot, "sitemap.xml"), "utf8")
-    const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
+    const entries = [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((match) => ({
+      location: match[1].match(/<loc>([^<]+)<\/loc>/)?.[1] ?? "",
+      lastmod: match[1].match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? "",
+    }))
+    const locations = entries.map((entry) => entry.location)
     if (locations.length === 0) failures.push(`${outputId} sitemap.xml must contain URLs`)
     for (const location of locations) {
       try {
@@ -573,6 +595,34 @@ async function validateDiscoveryFiles(outputRoot, outputId, failures) {
         }
       } catch {
         failures.push(`${outputId} sitemap contains an invalid URL: ${location}`)
+      }
+    }
+    if (outputId === "blog") {
+      for (const entry of entries) {
+        let url
+        try {
+          url = new URL(entry.location)
+        } catch {
+          continue
+        }
+        if (!/^\/blog\/[^/]+$/.test(url.pathname)) continue
+        const articleFile = path.join(
+          outputRoot,
+          `${decodeURIComponent(url.pathname.replace(/^\//, ""))}.html`,
+        )
+        try {
+          const articleFacts = inspectHtml(await fs.readFile(articleFile, "utf8"))
+          const article = structuredDataNodes(articleFacts.structuredData).find(
+            (node) => node?.["@type"] === "BlogPosting",
+          )
+          if (!article?.dateModified || entry.lastmod !== article.dateModified) {
+            failures.push(
+              `${outputId} sitemap lastmod for ${entry.location} must match BlogPosting.dateModified`,
+            )
+          }
+        } catch {
+          failures.push(`${outputId} sitemap article is missing: ${entry.location}`)
+        }
       }
     }
   } catch {
@@ -808,6 +858,9 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
           }
           if (!hasStructuredType(facts.structuredData, "Blog")) {
             failures.push(`${relativePath} needs Blog structured data`)
+          }
+          if (facts.h1Count !== 1) {
+            failures.push(`${relativePath} blog home must contain exactly one h1`)
           }
         }
       }

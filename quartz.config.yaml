@@ -187,6 +187,8 @@ plugins:
       group: toolbar
   - source: github:quartz-community/breadcrumbs
     enabled: true
+    options:
+      rootName: MarkZ
     layout:
       position: beforeBody
       priority: 5

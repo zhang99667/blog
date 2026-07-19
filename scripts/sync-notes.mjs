@@ -771,7 +771,7 @@ description: ${JSON.stringify(brand.description)}
     <div class="section-heading">
       <div>
         <p class="eyebrow">Latest writing</p>
-        <h2>最近文章</h2>
+        <h1>最近文章</h1>
       </div>
       <a href="/blog/">查看全部</a>
     </div>
@@ -1279,7 +1279,8 @@ function rewriteBlogMarkdown(markdown, post, noteLookup, assetLookup) {
           const src = `${noteOrigin}/${encodeURI(asset.destRel)}`
           const width = options.match(/\|(\d+)/)?.[1]
           const widthAttr = width ? ` width="${width}"` : ""
-          return `<img src="${src}" alt=""${widthAttr} />`
+          const alt = blogConfig.imageAlts?.[path.posix.basename(asset.destRel)] ?? ""
+          return `<img src="${src}" alt="${htmlEscape(alt)}"${widthAttr} />`
         },
       )
       .replace(/!\[([^\]]*)]\((?!https?:|mailto:|#|\/)([^)]+)\)/g, (match, alt, target) => {

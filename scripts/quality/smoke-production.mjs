@@ -49,6 +49,7 @@ const routes = [
     description: tokens.brand.description,
     siteName: "MarkZ 个人博客",
     structuredTypes: ["WebSite", "Blog", "WebPage"],
+    compressed: true,
     forbiddenEvidence: ["JSONUtils - 在线 JSON 格式化、校验与智能修复工具"],
   },
   {
@@ -78,6 +79,19 @@ const routes = [
       "JSONUtils 是面向开发者的在线 JSON 格式化与校验工具，可定位语法错误、智能修复异常 JSON，并支持 JSONPath 查询、差异对比、JSON Schema 校验和 TypeScript 类型生成；常规处理在浏览器本地完成。",
     siteName: "JSONUtils",
     structuredTypes: ["WebSite", "WebApplication"],
+    compressed: true,
+    forbiddenEvidence: ["MarkZ 个人博客"],
+  },
+  {
+    url: "https://jsonutils.markz.fun/guides/json-formatter/",
+    evidence: ["<h1>在线 JSON 格式化工具：美化、压缩与深度展开</h1>"],
+    title: "在线 JSON 格式化工具：美化、压缩与深度展开 | JSONUtils",
+    canonical: "https://jsonutils.markz.fun/guides/json-formatter/",
+    description:
+      "使用 JSONUtils 在线格式化 JSON：一键美化或压缩数据，校验语法，并可深度展开嵌套在字符串中的 JSON。常规处理在浏览器本地完成。",
+    siteName: "JSONUtils",
+    structuredTypes: ["WebPage", "BreadcrumbList"],
+    compressed: true,
     forbiddenEvidence: ["MarkZ 个人博客"],
   },
   {
@@ -113,7 +127,10 @@ const routes = [
   },
   {
     url: "https://jsonutils.markz.fun/sitemap.xml",
-    evidence: ["<loc>https://jsonutils.markz.fun/</loc>"],
+    evidence: [
+      "<loc>https://jsonutils.markz.fun/</loc>",
+      "<loc>https://jsonutils.markz.fun/guides/json-formatter/</loc>",
+    ],
     forbiddenEvidence: ["<loc>https://markz.fun/"],
     contentType: "xml",
   },
@@ -181,6 +198,7 @@ await Promise.all(
       structuredTypes = [],
       contentType,
       responseHeaders = {},
+      compressed = false,
     }) => {
       try {
         const response = await fetch(url, {
@@ -191,6 +209,9 @@ await Promise.all(
         if (response.status !== status)
           failures.push(`${url} returned ${response.status}, expected ${status}`)
         validateSecurityHeaders(url, response)
+        if (compressed && response.headers.get("content-encoding") !== "gzip") {
+          failures.push(`${url} must use gzip content encoding`)
+        }
         for (const [header, expected] of Object.entries(responseHeaders)) {
           const actual = response.headers.get(header)
           if (actual !== expected) {

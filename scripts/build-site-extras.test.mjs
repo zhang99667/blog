@@ -3,7 +3,12 @@ import { promises as fs } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { renderEditorialRss, renderRobotsTxt, writeSiteExtras } from "./build-site-extras.mjs"
+import {
+  renderBlogSitemapWithModifiedDates,
+  renderEditorialRss,
+  renderRobotsTxt,
+  writeSiteExtras,
+} from "./build-site-extras.mjs"
 
 const posts = [
   {
@@ -50,6 +55,25 @@ test("robots file declares the canonical sitemap", () => {
   )
 })
 
+test("blog sitemap uses the significant article modification time", () => {
+  const sitemap = `<urlset><url>
+    <loc>https://markz.fun/blog/newest</loc>
+    <lastmod>2026-07-01T00:00:00.000Z</lastmod>
+  </url><url>
+    <loc>https://markz.fun/</loc>
+    <lastmod>2026-07-04T00:00:00.000Z</lastmod>
+  </url></urlset>`
+  const rendered = renderBlogSitemapWithModifiedDates(sitemap, posts)
+  assert.match(
+    rendered,
+    /<loc>https:\/\/markz\.fun\/blog\/newest<\/loc>\s*<lastmod>2026-07-03T00:00:00\.000Z<\/lastmod>/,
+  )
+  assert.match(
+    rendered,
+    /<loc>https:\/\/markz\.fun\/<\/loc>\s*<lastmod>2026-07-04T00:00:00\.000Z<\/lastmod>/,
+  )
+})
+
 test("site extras write independent blog and notes discovery files", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "markz-site-extras-"))
   try {
@@ -63,6 +87,11 @@ test("site extras write independent blog and notes discovery files", async () =>
       path.join(root, "design-system/tokens.json"),
       JSON.stringify({ brand: { name: "MarkZ", description: "Personal blog" } }),
     )
+    await fs.mkdir(path.join(root, "public"), { recursive: true })
+    await fs.writeFile(
+      path.join(root, "public/sitemap.xml"),
+      "<urlset><url><loc>https://markz.fun/blog/newest</loc><lastmod>2026-07-01T00:00:00.000Z</lastmod></url></urlset>",
+    )
 
     await writeSiteExtras({ root, site: "blog", output: "public" })
     await writeSiteExtras({ root, site: "notes", output: "public-notes" })
@@ -70,9 +99,11 @@ test("site extras write independent blog and notes discovery files", async () =>
     const rss = await fs.readFile(path.join(root, "public/index.xml"), "utf8")
     const blogRobots = await fs.readFile(path.join(root, "public/robots.txt"), "utf8")
     const notesRobots = await fs.readFile(path.join(root, "public-notes/robots.txt"), "utf8")
+    const blogSitemap = await fs.readFile(path.join(root, "public/sitemap.xml"), "utf8")
     assert.equal((rss.match(/<item>/g) ?? []).length, 2)
     assert.match(blogRobots, /https:\/\/markz\.fun\/sitemap\.xml/)
     assert.match(notesRobots, /https:\/\/note\.markz\.fun\/sitemap\.xml/)
+    assert.match(blogSitemap, /2026-07-03T00:00:00\.000Z/)
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }

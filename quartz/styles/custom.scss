@@ -401,7 +401,7 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   margin-bottom: 1.25rem;
 }
 
-.section-heading h2 {
+.section-heading :is(h1, h2) {
   margin: 0.35rem 0 0;
   color: var(--dark);
   font-size: 1.8rem;

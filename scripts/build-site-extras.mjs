@@ -91,14 +91,35 @@ Sitemap: ${sitemapUrl}
 `
 }
 
+export function renderBlogSitemapWithModifiedDates(sitemap, posts) {
+  const modifiedByLocation = new Map(
+    editorialPosts(posts).flatMap((post) => {
+      const modified = validDate(post.updatedAt) ?? publicationDate(post)
+      if (!modified) return []
+      return [[new URL(post.post.url, "https://markz.fun").toString(), modified.toISOString()]]
+    }),
+  )
+
+  return sitemap.replace(/<url>([\s\S]*?)<\/url>/g, (entry, body) => {
+    const location = body.match(/<loc>([^<]+)<\/loc>/)?.[1]
+    const modified = location ? modifiedByLocation.get(location) : undefined
+    if (!modified) return entry
+    const nextBody = /<lastmod>[^<]*<\/lastmod>/.test(body)
+      ? body.replace(/<lastmod>[^<]*<\/lastmod>/, `<lastmod>${modified}</lastmod>`)
+      : `${body}\n    <lastmod>${modified}</lastmod>`
+    return `<url>${nextBody}</url>`
+  })
+}
+
 export async function writeSiteExtras({ root = defaultRoot, site, output }) {
   const outputRoot = path.resolve(root, output)
   await fs.mkdir(outputRoot, { recursive: true })
 
   if (site === "blog") {
-    const [index, tokens] = await Promise.all([
+    const [index, tokens, sitemap] = await Promise.all([
       fs.readFile(path.join(root, "content/site/ai-data/index.json"), "utf8").then(JSON.parse),
       fs.readFile(path.join(root, "design-system/tokens.json"), "utf8").then(JSON.parse),
+      fs.readFile(path.join(outputRoot, "sitemap.xml"), "utf8"),
     ])
     await Promise.all([
       fs.writeFile(
@@ -111,6 +132,10 @@ export async function writeSiteExtras({ root = defaultRoot, site, output }) {
       fs.writeFile(
         path.join(outputRoot, "robots.txt"),
         renderRobotsTxt("https://markz.fun/sitemap.xml"),
+      ),
+      fs.writeFile(
+        path.join(outputRoot, "sitemap.xml"),
+        renderBlogSitemapWithModifiedDates(sitemap, index.posts ?? []),
       ),
     ])
     return

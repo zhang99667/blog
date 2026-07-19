@@ -25,7 +25,7 @@ npm run build
 
 该工作流只做审计和排队，不提交代码、不触发部署、不读取生产 SSH 密钥。`critical` 路由、隐私、破坏性操作、外部密钥和任何证据不足的能力都必须由人工选择任务后走标准开发、验证和发布流程。若报告与仓库事实不符，先修探针或模型，不能手工改 issue 文案冒充能力完成。
 
-发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 还会解析每个 HTML，拒绝可执行内联脚本、事件属性、JavaScript URL、未获策略许可的资源源站，以及 Mermaid/Explorer 运行时回退到外部执行。
+发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；博客 sitemap 的文章 `lastmod` 与 JSON-LD `dateModified` 精确一致；JSONUtils sitemap 只列工具首页和由自身生成器维护的真实指南页；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 还会解析每个 HTML，拒绝可执行内联脚本、事件属性、JavaScript URL、未获策略许可的资源源站，以及 Mermaid/Explorer 运行时回退到外部执行。
 
 ## 发布流程
 
@@ -158,6 +158,8 @@ GitHub 仓库需要以下 Actions 配置：
 3. 在百度搜索资源平台把裸域博客和 JSONUtils 子域作为两个独立站点维护，分别提交各自 sitemap、站点名称与 Logo；不要把两个 sitemap 提交到同一个站点属性下。
 4. 发布并通过生产 smoke 后，分别对两个首页发起抓取诊断或更新提交。搜索引擎会自动选择标题和摘要，旧结果可能继续保留到下一次重抓，不能因为短期未刷新而恢复错误的跨站身份。
 5. 若摘要继续退化成功能词拼盘，先检查 JSONUtils 原始 HTML 首段是否仍是自然语言用途说明，以及 React 渲染后是否保留可见的 JSONUtils 一级标题；不要用 `meta keywords` 或更多重复词掩盖正文缺失。
+6. 检查 `/guides/` 与各任务指南的可见正文、唯一 title/description/canonical、面包屑、内部链接和 sitemap 收录；这些页面必须对读者独立有用，不能只换关键词生成近似门页。
+7. 使用 `curl --compressed -sSI https://jsonutils.markz.fun/` 和代表性指南页验证 `Content-Encoding: gzip`，并与发布前 Lighthouse 对照；SEO 分数满分不代表传输性能或搜索意图已经优化。
 
 ### 装箱单出现路径和子域双入口
 

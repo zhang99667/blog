@@ -92,12 +92,14 @@ export function createStructuredData({
   const blogId = `${BLOG_ORIGIN}#blog`
   const personId = `${BLOG_ORIGIN}#person`
   const pageId = `${canonicalUrl}#webpage`
+  const breadcrumbId = `${canonicalUrl}#breadcrumb`
   const graph: Record<string, unknown>[] = [
     {
       "@type": "Person",
       "@id": personId,
       name: "MarkZ",
       url: BLOG_ORIGIN,
+      sameAs: ["https://github.com/zhang99667"],
     },
     {
       "@type": "WebSite",
@@ -124,7 +126,7 @@ export function createStructuredData({
     })
   }
 
-  graph.push({
+  const webPage: Record<string, unknown> = {
     "@type": "WebPage",
     "@id": pageId,
     url: canonicalUrl,
@@ -132,7 +134,37 @@ export function createStructuredData({
     description,
     inLanguage: "zh-CN",
     isPartOf: { "@id": websiteId },
-  })
+  }
+
+  if (isArticle) {
+    webPage.breadcrumb = { "@id": breadcrumbId }
+    graph.push({
+      "@type": "BreadcrumbList",
+      "@id": breadcrumbId,
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "MarkZ",
+          item: BLOG_ORIGIN,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "文章",
+          item: `${BLOG_ORIGIN}blog/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: title,
+          item: canonicalUrl,
+        },
+      ],
+    })
+  }
+
+  graph.push(webPage)
 
   if (isArticle) {
     graph.push({
@@ -147,6 +179,7 @@ export function createStructuredData({
       inLanguage: "zh-CN",
       mainEntityOfPage: { "@id": pageId },
       author: { "@id": personId },
+      publisher: { "@id": personId },
       isPartOf: { "@id": blogId },
     })
   }

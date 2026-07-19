@@ -308,6 +308,7 @@ for (const target of pages) {
           await expect(
             page.locator(".blog-hero, .hero-copy, .home-actions, .notes-bridge, .bridge-link"),
           ).toHaveCount(0)
+          await expect(page.getByRole("heading", { level: 1, name: "最近文章" })).toHaveCount(1)
           const firstPost = await page.locator(".post-row").first().boundingBox()
           expect(firstPost).not.toBeNull()
           expect(firstPost!.y).toBeLessThan(viewport.height)
@@ -897,7 +898,21 @@ test("editorial articles expose one decodable title-specific social image", asyn
   const article = structuredData["@graph"].find(
     (node: { "@type"?: string }) => node["@type"] === "BlogPosting",
   )
+  const breadcrumb = structuredData["@graph"].find(
+    (node: { "@type"?: string }) => node["@type"] === "BreadcrumbList",
+  )
   expect(article.image).toEqual([ogImage])
+  expect(article.publisher).toEqual({ "@id": "https://markz.fun/#person" })
+  expect(breadcrumb.itemListElement.map((item: { name: string }) => item.name)).toEqual([
+    "MarkZ",
+    "文章",
+    "Agent MCP 完全指南",
+  ])
+  const contentImageAlts = await page
+    .locator("article img")
+    .evaluateAll((images) => images.map((image) => image.getAttribute("alt") ?? ""))
+  expect(contentImageAlts.length).toBeGreaterThan(0)
+  expect(contentImageAlts.every((alt) => alt.trim().length > 0)).toBe(true)
 
   const localImageUrl = `${pages[1].baseUrl}${new URL(ogImage!).pathname}`
   const dimensions = await page.evaluate(

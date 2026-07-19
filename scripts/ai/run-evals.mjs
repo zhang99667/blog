@@ -361,6 +361,16 @@ export async function collectRoutingContractFailures(root = defaultRoot) {
   const blogFrame = await readText(root, "quartz/components/frames/BlogFrame.tsx")
   const budgets = await readJson(root, "quality/budgets.json")
   for (const snippet of [
+    "gzip on;",
+    "gzip_vary on;",
+    "gzip_min_length 1024;",
+    "application/javascript",
+    "application/json",
+    "image/svg+xml",
+  ]) {
+    if (!nginx.includes(snippet)) failures.push(`edge compression is missing ${snippet}`)
+  }
+  for (const snippet of [
     "container_name: markz-edge",
     '"${EDGE_HTTP_PORT:-80}:80"',
     '"${EDGE_HTTPS_PORT:-443}:443"',

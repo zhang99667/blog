@@ -81,9 +81,36 @@ test("structured data connects a BlogPosting to the independent blog entity", ()
   const graph = structured["@graph"] as Record<string, unknown>[]
   const website = graph.find((node) => node["@type"] === "WebSite")
   const blog = graph.find((node) => node["@type"] === "Blog")
+  const person = graph.find((node) => node["@type"] === "Person")
+  const breadcrumb = graph.find((node) => node["@type"] === "BreadcrumbList")
+  const webPage = graph.find((node) => node["@type"] === "WebPage")
   const article = graph.find((node) => node["@type"] === "BlogPosting")
   assert.equal(website?.name, "MarkZ 个人博客")
   assert.equal(blog?.name, "MarkZ 个人博客")
+  assert.deepEqual(person?.sameAs, ["https://github.com/zhang99667"])
+  assert.deepEqual(webPage?.breadcrumb, {
+    "@id": "https://markz.fun/blog/agent-mcp#breadcrumb",
+  })
+  assert.deepEqual(breadcrumb?.itemListElement, [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "MarkZ",
+      item: "https://markz.fun/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "文章",
+      item: "https://markz.fun/blog/",
+    },
+    {
+      "@type": "ListItem",
+      position: 3,
+      name: "Agent MCP 完全指南",
+      item: "https://markz.fun/blog/agent-mcp",
+    },
+  ])
   assert.ok(article)
   assert.equal(article.headline, "Agent MCP 完全指南")
   assert.equal(article.datePublished, "2026-07-07T00:00:00.000Z")
@@ -92,6 +119,7 @@ test("structured data connects a BlogPosting to the independent blog entity", ()
     "@id": "https://markz.fun/blog/agent-mcp#webpage",
   })
   assert.deepEqual(article.isPartOf, { "@id": "https://markz.fun/#blog" })
+  assert.deepEqual(article.publisher, { "@id": "https://markz.fun/#person" })
 })
 
 test("structured data serialization cannot terminate its script element", () => {

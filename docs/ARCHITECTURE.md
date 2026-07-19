@@ -170,14 +170,15 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 定时发布和服务器密钥归 blog；note 最多发送更新通知，不拥有构建或部署职责。
 - 品牌值归 `design-system/tokens.json`。
 - 页面结构归 Quartz 组件或 `scripts/sync-notes.mjs` 模板。
-- 页面标题、应用名和社交元数据归 `quartz/components/Head.tsx`；SPA 只按标题元素保存的独立权威值恢复浏览器标题，不能从旧工具状态或可变正文猜测。canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
-- JSONUtils 的标题、自然语言简介、canonical、`WebApplication` 结构化数据、robots 与 sitemap 归 JSONUtils 仓库的 `frontend/index.html` 和 `frontend/public/`；本仓库只拥有 edge 路由、后台响应头和跨站生产 smoke，不能在博客构建里复制工具站 SEO 内容。
+- 页面标题、应用名和社交元数据归 `quartz/components/Head.tsx`；SPA 只按标题元素保存的独立权威值恢复浏览器标题，不能从旧工具状态或可变正文猜测。canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS、robots 与 sitemap 的文章更新时间归 `scripts/build-site-extras.mjs`，sitemap 的 `lastmod` 必须与文章 `dateModified` 一致而不是使用构建时间。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
+- JSONUtils 的标题、自然语言简介、canonical、`WebApplication` 结构化数据、robots、工具指南和 sitemap 归 JSONUtils 仓库的 `frontend/index.html`、`frontend/scripts/generate-seo-pages.mjs` 与 `frontend/public/`；本仓库只拥有 edge 路由、文本压缩、后台响应头和跨站生产 smoke，不能在博客构建里复制工具站 SEO 内容。
 - 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
 - 长文回顶与文章互动栏共用 `ArticleReactions` 的 SPA 生命周期和正文边缘定位；博客右侧目录吸顶时整组工具固定在正文左侧近邻，无阅读栏时优先贴正文右侧。回顶是纯前端阅读辅助，不访问互动 API，短文与目录页不挂载可见入口。
 - 成熟度能力、评分、用户处置和风险边界归 `ai/evolution.json`；探针只报告可观察事实，明确不采纳项保持未达成但退出排序，定时工作流不能直接修改代码、部署或处理密钥。
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
 - HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。
+- 公网文本压缩归 `deploy/nginx.conf` 的 HTTP 级 gzip 配置，覆盖博客、笔记、JSONUtils 和装箱单的文本型响应；各产品不通过复制 Nginx 片段争夺压缩所有权，生产 smoke 必须携带 `Accept-Encoding: gzip` 验证真实响应。
 - 博客与笔记 CSP 的唯一策略值归 `deploy/nginx.conf` 中的 `$markz_content_security_policy` host map；`security-headers.inc` 只负责统一发射。默认映射必须为空，不能隐藏或覆盖 JSONUtils、后台和装箱单自行提供的 CSP。
 - 生成目录没有编辑权。
 - 路由归 edge 配置，工具 Compose 不能接管公网端口。
