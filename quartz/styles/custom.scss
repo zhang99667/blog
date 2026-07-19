@@ -49,6 +49,13 @@ article img[src$=".svg"] {
   forced-color-adjust: none;
 }
 
+article .callout[data-callout="info"],
+article .callout[data-callout="todo"] {
+  --color: var(--secondary);
+  --border: color-mix(in srgb, var(--secondary) 32%, transparent);
+  --bg: color-mix(in srgb, var(--secondary) 7%, transparent);
+}
+
 article object,
 article video,
 article iframe {

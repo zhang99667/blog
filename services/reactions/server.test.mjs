@@ -427,6 +427,71 @@ describe("MarkZ reactions API", () => {
     }
   })
 
+  test("migrates a renamed source content identity without resetting metrics", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "markz-reaction-source-rename-"))
+    temporaryDirectories.push(directory)
+    const databasePath = path.join(directory, "reactions.sqlite")
+    const blogSlug = "blog/renamed-source"
+    const previousId = `v1/${"b".repeat(64)}`
+    const currentId = `v1/${"c".repeat(64)}`
+
+    const firstRun = await startService(databasePath, {
+      reactionAliases: {
+        version: 1,
+        pages: [{ id: previousId, aliases: [{ site: "blog", slug: blogSlug }] }],
+      },
+    })
+    await requestJson(`${firstRun.baseUrl}/api/reactions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ site: "blog", slug: blogSlug, visitor: visitor(31) }),
+    })
+    await requestJson(`${firstRun.baseUrl}/api/reactions/view`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ site: "blog", slug: blogSlug, visitor: visitor(31) }),
+    })
+    await firstRun.service.close()
+
+    const secondRun = await startService(databasePath, {
+      reactionAliases: {
+        version: 1,
+        pages: [
+          {
+            id: currentId,
+            previousIds: [previousId],
+            aliases: [{ site: "blog", slug: blogSlug }],
+          },
+        ],
+      },
+    })
+    try {
+      const counts = await requestJson(
+        `${secondRun.baseUrl}/api/reactions?site=blog&slug=${encodeURIComponent(blogSlug)}`,
+      )
+      assert.deepEqual(counts.body, { count: 1, likes: 1, views: 1 })
+    } finally {
+      await secondRun.service.close()
+    }
+
+    const database = new DatabaseSync(databasePath)
+    for (const table of ["reactions", "views"]) {
+      assert.equal(
+        database
+          .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE site = 'content' AND slug = ?`)
+          .get(previousId).count,
+        0,
+      )
+      assert.equal(
+        database
+          .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE site = 'content' AND slug = ?`)
+          .get(currentId).count,
+        1,
+      )
+    }
+    database.close()
+  })
+
   test("rejects malformed pages, visitors, methods and oversized payloads", async () => {
     const { service, baseUrl } = await startService()
     try {

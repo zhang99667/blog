@@ -111,6 +111,7 @@ test("reaction identity survives content metadata changes and joins blog with it
         sourcePath,
         path: "ai/Agent MCP 完全指南.md",
         reactionId,
+        reactionPreviousIds: [stableReactionId("AI/Agent MCP 完全指南 v2.md")],
         title: "修改标题、日期和正文不改变身份",
         date: "2026-07-16",
         post: { slug: "agent-mcp" },
@@ -122,6 +123,7 @@ test("reaction identity survives content metadata changes and joins blog with it
   assert.deepEqual(manifest.pages, [
     {
       id: reactionId,
+      previousIds: [stableReactionId("AI/Agent MCP 完全指南 v2.md")],
       aliases: [
         { site: "notes", slug: "ai/agent-mcp-完全指南" },
         { site: "blog", slug: "blog/agent-mcp" },

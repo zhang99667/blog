@@ -170,6 +170,9 @@ export function buildReactionAliases(records, { generatedAt, sourceCommit }) {
     pages: records
       .map((record) => ({
         id: record.reactionId,
+        ...(record.reactionPreviousIds?.length > 0
+          ? { previousIds: record.reactionPreviousIds }
+          : {}),
         aliases: [
           { site: "notes", slug: slugifyFilePath(record.path) },
           ...(record.post ? [{ site: "blog", slug: `blog/${record.post.slug}` }] : []),
@@ -654,6 +657,9 @@ function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
   const date = sourceDates.createdAt.slice(0, 10)
   const post = classifyPost(sourceRel, fm)
   const id = destRel.replace(/\.md$/i, "")
+  const reactionPreviousIds = Array.isArray(configured?.previousSources)
+    ? configured.previousSources.map((previousSource) => stableReactionId(previousSource))
+    : []
 
   return {
     id,
@@ -670,6 +676,7 @@ function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
     createdAt: sourceDates.createdAt,
     updatedAt: sourceDates.modifiedAt,
     reactionId: stableReactionId(sourceRel),
+    reactionPreviousIds,
     collection,
     post: post
       ? {

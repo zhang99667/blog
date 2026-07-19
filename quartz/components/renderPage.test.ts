@@ -65,6 +65,37 @@ test("content tables are keyboard focusable", () => {
   assert.equal(table.properties.tabIndex, 0)
 })
 
+test("content task checkboxes use their item text as an accessible name", () => {
+  const input: Element = {
+    type: "element",
+    tagName: "input",
+    properties: { type: "checkbox", className: ["checkbox-toggle"] },
+    children: [],
+  }
+  const root: Root = {
+    type: "root",
+    children: [
+      {
+        type: "element",
+        tagName: "ul",
+        properties: { className: ["contains-task-list"] },
+        children: [
+          {
+            type: "element",
+            tagName: "li",
+            properties: { className: ["task-list-item"] },
+            children: [input, { type: "text", value: " 验证发布结果" }],
+          },
+        ],
+      },
+    ],
+  }
+
+  enhanceContentAccessibility(root)
+
+  assert.equal(input.properties.ariaLabel, "验证发布结果")
+})
+
 function makeComponentData(
   allFiles: QuartzComponentProps["allFiles"],
 ): Pick<QuartzComponentProps, "allFiles" | "cfg"> {

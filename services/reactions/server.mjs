@@ -63,11 +63,32 @@ export function parseReactionAliases(value = { version: 1, pages: [] }) {
 
   const aliasMap = new Map()
   const migrations = []
+  const migrationTargets = new Map()
+  const registerMigration = (alias, target) => {
+    const aliasKey = pageKey(alias)
+    const targetKey = pageKey(target)
+    if (aliasKey === targetKey) return
+
+    const existing = migrationTargets.get(aliasKey)
+    if (existing && existing !== targetKey) {
+      throw new Error(`Reaction identity ${alias.site}:${alias.slug} has multiple owners`)
+    }
+    migrationTargets.set(aliasKey, targetKey)
+    migrations.push({ alias, target })
+  }
+
   for (const entry of value.pages) {
-    if (!entry || !Array.isArray(entry.aliases)) {
+    if (
+      !entry ||
+      !Array.isArray(entry.aliases) ||
+      (entry.previousIds !== undefined && !Array.isArray(entry.previousIds))
+    ) {
       throw new Error("Invalid reactions alias entry")
     }
     const target = normalizeContentTarget(entry.id)
+    for (const previousId of entry.previousIds ?? []) {
+      registerMigration(normalizeContentTarget(previousId), target)
+    }
     for (const candidate of entry.aliases) {
       const alias = normalizePageInput(candidate?.site, candidate?.slug)
       const key = pageKey(alias)
@@ -76,7 +97,7 @@ export function parseReactionAliases(value = { version: 1, pages: [] }) {
         throw new Error(`Reaction alias ${alias.site}:${alias.slug} has multiple owners`)
       }
       aliasMap.set(key, target)
-      migrations.push({ alias, target })
+      registerMigration(alias, target)
     }
   }
   return { aliasMap, migrations }

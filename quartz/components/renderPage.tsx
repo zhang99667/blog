@@ -30,13 +30,33 @@ interface RenderComponents {
 }
 
 export function enhanceContentAccessibility(root: Root) {
-  const visit = (node: Root | Element | ElementContent) => {
+  const textContent = (node: Root | Element | ElementContent): string => {
+    if (node.type === "text") return node.value
+    if (!("children" in node)) return ""
+    return node.children.map((child) => textContent(child as Element | ElementContent)).join(" ")
+  }
+
+  const visit = (node: Root | Element | ElementContent, parent?: Element) => {
     if (node.type === "element" && node.tagName === "table") {
       node.properties ??= {}
       node.properties.tabIndex = 0
     }
+    if (
+      node.type === "element" &&
+      node.tagName === "input" &&
+      node.properties?.type === "checkbox" &&
+      parent?.tagName === "li" &&
+      Array.isArray(parent.properties?.className) &&
+      parent.properties.className.includes("task-list-item") &&
+      !node.properties.ariaLabel
+    ) {
+      const label = textContent(parent).replace(/\s+/g, " ").trim()
+      node.properties.ariaLabel = label || "任务项"
+    }
     if ("children" in node) {
-      for (const child of node.children) visit(child as Element | ElementContent)
+      for (const child of node.children) {
+        visit(child as Element | ElementContent, node.type === "element" ? node : parent)
+      }
     }
   }
 

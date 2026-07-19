@@ -15,10 +15,11 @@ export const blogConfig = {
       featured: true,
     },
     {
-      source: "AI/Agent Plugin 完全指南 v2.md",
+      source: "AI/Agent Plugin 完全指南.md",
+      previousSources: ["AI/Agent Plugin 完全指南 v2.md"],
       slug: "agent-plugin",
       title: "Agent Plugin 完全指南",
-      summary: "把插件、Skill、MCP 和 Hook 拆开看，理解 Codex 扩展能力的组合方式。",
+      summary: "系统梳理 Plugin 的组件模型、目录、加载、分发、安全与跨端差异。",
       featured: true,
     },
     {
