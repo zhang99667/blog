@@ -474,7 +474,8 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     'page.locator(".blog-article-toc")',
     "page.locator('.page[data-frame=\"blog\"] .graph')",
     'toHaveAttribute("aria-expanded", "false")',
-    'toHaveAttribute("data-side", "start")',
+    'toHaveAttribute("data-side", "end")',
+    "data-reaction-clearance",
   ]) {
     if (!browserSuite.includes(snippet)) failures.push(`browser matrix is missing ${snippet}`)
   }
@@ -485,9 +486,10 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     failures.push("blog table of contents must keep its governed responsive layout")
   }
   for (const snippet of [
-    "preferredStartLeft",
-    'root.dataset.side = "start"',
-    'root.style.bottom = "auto"',
+    "preferredLeft",
+    "clearReadingRail",
+    "resetReadingRailClearance",
+    'root.dataset.side = "end"',
   ]) {
     if (!reactionScript.includes(snippet)) {
       failures.push(`article-adjacent reaction positioning is missing ${snippet}`)

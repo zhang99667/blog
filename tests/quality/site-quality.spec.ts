@@ -567,20 +567,7 @@ for (const target of pages) {
           const safeEdge = viewport.width <= 600 ? 12 : 16
           const hasSideRoom =
             viewport.width - articleBounds!.x - articleBounds!.width >= bounds!.width + safeEdge
-          const hasBlogReadingRail = target.id === "blog-article" && viewport.width >= 1400
-          if (hasBlogReadingRail) {
-            const readingRailBounds = await blogArticleToc.boundingBox()
-            expect(readingRailBounds).not.toBeNull()
-            await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
-            await expect(reactionRoot).toHaveAttribute("data-side", "start")
-            expect(articleBounds!.x - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
-            expect(bounds!.x + bounds!.width).toBeLessThan(articleBounds!.x)
-            expect(bounds!.y + bounds!.height / 2).toBeCloseTo(viewport.height / 2, 0)
-            expect(viewport.height - bounds!.y - bounds!.height).toBeGreaterThanOrEqual(
-              viewport.height * 0.4,
-            )
-            expect(readingRailBounds!.x - (bounds!.x + bounds!.width)).toBeGreaterThanOrEqual(8)
-          } else if (hasSideRoom) {
+          if (hasSideRoom) {
             await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
             await expect(reactionRoot).toHaveAttribute("data-side", "end")
             expect(bounds!.x - articleBounds!.x - articleBounds!.width).toBeCloseTo(safeEdge, 0)
@@ -621,7 +608,7 @@ for (const target of pages) {
           expect(expandedBounds).not.toBeNull()
           expect(scrollTopBounds!.width).toBeGreaterThanOrEqual(44)
           expect(scrollTopBounds!.height).toBeGreaterThanOrEqual(44)
-          if (hasSideRoom && !hasBlogReadingRail) {
+          if (hasSideRoom) {
             expect(Math.abs(scrollTopBounds!.x - panelBounds!.x)).toBeLessThanOrEqual(1)
           } else {
             expect(
@@ -639,18 +626,20 @@ for (const target of pages) {
           expect(expandedBounds!.y).toBeGreaterThanOrEqual(0)
           expect(expandedBounds!.y + expandedBounds!.height).toBeLessThanOrEqual(viewport.height)
 
-          if (target.id === "notes-article" && viewport.width >= 1200) {
+          if (
+            (target.id === "notes-article" && viewport.width >= 1200) ||
+            (target.id === "blog-article" && viewport.width >= 1400)
+          ) {
             const tocClearance = await page.evaluate(async () => {
-              const sidebar = document.querySelector<HTMLElement>(".sidebar.right")
-              const toc = document.querySelector<HTMLElement>("ul.toc-content.overflow")
+              const rail = document.querySelector<HTMLElement>(".blog-article-toc, .sidebar.right")
+              const toc = rail?.querySelector<HTMLElement>("ul.toc-content.overflow")
               const reaction = document.querySelector<HTMLElement>("[data-article-reaction]")
               const links = toc
                 ? Array.from(toc.querySelectorAll<HTMLElement>("li:not(.overflow-end) > a"))
                 : []
               const lastLink = links.at(-1)
-              if (!sidebar || !toc || !reaction || !lastLink) return null
+              if (!rail || !toc || !reaction || !lastLink) return null
 
-              sidebar.scrollTop = sidebar.scrollHeight
               toc.scrollTop = toc.scrollHeight
               await new Promise<void>((resolve) =>
                 requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -659,16 +648,43 @@ for (const target of pages) {
               const tocBounds = toc.getBoundingClientRect()
               const reactionBounds = reaction.getBoundingClientRect()
               const lastLinkBounds = lastLink.getBoundingClientRect()
+              const railBounds = rail.getBoundingClientRect()
+              const clearanceBottom = rail.classList.contains("sidebar")
+                ? railBounds.bottom
+                : tocBounds.bottom
+              const obstructedControls = Array.from(
+                rail.querySelectorAll<HTMLElement>("a, button, h3"),
+              )
+                .filter((element) => {
+                  const bounds = element.getBoundingClientRect()
+                  const visibleTop = Math.max(bounds.top, railBounds.top)
+                  const visibleBottom = Math.min(bounds.bottom, clearanceBottom)
+                  return (
+                    bounds.width > 0 &&
+                    visibleBottom > visibleTop &&
+                    Math.min(bounds.right, reactionBounds.right) -
+                      Math.max(bounds.left, reactionBounds.left) >
+                      0 &&
+                    Math.min(visibleBottom, reactionBounds.bottom) -
+                      Math.max(visibleTop, reactionBounds.top) >
+                      0
+                  )
+                })
+                .map((element) => element.textContent?.trim() || element.getAttribute("aria-label"))
               return {
                 horizontalOverlap:
-                  Math.min(lastLinkBounds.right, reactionBounds.right) -
-                  Math.max(lastLinkBounds.left, reactionBounds.left),
-                lastLinkBottom: lastLinkBounds.bottom,
-                reactionGap: reactionBounds.top - lastLinkBounds.bottom,
-                reactionHeight: reactionBounds.height,
-                tailClearance: tocBounds.bottom - lastLinkBounds.bottom,
+                  Math.min(railBounds.right, reactionBounds.right) -
+                  Math.max(railBounds.left, reactionBounds.left),
+                lastLinkBottom: Math.min(lastLinkBounds.bottom, clearanceBottom),
+                reactionTop: reactionBounds.top,
+                reactionGap: reactionBounds.top - Math.min(lastLinkBounds.bottom, clearanceBottom),
                 tocMaxScroll: toc.scrollHeight - toc.clientHeight,
                 tocScrollTop: toc.scrollTop,
+                hasDynamicClearance:
+                  rail.hasAttribute("data-reaction-clearance") ||
+                  toc.hasAttribute("data-reaction-clearance"),
+                obstructedControls,
+                clearanceBottom,
                 viewportHeight: document.documentElement.clientHeight,
               }
             })
@@ -676,10 +692,12 @@ for (const target of pages) {
             expect(tocClearance).not.toBeNull()
             expect(tocClearance!.horizontalOverlap).toBeGreaterThan(0)
             expect(tocClearance!.tocScrollTop).toBeCloseTo(tocClearance!.tocMaxScroll, 0)
-            expect(tocClearance!.tailClearance).toBeGreaterThanOrEqual(
-              tocClearance!.reactionHeight + 12,
+            expect(tocClearance!.hasDynamicClearance).toBe(true)
+            expect(tocClearance!.obstructedControls).toEqual([])
+            expect(tocClearance!.clearanceBottom).toBeLessThanOrEqual(
+              tocClearance!.reactionTop - safeEdge,
             )
-            expect(tocClearance!.reactionGap).toBeGreaterThanOrEqual(16)
+            expect(tocClearance!.reactionGap).toBeGreaterThanOrEqual(safeEdge)
             expect(tocClearance!.lastLinkBottom).toBeLessThanOrEqual(tocClearance!.viewportHeight)
           }
 
@@ -751,6 +769,73 @@ for (const target of pages) {
         }
       })
     }
+  }
+}
+
+for (const target of pages.filter((page) => page.id.endsWith("-article"))) {
+  for (const theme of manifest.requiredThemes) {
+    test(`${target.id} wide-reading ${theme}`, async ({ page }, testInfo) => {
+      const viewport = { width: 2048, height: 1213 }
+      await page.setViewportSize(viewport)
+      await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+      await mockReactions(page)
+      await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
+      await page.evaluate(() => document.fonts.ready)
+
+      const reaction = page.locator("[data-article-reaction]")
+      const article = page.locator("main.center > article.popover-hint")
+      await expect(reaction).toHaveAttribute("data-anchor", "article")
+      await expect(reaction).toHaveAttribute("data-side", "end")
+
+      const [reactionBounds, articleBounds] = await Promise.all([
+        reaction.boundingBox(),
+        article.boundingBox(),
+      ])
+      expect(reactionBounds).not.toBeNull()
+      expect(articleBounds).not.toBeNull()
+      expect(reactionBounds!.x - articleBounds!.x - articleBounds!.width).toBeCloseTo(16, 0)
+
+      const railState = await page.evaluate(() => {
+        const rail = document.querySelector<HTMLElement>(".blog-article-toc, .sidebar.right")
+        const toc = rail?.querySelector<HTMLElement>("ul.toc-content.overflow")
+        const reaction = document.querySelector<HTMLElement>("[data-article-reaction]")
+        if (!rail || !toc || !reaction) return null
+        const railBounds = rail.getBoundingClientRect()
+        const tocBounds = toc.getBoundingClientRect()
+        const reactionBounds = reaction.getBoundingClientRect()
+        const clearanceBottom = rail.classList.contains("sidebar")
+          ? railBounds.bottom
+          : tocBounds.bottom
+        return {
+          horizontalOverlap:
+            Math.min(railBounds.right, reactionBounds.right) -
+            Math.max(railBounds.left, reactionBounds.left),
+          verticalOverlap:
+            Math.min(clearanceBottom, reactionBounds.bottom) -
+            Math.max(tocBounds.top, reactionBounds.top),
+          clearanceBottom,
+          reactionTop: reactionBounds.top,
+          graphTop: document
+            .querySelector<HTMLElement>(".sidebar.right .graph")
+            ?.getBoundingClientRect().top,
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }
+      })
+      expect(railState).not.toBeNull()
+      expect(railState!.horizontalOverlap).toBeGreaterThan(0)
+      expect(railState!.verticalOverlap).toBeLessThanOrEqual(0)
+      expect(railState!.clearanceBottom).toBeLessThanOrEqual(railState!.reactionTop - 16)
+      expect(railState!.scrollWidth).toBeLessThanOrEqual(railState!.clientWidth + 1)
+      if (target.id === "notes-article") {
+        expect(railState!.graphTop).toBeCloseTo(32, 0)
+      }
+
+      await testInfo.attach(`${target.id}-wide-reading-${theme}`, {
+        body: await page.screenshot({ fullPage: false }),
+        contentType: "image/png",
+      })
+    })
   }
 }
 

@@ -667,19 +667,6 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   color: var(--secondary);
 }
 
-.page[data-frame="default"]:has([data-article-reaction]) ul.toc-content.overflow > li.overflow-end {
-  height: calc(var(--brand-target-comfortable) + var(--brand-space-4));
-}
-
-.page[data-frame="default"]:has([data-scroll-to-top]:not([hidden]))
-  ul.toc-content.overflow
-  > li.overflow-end {
-  height: calc(
-    var(--brand-target-comfortable) + var(--brand-target-comfortable) + var(--brand-space-2) +
-      var(--brand-space-4)
-  );
-}
-
 .page[data-frame="default"] .search-button {
   min-width: 0;
   width: 100%;
@@ -844,6 +831,10 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
   .page[data-frame="default"] > #quartz-body {
     grid-template-columns: 260px minmax(0, 760px) 260px;
     column-gap: 2rem;
+  }
+
+  .page[data-frame="default"] > #quartz-body .sidebar.right {
+    padding-top: var(--brand-space-8);
   }
 }
 

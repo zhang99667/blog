@@ -161,6 +161,51 @@ function createReactionRoot() {
   return { root, scrollTop, views, viewCount, button, likeCount, status }
 }
 
+function resetReadingRailClearance() {
+  for (const element of document.querySelectorAll<HTMLElement>("[data-reaction-clearance]")) {
+    element.style.removeProperty("max-height")
+    element.removeAttribute("data-reaction-clearance")
+  }
+}
+
+function overlapsHorizontally(first: DOMRect, second: DOMRect): boolean {
+  return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 0
+}
+
+function clearReadingRail(root: HTMLElement, safeEdge: number) {
+  resetReadingRailClearance()
+
+  const rootBounds = root.getBoundingClientRect()
+  const rails = document.querySelectorAll<HTMLElement>(".blog-article-toc, .sidebar.right")
+  for (const rail of rails) {
+    const railStyle = getComputedStyle(rail)
+    if (railStyle.display === "none" || railStyle.position !== "sticky") continue
+    const toc = rail.querySelector<HTMLElement>("ul.toc-content.overflow:not(.collapsed)")
+    if (!toc) continue
+
+    const railBounds = rail.getBoundingClientRect()
+    if (!overlapsHorizontally(rootBounds, railBounds)) continue
+
+    if (rail.classList.contains("sidebar")) {
+      const maxHeight = Math.floor(rootBounds.top - railBounds.top - safeEdge)
+      if (maxHeight > 0 && railBounds.height > maxHeight) {
+        rail.style.maxHeight = `${maxHeight}px`
+        rail.dataset.reactionClearance = ""
+      }
+      continue
+    }
+
+    const tocBounds = toc.getBoundingClientRect()
+    if (tocBounds.height <= 0) continue
+    const overflow = tocBounds.bottom - (rootBounds.top - safeEdge)
+    if (overflow <= 0) continue
+
+    const maxHeight = Math.max(96, Math.floor(tocBounds.height - overflow))
+    toc.style.maxHeight = `${maxHeight}px`
+    toc.dataset.reactionClearance = ""
+  }
+}
+
 function positionReaction(root: HTMLElement, article: HTMLElement) {
   root.style.removeProperty("left")
   root.style.removeProperty("right")
@@ -171,23 +216,9 @@ function positionReaction(root: HTMLElement, article: HTMLElement) {
   const safeEdge = Number.isFinite(edge) ? edge : 16
   const articleBounds = article.getBoundingClientRect()
   const reactionBounds = root.getBoundingClientRect()
-  const preferredStartLeft = articleBounds.left - reactionBounds.width - safeEdge
   const preferredLeft = articleBounds.right + safeEdge
   const viewportLeft = window.innerWidth - reactionBounds.width - safeEdge
-  const readingRail = document.querySelector<HTMLElement>(".blog-article-toc")
-  const hasSideReadingRail = readingRail && getComputedStyle(readingRail).position === "sticky"
-  const anchorsToArticleEnd = !hasSideReadingRail && preferredLeft <= viewportLeft
-
-  if (hasSideReadingRail) {
-    const centeredTop = Math.max(safeEdge, (window.innerHeight - reactionBounds.height) / 2)
-    root.style.left = `${Math.max(safeEdge, preferredStartLeft)}px`
-    root.style.right = "auto"
-    root.style.top = `${centeredTop}px`
-    root.style.bottom = "auto"
-    root.dataset.anchor = "article"
-    root.dataset.side = "start"
-    return
-  }
+  const anchorsToArticleEnd = preferredLeft <= viewportLeft
 
   const left = Math.max(safeEdge, anchorsToArticleEnd ? preferredLeft : viewportLeft)
 
@@ -195,6 +226,7 @@ function positionReaction(root: HTMLElement, article: HTMLElement) {
   root.style.right = "auto"
   root.dataset.anchor = anchorsToArticleEnd ? "article" : "viewport"
   root.dataset.side = "end"
+  clearReadingRail(root, safeEdge)
 }
 
 function trackReactionPosition(root: HTMLElement, article: HTMLElement, signal: AbortSignal) {
@@ -209,6 +241,8 @@ function trackReactionPosition(root: HTMLElement, article: HTMLElement, signal: 
   const observer = new ResizeObserver(schedule)
   observer.observe(root)
   observer.observe(article)
+  document.addEventListener("click", schedule, { signal })
+  window.addEventListener("scroll", schedule, { passive: true, signal })
   window.addEventListener("resize", schedule, { signal })
   signal.addEventListener(
     "abort",
@@ -276,6 +310,7 @@ function unmountReactions() {
   activeRoot?.remove()
   activeRoot = undefined
   activePageKey = undefined
+  resetReadingRailClearance()
 }
 
 function mountReactions() {
