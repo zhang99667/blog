@@ -755,12 +755,64 @@ function buildChunks(records) {
 async function writeGeneratedPages(records, posts, manifest, assetLookup, includeCollections) {
   await writeHome(posts)
   await writeBlogIndex(posts, manifest)
+  await writeAbout(posts)
   await writeBlogPosts(posts, records, assetLookup)
   const socialImages = await generateArticleSocialImages(posts, { root, tokens: designTokens })
   await writeNotesIndex(records, manifest, includeCollections)
   console.log(
     `Article social cards: ${socialImages.generated} generated, ${socialImages.reused} reused, ${socialImages.removed} removed.`,
   )
+}
+
+async function writeAbout(posts) {
+  const latestPosts = posts.slice(0, 3).map(renderPostRow).join("\n")
+  const body = `---
+title: 关于 MarkZ
+description: MarkZ 是本博客与公开笔记的作者，持续记录 AI 开发、软件工具、系统设计和产品实践。
+---
+
+<div class="author-profile">
+  <header class="author-profile-intro">
+    <p class="eyebrow">About the author</p>
+    <p>MarkZ 是本博客与公开笔记的作者，持续记录 AI 开发、软件工具、系统设计和产品实践。</p>
+    <p>博客收录经过整理的长文；研究过程、参考资料和持续更新的工作记录保留在独立公开笔记库。内容以实际问题、实现过程和可验证证据为主，不用批量拼接的页面替代真实经验。</p>
+  </header>
+
+  <section aria-labelledby="author-topics">
+    <h2 id="author-topics">主要写什么</h2>
+    <ul class="author-topic-list">
+      <li><strong>AI 工程</strong><span>Agent、MCP、Skills、插件与模型调用链路</span></li>
+      <li><strong>软件工具</strong><span>开发工作台、自动化流程与可维护的工程实践</span></li>
+      <li><strong>系统设计</strong><span>稳定边界、验证机制、部署与长期演进</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="author-links">
+    <h2 id="author-links">站内与公开身份</h2>
+    <div class="author-link-grid">
+      <a href="/blog/"><strong>文章归档</strong><span>阅读经过整理的长文</span></a>
+      <a href="https://note.markz.fun/"><strong>公开笔记</strong><span>查看研究过程与资料网络</span></a>
+      <a href="https://github.com/zhang99667" rel="me"><strong>GitHub</strong><span>核对公开代码与项目活动</span></a>
+    </div>
+  </section>
+
+  <section aria-labelledby="author-latest">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Latest writing</p>
+        <h2 id="author-latest">最近文章</h2>
+      </div>
+      <a href="/blog/">查看全部</a>
+    </div>
+    <div class="post-feed">
+${latestPosts || "<p>还没有发布文章。</p>"}
+    </div>
+  </section>
+</div>
+`
+
+  await fs.mkdir(blogContentDir, { recursive: true })
+  await fs.writeFile(path.join(blogContentDir, "about.md"), body)
 }
 
 async function writeHome(posts) {

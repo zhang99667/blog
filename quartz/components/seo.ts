@@ -8,6 +8,9 @@ const NOTES_SITE_NAME = "MarkZ 公开笔记"
 const BLOG_DESCRIPTION =
   "MarkZ 的个人博客，记录 AI 开发、软件工具、系统设计与产品实践，以及值得长期保留的技术思考。"
 const NOTES_DESCRIPTION = "MarkZ 的公开笔记库。"
+const AUTHOR_PAGE_URL = "https://markz.fun/about"
+const AUTHOR_DESCRIPTION =
+  "MarkZ 是个人博客与公开笔记的作者，持续记录 AI 开发、软件工具、系统设计和产品实践。"
 
 export interface StructuredDataInput {
   canonicalUrl: string
@@ -98,7 +101,8 @@ export function createStructuredData({
       "@type": "Person",
       "@id": personId,
       name: "MarkZ",
-      url: BLOG_ORIGIN,
+      url: AUTHOR_PAGE_URL,
+      description: AUTHOR_DESCRIPTION,
       sameAs: ["https://github.com/zhang99667"],
     },
     {
@@ -126,14 +130,16 @@ export function createStructuredData({
     })
   }
 
+  const isProfile = canonicalUrl === AUTHOR_PAGE_URL
   const webPage: Record<string, unknown> = {
-    "@type": "WebPage",
+    "@type": isProfile ? ["WebPage", "ProfilePage"] : "WebPage",
     "@id": pageId,
     url: canonicalUrl,
     name: title,
     description,
     inLanguage: "zh-CN",
     isPartOf: { "@id": websiteId },
+    ...(isProfile ? { mainEntity: { "@id": personId } } : {}),
   }
 
   if (isArticle) {

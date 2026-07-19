@@ -102,8 +102,8 @@ test("article SEO contract requires canonical discovery, dates, JSON-LD, and loc
     <meta property="article:modified_time" content="2026-07-13T00:00:00.000Z">
     <link rel="canonical" href="https://markz.fun/blog/agent-mcp">
     <link rel="alternate" type="application/rss+xml" href="https://markz.fun/index.xml">
-    <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":"BreadcrumbList"},{"@type":"BlogPosting","publisher":{"@id":"https://markz.fun/#person"}}]}</script>
-  </head><body><img src="diagram.svg" alt="MCP 调用流程"></body></html>`)
+    <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"https://markz.fun/#person","url":"https://markz.fun/about"},{"@type":"WebPage"},{"@type":"BreadcrumbList"},{"@type":"BlogPosting","author":{"@id":"https://markz.fun/#person"},"publisher":{"@id":"https://markz.fun/#person"}}]}</script>
+  </head><body><a href="/about" rel="author">MarkZ</a><img src="diagram.svg" alt="MCP 调用流程"></body></html>`)
 
   assert.deepEqual(
     validateSeoMetadata("public/blog/agent-mcp.html", facts, {

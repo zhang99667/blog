@@ -28,10 +28,8 @@ export const BlogFrame: PageFrame = {
   name: "blog",
   render({ componentData, beforeBody, pageBody: Content, afterBody, right }: PageFrameProps) {
     const slug = String(componentData.fileData.slug ?? "")
-    const tableOfContents =
-      slug.startsWith("blog/") && slug !== "blog/index"
-        ? renderBlogTableOfContents(right, componentData)
-        : null
+    const isArticle = slug.startsWith("blog/") && slug !== "blog/index"
+    const tableOfContents = isArticle ? renderBlogTableOfContents(right, componentData) : null
 
     return (
       <>
@@ -57,6 +55,14 @@ export const BlogFrame: PageFrame = {
                 ))}
               </div>
             </div>
+            {isArticle && (
+              <p class="article-byline">
+                作者{" "}
+                <a href="/about" rel="author">
+                  MarkZ
+                </a>
+              </p>
+            )}
             {tableOfContents && (
               <aside class="blog-article-toc" aria-label="文章目录">
                 {tableOfContents}
@@ -86,6 +92,7 @@ export const BlogFrame: PageFrame = {
             </span>
           </div>
           <nav aria-label="页脚导航">
+            <a href="/about">关于</a>
             <a href="/index.xml">RSS</a>
             <a href="https://note.markz.fun/">笔记</a>
             <a href="https://github.com/zhang99667">GitHub</a>

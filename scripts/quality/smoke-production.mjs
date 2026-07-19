@@ -63,6 +63,17 @@ const routes = [
     applicationName: "MarkZ 个人博客",
   },
   {
+    url: "https://markz.fun/about",
+    evidence: ["MarkZ 是本博客与公开笔记的作者", 'rel="me"'],
+    title: "关于 MarkZ · 个人博客",
+    applicationName: "MarkZ 个人博客",
+    canonical: "https://markz.fun/about",
+    description: "MarkZ 是本博客与公开笔记的作者，持续记录 AI 开发、软件工具、系统设计和产品实践。",
+    siteName: "MarkZ 个人博客",
+    structuredTypes: ["WebPage", "ProfilePage", "Person"],
+    compressed: true,
+  },
+  {
     url: "https://note.markz.fun/",
     evidence: brandEvidence,
     title: "Notes · 公开笔记",
@@ -81,7 +92,7 @@ const routes = [
     applicationName: "JSONUtils",
     canonical: "https://jsonutils.markz.fun/",
     description:
-      "JSONUtils 是面向开发者的在线 JSON 格式化与校验工具，可定位语法错误、智能修复异常 JSON，并支持 JSONPath 查询、差异对比、JSON Schema 校验和 TypeScript 类型生成；常规处理在浏览器本地完成。",
+      "免费在线 JSON 格式化、校验与修复工具：粘贴或导入数据即可美化、压缩、定位语法错误，并支持 JSONPath、Diff、JSON Schema 和 TypeScript 类型生成。常规处理仅在浏览器本地完成。",
     siteName: "JSONUtils",
     structuredTypes: ["WebSite", "WebApplication"],
     compressed: true,
@@ -89,7 +100,11 @@ const routes = [
   },
   {
     url: "https://jsonutils.markz.fun/guides/json-formatter/",
-    evidence: ["<h1>在线 JSON 格式化工具：美化、压缩与深度展开</h1>"],
+    evidence: [
+      "<h1>在线 JSON 格式化工具：美化、压缩与深度展开</h1>",
+      "输入与预期结果",
+      "常见问题排查",
+    ],
     title: "在线 JSON 格式化工具：美化、压缩与深度展开 | JSONUtils",
     canonical: "https://jsonutils.markz.fun/guides/json-formatter/",
     description:
@@ -160,12 +175,14 @@ const failures = []
 
 function structuredDataTypes(payloads) {
   return new Set(
-    payloads.flatMap((payload) => [
-      payload?.["@type"],
-      ...(Array.isArray(payload?.["@graph"])
-        ? payload["@graph"].map((node) => node?.["@type"])
-        : []),
-    ]),
+    payloads
+      .flatMap((payload) => [
+        payload?.["@type"],
+        ...(Array.isArray(payload?.["@graph"])
+          ? payload["@graph"].map((node) => node?.["@type"])
+          : []),
+      ])
+      .flatMap((type) => (Array.isArray(type) ? type : [type])),
   )
 }
 

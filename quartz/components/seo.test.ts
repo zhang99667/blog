@@ -88,6 +88,7 @@ test("structured data connects a BlogPosting to the independent blog entity", ()
   assert.equal(website?.name, "MarkZ 个人博客")
   assert.equal(blog?.name, "MarkZ 个人博客")
   assert.deepEqual(person?.sameAs, ["https://github.com/zhang99667"])
+  assert.equal(person?.url, "https://markz.fun/about")
   assert.deepEqual(webPage?.breadcrumb, {
     "@id": "https://markz.fun/blog/agent-mcp#breadcrumb",
   })
@@ -120,6 +121,26 @@ test("structured data connects a BlogPosting to the independent blog entity", ()
   })
   assert.deepEqual(article.isPartOf, { "@id": "https://markz.fun/#blog" })
   assert.deepEqual(article.publisher, { "@id": "https://markz.fun/#person" })
+})
+
+test("author page connects visible profile URL to the canonical Person entity", () => {
+  const structured = createStructuredData({
+    canonicalUrl: "https://markz.fun/about",
+    title: "关于 MarkZ",
+    description: "MarkZ 是本博客与公开笔记的作者。",
+    imageUrl: "https://markz.fun/static/markz-card-v2.png",
+    isArticle: false,
+  })
+  const graph = structured["@graph"] as Record<string, any>[]
+  const profile = graph.find(
+    (node) => Array.isArray(node["@type"]) && node["@type"].includes("ProfilePage"),
+  )
+  const person = graph.find((node) => node["@type"] === "Person")
+
+  assert.ok(profile)
+  assert.equal(profile.url, "https://markz.fun/about")
+  assert.deepEqual(profile.mainEntity, { "@id": "https://markz.fun/#person" })
+  assert.equal(person?.url, "https://markz.fun/about")
 })
 
 test("structured data serialization cannot terminate its script element", () => {

@@ -78,6 +78,7 @@ function firstArticle(
 
 const pages = [
   { id: "blog-home", baseUrl: "http://127.0.0.1:4173", path: "/" },
+  { id: "blog-author", baseUrl: "http://127.0.0.1:4173", path: "/about" },
   {
     id: "blog-article",
     baseUrl: "http://127.0.0.1:4173",
@@ -90,6 +91,7 @@ const pages = [
     path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"]),
   },
 ]
+const blogArticlePage = pages.find(({ id }) => id === "blog-article")!
 
 const hasArticleImage = (html: string) => /<article\b[\s\S]*?<img\b/.test(html)
 const imagePages = [
@@ -367,6 +369,28 @@ for (const target of pages) {
           expect(firstPost).not.toBeNull()
           expect(firstPost!.y).toBeLessThan(viewport.height)
         }
+        if (target.id === "blog-author") {
+          await expect(page.getByRole("heading", { level: 1, name: "关于 MarkZ" })).toHaveCount(1)
+          await expect(
+            page.getByText("MarkZ 是本博客与公开笔记的作者", { exact: false }),
+          ).toBeVisible()
+          await expect(page.locator('.author-link-grid a[rel="me"]')).toHaveAttribute(
+            "href",
+            "https://github.com/zhang99667",
+          )
+          const structuredData = await page
+            .locator('script[type="application/ld+json"]')
+            .textContent()
+          const graph = JSON.parse(structuredData ?? "{}")["@graph"] as Array<
+            Record<string, unknown>
+          >
+          expect(
+            graph.some((node) => {
+              const type = node["@type"]
+              return Array.isArray(type) && type.includes("ProfilePage")
+            }),
+          ).toBe(true)
+        }
         const brandStyle = await brand.evaluate((element) => {
           const style = getComputedStyle(element)
           return { family: style.fontFamily, weight: style.fontWeight }
@@ -431,6 +455,10 @@ for (const target of pages) {
         const blogArticleToc = page.locator(".blog-article-toc")
         if (target.id === "blog-article") {
           await expect(blogArticleToc).toHaveCount(1)
+          await expect(page.locator('.article-byline a[rel="author"]')).toHaveAttribute(
+            "href",
+            "/about",
+          )
           await expect(page.locator('.page[data-frame="blog"] .graph')).toHaveCount(0)
 
           const toc = blogArticleToc.locator(".toc")
@@ -917,7 +945,7 @@ test("blog reading layout remains styled without JavaScript", async ({ browser }
   const page = await context.newPage()
 
   try {
-    await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "load" })
+    await page.goto(`${blogArticlePage.baseUrl}${blogArticlePage.path}`, { waitUntil: "load" })
     await expect(page.locator(".blog-site-header")).toHaveCSS("display", "flex")
     await expect(page.locator(".breadcrumb-container")).toHaveCSS("display", "flex")
     await expect(page.locator(".blog-article-toc .toc-header")).toHaveCSS("display", "flex")
@@ -938,7 +966,9 @@ test("blog reading layout remains styled without JavaScript", async ({ browser }
 
 test("editorial articles expose one decodable title-specific social image", async ({ page }) => {
   await mockReactions(page)
-  await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
+  await page.goto(`${blogArticlePage.baseUrl}${blogArticlePage.path}`, {
+    waitUntil: "domcontentloaded",
+  })
 
   const ogImage = await page.locator('meta[property="og:image"]').getAttribute("content")
   expect(ogImage).toMatch(
@@ -970,7 +1000,7 @@ test("editorial articles expose one decodable title-specific social image", asyn
   expect(contentImageAlts.length).toBeGreaterThan(0)
   expect(contentImageAlts.every((alt) => alt.trim().length > 0)).toBe(true)
 
-  const localImageUrl = `${pages[1].baseUrl}${new URL(ogImage!).pathname}`
+  const localImageUrl = `${blogArticlePage.baseUrl}${new URL(ogImage!).pathname}`
   const dimensions = await page.evaluate(
     (src) =>
       new Promise<{ width: number; height: number }>((resolve, reject) => {
@@ -1053,7 +1083,9 @@ test.describe("article reactions", () => {
     page,
   }) => {
     const mock = await mockReactions(page, 4)
-    await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "domcontentloaded" })
+    await page.goto(`${blogArticlePage.baseUrl}${blogArticlePage.path}`, {
+      waitUntil: "domcontentloaded",
+    })
 
     const button = page.locator("[data-reaction-like]")
     const viewCount = page.locator("[data-article-reaction] [data-view-count]")

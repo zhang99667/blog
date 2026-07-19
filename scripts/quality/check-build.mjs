@@ -61,6 +61,7 @@ export function inspectHtml(source) {
     inlineStyleElements: 0,
     h1Count: 0,
     images: [],
+    authorLinks: [],
   }
 
   function addCspReference(directive, value, nodeName, attribute) {
@@ -109,6 +110,10 @@ export function inspectHtml(source) {
         const directive = preloadDirectives[attrs.as]
         if (directive) addCspReference(directive, attrs.href, "link", "href")
       }
+    }
+    if (node.nodeName === "a") {
+      const relations = new Set((attrs.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean))
+      if (relations.has("author") && attrs.href) facts.authorLinks.push(attrs.href)
     }
     if (node.nodeName === "script") {
       const scriptType = attrs.type?.toLowerCase() ?? ""
@@ -342,7 +347,10 @@ function structuredDataNodes(payloads) {
 }
 
 function hasStructuredType(payloads, type) {
-  return structuredDataNodes(payloads).some((node) => node?.["@type"] === type)
+  return structuredDataNodes(payloads).some((node) => {
+    const value = node?.["@type"]
+    return Array.isArray(value) ? value.includes(type) : value === type
+  })
 }
 
 export function validateArticleSocialMetadata(relativePath, facts, manifestEntry) {
@@ -411,8 +419,20 @@ export function validateSeoMetadata(relativePath, facts, options) {
     const articleNode = structuredDataNodes(facts.structuredData).find(
       (node) => node?.["@type"] === "BlogPosting",
     )
+    const personNode = structuredDataNodes(facts.structuredData).find(
+      (node) => node?.["@type"] === "Person",
+    )
     if (!articleNode?.publisher) {
       failures.push(`${relativePath} BlogPosting needs publisher identity`)
+    }
+    if (personNode?.url !== "https://markz.fun/about") {
+      failures.push(`${relativePath} Person identity must resolve to the visible author page`)
+    }
+    if (articleNode?.author?.["@id"] !== personNode?.["@id"]) {
+      failures.push(`${relativePath} BlogPosting author must reference the declared Person`)
+    }
+    if (!facts.authorLinks.includes("/about")) {
+      failures.push(`${relativePath} article needs a visible rel=author link to /about`)
     }
     for (const image of facts.images) {
       if (!image.alt.trim()) {
@@ -854,6 +874,26 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
           }
           if (facts.h1Count !== 1) {
             failures.push(`${relativePath} blog home must contain exactly one h1`)
+          }
+        }
+        if (output.id === "blog" && outputRelativePath === "about.html") {
+          const profileNode = structuredDataNodes(facts.structuredData).find((node) => {
+            const type = node?.["@type"]
+            return Array.isArray(type) ? type.includes("ProfilePage") : type === "ProfilePage"
+          })
+          const personNode = structuredDataNodes(facts.structuredData).find(
+            (node) => node?.["@type"] === "Person",
+          )
+          if (!profileNode || !personNode) {
+            failures.push(
+              `${relativePath} author page needs ProfilePage and Person structured data`,
+            )
+          }
+          if (profileNode?.mainEntity?.["@id"] !== personNode?.["@id"]) {
+            failures.push(`${relativePath} ProfilePage must identify the declared Person`)
+          }
+          if (facts.h1Count !== 1) {
+            failures.push(`${relativePath} author page must contain exactly one h1`)
           }
         }
       }
