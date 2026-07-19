@@ -352,6 +352,12 @@ for (const target of pages) {
             page.locator(".blog-hero, .hero-copy, .home-actions, .notes-bridge, .bridge-link"),
           ).toHaveCount(0)
           await expect(page.getByRole("heading", { level: 1, name: "最近文章" })).toHaveCount(1)
+          await expect(page.getByRole("link", { name: "查看全部" })).toHaveCount(0)
+          const archiveResponse = await page.request.get(`${target.baseUrl}/blog/`)
+          expect(archiveResponse.ok()).toBe(true)
+          const archiveHtml = await archiveResponse.text()
+          const archivePostCount = (archiveHtml.match(/class="post-row"/g) ?? []).length
+          await expect(page.locator(".post-row")).toHaveCount(archivePostCount)
           const postDates = await page
             .locator(".post-row time[datetime]")
             .evaluateAll((dates) => dates.map((date) => date.getAttribute("datetime") ?? ""))
@@ -897,7 +903,9 @@ test("blog listing and article display the same editorial date", async ({ page }
 
   await firstPost.locator("a").click()
   await expect(page).toHaveURL(/\/blog\//)
-  const articleDate = await page.locator(".content-meta time").getAttribute("datetime")
+  const articleDate = await page
+    .locator("main.center > .page-header .content-meta time")
+    .getAttribute("datetime")
   expect(articleDate?.slice(0, 10)).toBe(listedDate)
 })
 

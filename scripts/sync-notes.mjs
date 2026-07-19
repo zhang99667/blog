@@ -764,8 +764,7 @@ async function writeGeneratedPages(records, posts, manifest, assetLookup, includ
 }
 
 async function writeHome(posts) {
-  const latestPosts = posts.slice(0, 5)
-  const postRows = latestPosts.map(renderPostRow).join("\n")
+  const postRows = posts.map(renderPostRow).join("\n")
 
   const body = `---
 title: ${brand.name}
@@ -779,7 +778,6 @@ description: ${JSON.stringify(brand.description)}
         <p class="eyebrow">Latest writing</p>
         <h1>最近文章</h1>
       </div>
-      <a href="/blog/">查看全部</a>
     </div>
     <div class="post-feed">
 ${postRows || "<p>还没有发布文章。</p>"}
