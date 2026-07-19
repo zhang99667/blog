@@ -12,6 +12,7 @@ import {
   validateArticleSocialMetadata,
   validateContentSecurityPolicy,
   validateHtmlMetadata,
+  validateLegacyStylesheetCompatibility,
   validateSeoMetadata,
 } from "./check-build.mjs"
 import {
@@ -28,6 +29,29 @@ test("HTML inspection uses structured document data", () => {
   assert.equal(facts.titleAuthority, "MarkZ")
   assert.equal(facts.meta.get("description"), "Blog")
   assert.deepEqual(facts.references, ["/blog/hello"])
+})
+
+test("legacy browsers receive one compatibility-transformed CSS bundle", () => {
+  assert.deepEqual(
+    validateLegacyStylesheetCompatibility(
+      ["../index-a1b2c3d4.css", "../static/resource-style-a1b2c3d4.css"],
+      ["html{box-sizing:border-box}", ".page{display:grid}"],
+    ),
+    [],
+  )
+})
+
+test("legacy CSS contract rejects split or untranslated required styles", () => {
+  assert.deepEqual(
+    validateLegacyStylesheetCompatibility(
+      ["../index-a1b2c3d4.css", "../component-a1b2c3d4.css"],
+      ["@layer quartz-base{html{box-sizing:border-box}}"],
+    ),
+    [
+      "must bundle base, component, and custom styles before compatibility transform",
+      "must not hide required styles inside the quartz-base cascade layer",
+    ],
+  )
 })
 
 test("SEO redirects use redirect metadata instead of content-page metadata", () => {

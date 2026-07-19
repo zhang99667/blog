@@ -50,7 +50,7 @@
   display: none;
 }
 
-.article-reaction[data-anchor="article"] .article-reaction__scroll-top {
+.article-reaction[data-anchor="article"][data-side="end"] .article-reaction__scroll-top {
   align-self: flex-start;
 }
 

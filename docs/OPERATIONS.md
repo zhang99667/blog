@@ -174,6 +174,13 @@ GitHub 仓库需要以下 Actions 配置：
 5. CSP 值只在 `deploy/nginx.conf` host map 修改；`security-headers.inc` 只发射映射值。默认值必须为空，避免接管 JSONUtils 和装箱单策略。
 6. 运行完整浏览器矩阵、远端 `nginx -t` 和生产 smoke；一次无报错刷新不能证明 SPA、404、图谱和双主题都合规。
 
+### 部分 Android 浏览器只显示裸 HTML
+
+1. 若页头仍有少量布局，但链接恢复默认下划线、正文和目录像浏览器原生控件，先检查最终 CSS 是否重新出现 `@layer quartz-base`；旧 Android WebView 会忽略整个未知层。
+2. 检查文章 HTML 必须只用一个 `index-*.css` 承载基础、组件和自定义样式；可以另有插件运行时样式，但不能重新出现 `component-*.css` 或 `custom-*.css`。所有 URL 必须返回 `200 text/css`。不要用 UA 判断、内联补丁或要求读者清缓存掩盖构建错误。
+3. 运行 `npm run quality:build`；它必须扫描博客、笔记与回退构建的全部 CSS，拒绝关键 cascade layer 和未先合并就分开转译的关键样式。
+4. 上线后运行 `npm run smoke:production`，由真实文章重新抓取每个样式资源并执行同一兼容契约。
+
 ### note.markz.fun 返回 421
 
 1. 检查证书是否包含 `note.markz.fun`。

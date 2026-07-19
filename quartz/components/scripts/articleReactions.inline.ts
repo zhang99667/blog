@@ -164,21 +164,37 @@ function createReactionRoot() {
 function positionReaction(root: HTMLElement, article: HTMLElement) {
   root.style.removeProperty("left")
   root.style.removeProperty("right")
+  root.style.removeProperty("top")
+  root.style.removeProperty("bottom")
 
   const edge = Number.parseFloat(getComputedStyle(root).right)
   const safeEdge = Number.isFinite(edge) ? edge : 16
   const articleBounds = article.getBoundingClientRect()
   const reactionBounds = root.getBoundingClientRect()
+  const preferredStartLeft = articleBounds.left - reactionBounds.width - safeEdge
   const preferredLeft = articleBounds.right + safeEdge
   const viewportLeft = window.innerWidth - reactionBounds.width - safeEdge
   const readingRail = document.querySelector<HTMLElement>(".blog-article-toc")
   const hasSideReadingRail = readingRail && getComputedStyle(readingRail).position === "sticky"
-  const anchorsToArticle = !hasSideReadingRail && preferredLeft <= viewportLeft
-  const left = Math.max(safeEdge, anchorsToArticle ? preferredLeft : viewportLeft)
+  const anchorsToArticleEnd = !hasSideReadingRail && preferredLeft <= viewportLeft
+
+  if (hasSideReadingRail) {
+    const centeredTop = Math.max(safeEdge, (window.innerHeight - reactionBounds.height) / 2)
+    root.style.left = `${Math.max(safeEdge, preferredStartLeft)}px`
+    root.style.right = "auto"
+    root.style.top = `${centeredTop}px`
+    root.style.bottom = "auto"
+    root.dataset.anchor = "article"
+    root.dataset.side = "start"
+    return
+  }
+
+  const left = Math.max(safeEdge, anchorsToArticleEnd ? preferredLeft : viewportLeft)
 
   root.style.left = `${left}px`
   root.style.right = "auto"
-  root.dataset.anchor = anchorsToArticle ? "article" : "viewport"
+  root.dataset.anchor = anchorsToArticleEnd ? "article" : "viewport"
+  root.dataset.side = "end"
 }
 
 function trackReactionPosition(root: HTMLElement, article: HTMLElement, signal: AbortSignal) {

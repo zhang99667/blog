@@ -21,6 +21,9 @@ import {
 } from "../../util/theme"
 import { Features, transform } from "lightningcss"
 import { transform as transpile } from "esbuild"
+import postcss from "postcss"
+// @ts-expect-error Quartz uses classic module resolution; this package exposes types via ESM exports.
+import postcssCascadeLayers from "@csstools/postcss-cascade-layers"
 import { write } from "./helpers"
 import { patchMermaidRuntimeSource } from "../../components/MermaidCompatibility"
 
@@ -347,14 +350,17 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
         (c) => !componentResources.componentCssStrings.has(c),
       )
 
-      // Core CSS: theme + fonts + global CSS + base styles (no per-component CSS)
+      // Process the complete layered bundle in one pass. The CSSTools transform
+      // preserves layer precedence with ordinary selectors for older WebViews.
       const quartzBase = joinStyles(
         ctx.cfg.configuration.theme,
         googleFontsStyleSheet,
         ...globalCss,
         baseStyles,
       )
-      const stylesheet = `@layer quartz-base {\n${quartzBase}\n}\n${customStyles}`
+      const stylesheet = `@layer quartz-base {\n${quartzBase}\n${[
+        ...componentResources.componentCssStrings,
+      ].join("\n")}\n}\n${customStyles}`
 
       const prescript = await joinScripts(componentResources.beforeDOMLoaded)
 
@@ -406,41 +412,27 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
         chrome: 109 << 16,
       }
 
+      const compatibleStylesheet = await postcss([
+        postcssCascadeLayers({
+          onConditionalRulesChangingLayerOrder: "warn",
+          onImportLayerRule: "warn",
+          onRevertLayerKeyword: "warn",
+        }),
+      ]).process(stylesheet, { from: "index.css" })
+      const cssWarnings = compatibleStylesheet.warnings()
+      if (cssWarnings.length > 0) {
+        throw new Error(cssWarnings.map((warning) => warning.toString()).join("\n"))
+      }
+
       const cssContent = transform({
         filename: "index.css",
-        code: Buffer.from(stylesheet),
+        code: Buffer.from(compatibleStylesheet.css),
         minify: true,
         targets: lightningTargets,
         include: Features.MediaQueries,
       }).code.toString()
 
-      const cssStringToFilename = new Map<string, string>()
-      for (const cssString of componentResources.componentCssStrings) {
-        if (cssStringToFilename.has(cssString)) continue
-
-        const wrapped = `@layer quartz-base {\n${cssString}\n}`
-        const minified = transform({
-          filename: "component.css",
-          code: Buffer.from(wrapped),
-          minify: true,
-          targets: lightningTargets,
-          include: Features.MediaQueries,
-        }).code.toString()
-
-        const hash = hashContent(minified)
-        const slug = `component-${hash}`
-        const filename = `${slug}.css`
-        cssStringToFilename.set(cssString, filename)
-
-        yield write({
-          ctx,
-          slug: slug as FullSlug,
-          ext: ".css",
-          content: minified,
-        })
-      }
-
-      ctx.componentCssMap = cssStringToFilename
+      ctx.componentCssMap = new Map()
 
       // Extract inline CSS/JS from plugin externalResources() into external files.
       // This prevents large inline payloads (e.g. theme CSS) from being duplicated

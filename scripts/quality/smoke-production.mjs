@@ -3,7 +3,11 @@ import os from "node:os"
 import path from "node:path"
 import { promises as fs } from "node:fs"
 import sharp from "sharp"
-import { inspectHtml, validateArticleSocialMetadata } from "./check-build.mjs"
+import {
+  inspectHtml,
+  validateArticleSocialMetadata,
+  validateLegacyStylesheetCompatibility,
+} from "./check-build.mjs"
 import { loadContentSecurityPolicy } from "./content-security-policy.mjs"
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..")
@@ -176,6 +180,21 @@ try {
   validateSecurityHeaders("https://markz.fun/blog/agent-mcp", articleResponse)
   const facts = inspectHtml(await articleResponse.text())
   failures.push(...validateArticleSocialMetadata("production agent-mcp", facts, entry))
+  const localStylesheets = facts.stylesheets.filter((reference) => !/^https?:\/\//i.test(reference))
+  const productionCss = await Promise.all(
+    localStylesheets.map(async (reference) => {
+      const url = new URL(reference, articleResponse.url)
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      if (!response.ok) throw new Error(`${url} returned ${response.status}`)
+      validateSecurityHeaders(url.toString(), response)
+      return response.text()
+    }),
+  )
+  failures.push(
+    ...validateLegacyStylesheetCompatibility(facts.stylesheets, productionCss).map(
+      (failure) => `production CSS ${failure}`,
+    ),
+  )
 
   const imageUrl = `https://markz.fun/static/${entry.path}`
   const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
@@ -325,6 +344,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, canonical legacy redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

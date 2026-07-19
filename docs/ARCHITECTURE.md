@@ -173,7 +173,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 页面标题、应用名和社交元数据归 `quartz/components/Head.tsx`；SPA 只按标题元素保存的独立权威值恢复浏览器标题，不能从旧工具状态或可变正文猜测。canonical 和 JSON-LD 归 `quartz/components/seo.ts`；RSS 与 robots 归 `scripts/build-site-extras.mjs`。笔记回退页 canonical 指向 `note.markz.fun` 并保持 `noindex`。
 - 文章分享图的视觉值归设计令牌，标题、日期和分类归同步后的文章 frontmatter；`article-social-images.mjs` 负责内容寻址和渲染，Static emitter 只向博客产物发射。通用页面和笔记继续使用版本化品牌卡片。
 - 文章末尾的“继续阅读”归同步器：只从博客成稿中按显式链接、反向引用、共同标签和同集合排序，最多三篇；不把仅笔记内容混入博客推荐。
-- 长文回顶与文章互动栏共用 `ArticleReactions` 的 SPA 生命周期和正文边缘定位；回顶是纯前端阅读辅助，不访问互动 API，短文与目录页不挂载可见入口。
+- 长文回顶与文章互动栏共用 `ArticleReactions` 的 SPA 生命周期和正文边缘定位；博客右侧目录吸顶时整组工具固定在正文左侧近邻，无阅读栏时优先贴正文右侧。回顶是纯前端阅读辅助，不访问互动 API，短文与目录页不挂载可见入口。
 - 成熟度能力、评分、用户处置和风险边界归 `ai/evolution.json`；探针只报告可观察事实，明确不采纳项保持未达成但退出排序，定时工作流不能直接修改代码、部署或处理密钥。
 - 远程 GitHub Actions 必须固定到完整 commit SHA，并在同行保留精确版本注释；`.github/dependabot.yml` 负责持续提出更新，探针负责拒绝浮动标签和已淘汰运行时主版本。
 - HSTS、`nosniff`、防嵌入和 Referrer 策略归 `deploy/security-headers.inc`；`nginx.conf` 只负责在 TLS server 和缓存 location 引用，不复制具体值。生产 smoke 必须验证真实响应头而不只检查配置文本。
@@ -202,11 +202,13 @@ deploy/nginx.conf CSP host map (one policy literal)
 
 公开链接使用两阶段生成：第一阶段先确定全部可公开记录，第二阶段才重写正文。目标已公开时输出带完整公开路径的 Quartz 双链，保留关系图谱和回链；目标私有、被过滤或不存在时只保留可读标题，不生成假链接。代码块、外部 URL 和真实公开资产不参与降级。
 
-博客正文复用同一条 Markdown 目录解析链，但只从 Quartz 右侧阅读组件中渲染 `TableOfContents`，不把 Graph、Backlinks 或笔记树带进博客。达到专用阅读栏断点时，目录位于正文右侧并随阅读吸顶，互动栏锚到目录外侧；空间不足时目录位于标题元数据之后、正文之前。超长目录在受限高度内独立滚动并保留原生折叠能力。首页、归档和无目录文章不生成该区域；这一展示层不参与文章稳定 ID、浏览量或点赞存储。
+博客正文复用同一条 Markdown 目录解析链，但只从 Quartz 右侧阅读组件中渲染 `TableOfContents`，不把 Graph、Backlinks 或笔记树带进博客。达到专用阅读栏断点时，目录位于正文右侧并随阅读吸顶，互动栏固定在正文左侧近邻；空间不足时目录位于标题元数据之后、正文之前。超长目录在受限高度内独立滚动并保留原生折叠能力。首页、归档和无目录文章不生成该区域；这一展示层不参与文章稳定 ID、浏览量或点赞存储。
 
 关系图谱继续使用上游 D3 + Pixi 渲染器，但运行时由项目锁定版本并在构建期裁剪成两个本域静态文件。`notes` 从 `/static/vendor/` 加载，`notes-fallback` 根据 `data-basepath` 从 `/notes/static/vendor/` 加载；没有图谱布局的博客构建不发射也不执行这段运行时。构建质量门禁拒绝重新出现 jsDelivr 依赖，并要求两个入口的资产与加载器同时存在。
 
 Quartz 的内容索引和 404 恢复脚本由外部 `prescript`、组件资源承载，不再写进每页 HTML。Explorer 只接受项目已验证的声明式默认排序，运行时移除函数反序列化；自定义回调在有 CSP 安全实现前直接失败。Mermaid 11.16.0 的固定 Tiny 发行包在构建期转换成本站 ESM 并只在图表页按需加载；Pixi 使用官方 CSP 兼容模块替换动态函数生成。200 KB 核心脚本预算不因这些按需运行时放宽，完整自托管文件仍计入总 JS 预算。
+
+页面 CSS 使用内容哈希缓存，但关键布局不要求浏览器原生支持 Cascade Layers。构建把主题、基础样式、全部 Quartz 组件和 MarkZ 自定义规则组成完整 layer bundle，再由 `@csstools/postcss-cascade-layers` 把层级优先关系转成普通选择器，最后交给 Lightning CSS 压缩为单个 `index-*.css`；插件运行时样式仍作为独立本域资源按需加载。这样现代浏览器视觉语义不变，不支持 `@layer` 的旧 Android WebView 也能得到完整基础布局。构建门禁扫描全部 CSS 并拒绝未转译 layer 或拆分的关键样式，生产 smoke 再从真实文章抓取同一组资源复核。
 
 博客成稿同步时同时生成静态“继续阅读”。关系计算只读取同一次同步中的公开记录，不请求外部推荐服务，也不在浏览器端重排，因此构建可复现、链接可检查、无额外隐私数据。
 

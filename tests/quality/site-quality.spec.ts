@@ -566,16 +566,22 @@ for (const target of pages) {
           if (hasBlogReadingRail) {
             const readingRailBounds = await blogArticleToc.boundingBox()
             expect(readingRailBounds).not.toBeNull()
-            await expect(reactionRoot).toHaveAttribute("data-anchor", "viewport")
-            expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
-            expect(
-              bounds!.x - (readingRailBounds!.x + readingRailBounds!.width),
-            ).toBeGreaterThanOrEqual(8)
+            await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
+            await expect(reactionRoot).toHaveAttribute("data-side", "start")
+            expect(articleBounds!.x - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
+            expect(bounds!.x + bounds!.width).toBeLessThan(articleBounds!.x)
+            expect(bounds!.y + bounds!.height / 2).toBeCloseTo(viewport.height / 2, 0)
+            expect(viewport.height - bounds!.y - bounds!.height).toBeGreaterThanOrEqual(
+              viewport.height * 0.4,
+            )
+            expect(readingRailBounds!.x - (bounds!.x + bounds!.width)).toBeGreaterThanOrEqual(8)
           } else if (hasSideRoom) {
             await expect(reactionRoot).toHaveAttribute("data-anchor", "article")
+            await expect(reactionRoot).toHaveAttribute("data-side", "end")
             expect(bounds!.x - articleBounds!.x - articleBounds!.width).toBeCloseTo(safeEdge, 0)
           } else {
             await expect(reactionRoot).toHaveAttribute("data-anchor", "viewport")
+            await expect(reactionRoot).toHaveAttribute("data-side", "end")
             expect(viewport.width - bounds!.x - bounds!.width).toBeCloseTo(safeEdge, 0)
           }
 
@@ -754,6 +760,33 @@ test("blog listing and article display the same editorial date", async ({ page }
   await expect(page).toHaveURL(/\/blog\//)
   const articleDate = await page.locator(".content-meta time").getAttribute("datetime")
   expect(articleDate?.slice(0, 10)).toBe(listedDate)
+})
+
+test("blog reading layout remains styled without JavaScript", async ({ browser }) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+  })
+  const page = await context.newPage()
+
+  try {
+    await page.goto(`${pages[1].baseUrl}${pages[1].path}`, { waitUntil: "load" })
+    await expect(page.locator(".blog-site-header")).toHaveCSS("display", "flex")
+    await expect(page.locator(".breadcrumb-container")).toHaveCSS("display", "flex")
+    await expect(page.locator(".blog-article-toc .toc-header")).toHaveCSS("display", "flex")
+    await expect(page.locator("article")).toBeVisible()
+    expect(
+      Number.parseFloat(
+        await page.locator(".article-title").evaluate((element) => {
+          return getComputedStyle(element).fontSize
+        }),
+      ),
+    ).toBeGreaterThan(32)
+    await expect(page.locator('link[href*="component-"]')).toHaveCount(0)
+    await expect(page.locator('link[href*="custom-"]')).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
 })
 
 test("editorial articles expose one decodable title-specific social image", async ({ page }) => {

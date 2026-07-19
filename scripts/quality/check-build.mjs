@@ -51,6 +51,7 @@ export function inspectHtml(source) {
     structuredData: [],
     structuredDataErrors: [],
     fontStylesheets: [],
+    stylesheets: [],
     refresh: "",
     cspReferences: [],
     inlineExecutableScripts: [],
@@ -90,6 +91,7 @@ export function inspectHtml(source) {
       if (relations.has("stylesheet") && attrs.href?.startsWith("https://fonts.googleapis.com/")) {
         facts.fontStylesheets.push(attrs.href)
       }
+      if (relations.has("stylesheet") && attrs.href) facts.stylesheets.push(attrs.href)
       if (relations.has("stylesheet")) addCspReference("style-src-elem", attrs.href, "link", "href")
       if (relations.has("preconnect")) addCspReference("connect-src", attrs.href, "link", "href")
       if (relations.has("manifest")) addCspReference("manifest-src", attrs.href, "link", "href")
@@ -164,6 +166,34 @@ export function inspectHtml(source) {
 
   visit(document)
   return facts
+}
+
+function stylesheetFilename(reference) {
+  if (/^https?:\/\//i.test(reference)) return ""
+  return reference.split(/[?#]/, 1)[0].split("/").pop() ?? ""
+}
+
+export function validateLegacyStylesheetCompatibility(stylesheets, cssSources) {
+  const failures = []
+  const localStylesheets = stylesheets.map(stylesheetFilename).filter(Boolean)
+  const baseStylesheets = localStylesheets.filter((name) =>
+    /^index(?:-[0-9a-f]+)?\.css$/.test(name),
+  )
+  const splitRequiredStyles = localStylesheets.filter((name) =>
+    /^(?:component|custom)(?:-[0-9a-f]+)?\.css$/.test(name),
+  )
+
+  if (baseStylesheets.length !== 1) {
+    failures.push("must load exactly one compatibility-transformed index stylesheet")
+  }
+  if (splitRequiredStyles.length > 0) {
+    failures.push("must bundle base, component, and custom styles before compatibility transform")
+  }
+  if (cssSources.some((source) => /@layer\s+quartz-base\b/.test(source))) {
+    failures.push("must not hide required styles inside the quartz-base cascade layer")
+  }
+
+  return failures
 }
 
 function policySources(policy, directive) {
@@ -653,6 +683,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
     const cssFiles = await listFiles(outputRoot, ".css")
     const jsFiles = await listFiles(outputRoot, ".js")
     const cssBytes = await sumFileSizes(cssFiles)
+    const cssSources = await Promise.all(cssFiles.map((file) => fs.readFile(file, "utf8")))
     const jsBytes = await sumFileSizes(jsFiles)
     const initialJsBytes = await maxInitialJavaScriptBytes(outputRoot, htmlFiles)
     if (cssBytes > output.maxTotalCssBytes) {
@@ -677,6 +708,12 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
     } catch {
       failures.push(`${output.id} output is missing index.html`)
     }
+    failures.push(
+      ...validateLegacyStylesheetCompatibility(
+        inspectHtml(indexSource).stylesheets,
+        cssSources,
+      ).map((failure) => `${output.id} ${failure}`),
+    )
     for (const snippet of [
       `data-brand-version="${tokens.version}"`,
       `markz-icon-${tokens.brand.assetRevision}.png`,

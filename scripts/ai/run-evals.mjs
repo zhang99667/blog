@@ -451,6 +451,13 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
   const blogFrame = await readText(root, "quartz/components/frames/BlogFrame.tsx")
   const browserSuite = await readText(root, "tests/quality/site-quality.spec.ts")
   const customStyles = await readText(root, "quartz/styles/custom.scss")
+  const reactionScript = await readText(
+    root,
+    "quartz/components/scripts/articleReactions.inline.ts",
+  )
+  const componentResources = await readText(root, "quartz/plugins/emitters/componentResources.ts")
+  const buildQuality = await readText(root, "scripts/quality/check-build.mjs")
+  const productionSmoke = await readText(root, "scripts/quality/smoke-production.mjs")
   for (const snippet of [
     "renderBlogTableOfContents",
     'hasClassName(rendered, "toc")',
@@ -462,6 +469,7 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     'page.locator(".blog-article-toc")',
     "page.locator('.page[data-frame=\"blog\"] .graph')",
     'toHaveAttribute("aria-expanded", "false")',
+    'toHaveAttribute("data-side", "start")',
   ]) {
     if (!browserSuite.includes(snippet)) failures.push(`browser matrix is missing ${snippet}`)
   }
@@ -470,6 +478,30 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     !customStyles.includes("position: sticky")
   ) {
     failures.push("blog table of contents must keep its governed responsive layout")
+  }
+  for (const snippet of [
+    "preferredStartLeft",
+    'root.dataset.side = "start"',
+    'root.style.bottom = "auto"',
+  ]) {
+    if (!reactionScript.includes(snippet)) {
+      failures.push(`article-adjacent reaction positioning is missing ${snippet}`)
+    }
+  }
+  for (const snippet of [
+    "postcssCascadeLayers",
+    "componentResources.componentCssStrings",
+    "compatibleStylesheet.css",
+    "ctx.componentCssMap = new Map()",
+  ]) {
+    if (!componentResources.includes(snippet)) {
+      failures.push(`legacy CSS build contract is missing ${snippet}`)
+    }
+  }
+  for (const source of [buildQuality, productionSmoke]) {
+    if (!source.includes("validateLegacyStylesheetCompatibility")) {
+      failures.push("legacy CSS compatibility must be checked before and after deployment")
+    }
   }
   return failures
 }

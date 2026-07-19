@@ -98,6 +98,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
+    "@csstools/postcss-cascade-layers": "^6.0.0",
     "@playwright/test": "^1.61.1",
     "@quartz-community/types": "github:quartz-community/types",
     "@quartz-community/utils": "github:quartz-community/utils",
@@ -109,6 +110,7 @@
     "@types/yargs": "^17.0.35",
     "esbuild": "^0.28.1",
     "parse5": "^8.0.1",
+    "postcss": "^8.5.19",
     "prettier": "^3.8.1",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
