@@ -49,7 +49,7 @@ const routes = [
     description: tokens.brand.description,
     siteName: "MarkZ 个人博客",
     structuredTypes: ["WebSite", "Blog", "WebPage"],
-    forbiddenEvidence: ["JSONUtils"],
+    forbiddenEvidence: ["JSONUtils - 在线 JSON 格式化、校验与智能修复工具"],
   },
   {
     url: "https://www.markz.fun/",
