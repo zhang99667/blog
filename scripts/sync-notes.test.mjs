@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml"
 import {
   buildReactionAliases,
   classifyPost,
+  comparePostsByEditorialDate,
   createNoteLookup,
   findStaleGeneratedPaths,
   isPublicFrontmatter,
@@ -206,6 +207,22 @@ test("frontmatter date is the canonical editorial date", () => {
     createdAt: "2020-01-01T00:00:00.000Z",
     modifiedAt: "2026-07-15T00:00:00.000Z",
   })
+})
+
+test("blog posts sort by editorial date before configured presentation order", () => {
+  const posts = [
+    { path: "oldest.md", date: "2026-03-07", post: { order: 0 } },
+    { path: "same-day-later.md", date: "2026-06-07", post: { order: 9 } },
+    { path: "newest.md", date: "2026-06-30", post: { order: 8 } },
+    { path: "same-day-earlier.md", date: "2026-06-07", post: { order: 2 } },
+  ]
+
+  posts.sort(comparePostsByEditorialDate)
+
+  assert.deepEqual(
+    posts.map((post) => post.path),
+    ["newest.md", "same-day-earlier.md", "same-day-later.md", "oldest.md"],
+  )
 })
 
 test("generated notes carry stable Quartz date frontmatter", () => {

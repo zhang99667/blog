@@ -500,9 +500,7 @@ async function syncContent() {
   }
 
   records.sort((a, b) => a.path.localeCompare(b.path, "zh-CN"))
-  const posts = records
-    .filter((record) => record.post)
-    .sort((a, b) => a.post.order - b.post.order || b.date.localeCompare(a.date))
+  const posts = records.filter((record) => record.post).sort(comparePostsByEditorialDate)
   const sourceCommit = read("git", ["-C", noteDir, "rev-parse", "HEAD"])
   const generatedAt = new Date().toISOString()
   const manifest = {
@@ -641,6 +639,14 @@ export function classifyPost(sourceRel, fm) {
     order: configured?.order ?? 1000,
     featured: configured?.featured ?? asBoolean(fm.featured),
   }
+}
+
+export function comparePostsByEditorialDate(a, b) {
+  return (
+    b.date.localeCompare(a.date) ||
+    a.post.order - b.post.order ||
+    a.path.localeCompare(b.path, "zh-CN")
+  )
 }
 
 function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {

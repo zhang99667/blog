@@ -352,6 +352,11 @@ for (const target of pages) {
             page.locator(".blog-hero, .hero-copy, .home-actions, .notes-bridge, .bridge-link"),
           ).toHaveCount(0)
           await expect(page.getByRole("heading", { level: 1, name: "最近文章" })).toHaveCount(1)
+          const postDates = await page
+            .locator(".post-row time[datetime]")
+            .evaluateAll((dates) => dates.map((date) => date.getAttribute("datetime") ?? ""))
+          expect(postDates.length).toBeGreaterThan(1)
+          expect(postDates).toEqual([...postDates].sort((left, right) => right.localeCompare(left)))
           const firstPost = await page.locator(".post-row").first().boundingBox()
           expect(firstPost).not.toBeNull()
           expect(firstPost!.y).toBeLessThan(viewport.height)
