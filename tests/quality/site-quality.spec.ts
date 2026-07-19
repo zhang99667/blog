@@ -283,7 +283,14 @@ for (const target of pages) {
         })
 
         if (target.id.startsWith("notes") && viewport.width <= 800) {
+          const explorer = page.locator(".explorer").first()
           const explorerContent = page.locator(".explorer-content").first()
+          await expect
+            .poll(() => explorerContent.evaluate((content) => getComputedStyle(content).display), {
+              timeout: 2_000,
+            })
+            .toBe("none")
+          await explorer.evaluate((element) => element.classList.remove("collapsed"))
           await expect
             .poll(
               () =>
@@ -292,7 +299,8 @@ for (const target of pages) {
                   const viewportWidth = document.documentElement.clientWidth
                   return {
                     position: getComputedStyle(content).position,
-                    collapsedAtViewportEdge: bounds.right <= 1,
+                    startsAtViewport: Math.abs(bounds.left) <= 1,
+                    endsAtViewport: Math.abs(bounds.right - viewportWidth) <= 1,
                     fillsViewport: Math.abs(bounds.width - viewportWidth) <= 1,
                   }
                 }),
@@ -300,9 +308,14 @@ for (const target of pages) {
             )
             .toEqual({
               position: "fixed",
-              collapsedAtViewportEdge: true,
+              startsAtViewport: true,
+              endsAtViewport: true,
               fillsViewport: true,
             })
+          await explorer.evaluate((element) => element.classList.add("collapsed"))
+          await expect
+            .poll(() => explorerContent.evaluate((content) => getComputedStyle(content).display))
+            .toBe("none")
         }
 
         const brand = page.locator(".brand-mark").first()

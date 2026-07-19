@@ -967,6 +967,10 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
     max-width: none;
   }
 
+  .page[data-frame="default"] .explorer.collapsed > .explorer-content {
+    display: none;
+  }
+
   .page[data-frame="default"] .page-title {
     min-width: 0;
     font-size: 1.25rem;
