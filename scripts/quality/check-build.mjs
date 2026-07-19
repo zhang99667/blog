@@ -562,6 +562,23 @@ async function validateDiscoveryFiles(outputRoot, outputId, failures) {
     failures.push(`${outputId} output is missing robots.txt`)
   }
 
+  try {
+    const sitemap = await fs.readFile(path.join(outputRoot, "sitemap.xml"), "utf8")
+    const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1])
+    if (locations.length === 0) failures.push(`${outputId} sitemap.xml must contain URLs`)
+    for (const location of locations) {
+      try {
+        if (new URL(location).hostname !== host) {
+          failures.push(`${outputId} sitemap contains a foreign host: ${location}`)
+        }
+      } catch {
+        failures.push(`${outputId} sitemap contains an invalid URL: ${location}`)
+      }
+    }
+  } catch {
+    failures.push(`${outputId} output is missing sitemap.xml`)
+  }
+
   if (outputId !== "blog") return
   try {
     const rss = await fs.readFile(path.join(outputRoot, "index.xml"), "utf8")
@@ -764,17 +781,34 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       }
       const facts = inspectHtml(source)
       failures.push(...validateHtmlMetadata(relativePath, facts))
+      const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
       if (!facts.refresh) {
         if (facts.titleAuthority !== facts.title) {
           failures.push(`${relativePath} page title must match its independent title authority`)
         }
-        for (const name of ["application-name", "apple-mobile-web-app-title"]) {
-          if (facts.meta.get(name) !== tokens.brand.name) {
-            failures.push(`${relativePath} ${name} must identify ${tokens.brand.name}`)
+        const isNotesPage =
+          output.id === "notes" ||
+          outputRelativePath.startsWith("notes/") ||
+          facts.canonical.startsWith("https://note.markz.fun/")
+        const expectedSiteName = isNotesPage ? "MarkZ 公开笔记" : "MarkZ 个人博客"
+        for (const name of ["application-name", "apple-mobile-web-app-title", "og:site_name"]) {
+          if (facts.meta.get(name) !== expectedSiteName) {
+            failures.push(`${relativePath} ${name} must identify ${expectedSiteName}`)
           }
         }
         if (/json\s*utils/i.test(facts.title)) {
           failures.push(`${relativePath} must not inherit the JSONUtils title`)
+        }
+        if (/json\s*utils/i.test(facts.meta.get("description") ?? "")) {
+          failures.push(`${relativePath} must not inherit the JSONUtils description`)
+        }
+        if (output.id === "blog" && outputRelativePath === "index.html") {
+          if (facts.meta.get("description") !== tokens.brand.description) {
+            failures.push(`${relativePath} must use the governed blog description`)
+          }
+          if (!hasStructuredType(facts.structuredData, "Blog")) {
+            failures.push(`${relativePath} needs Blog structured data`)
+          }
         }
       }
       failures.push(
@@ -786,7 +820,6 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
           { validatePolicyContract: false },
         ),
       )
-      const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
       if (!facts.refresh) {
         const isNotFound = /(?:^|\/)404\.html$/i.test(outputRelativePath)
         if (isNotFound) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   canonicalPageUrl,
+  canonicalSiteName,
   canonicalSiteRootUrl,
   createStructuredData,
   isEditorialArticle,
@@ -37,6 +38,13 @@ test("notes fallback metadata points at the independent notes host", () => {
   assert.equal(isNotesFallback("markz.fun/notes"), true)
 })
 
+test("site names keep blog and notes identities explicit", () => {
+  assert.equal(canonicalSiteName("markz.fun"), "MarkZ 个人博客")
+  assert.equal(canonicalSiteName("note.markz.fun"), "MarkZ 公开笔记")
+  assert.equal(canonicalSiteName("markz.fun/notes"), "MarkZ 公开笔记")
+  assert.equal(canonicalSiteName("example.com"), "MarkZ 个人博客")
+})
+
 test("only canonical blog post routes are classified as editorial articles", () => {
   assert.equal(isEditorialArticle("markz.fun", "blog/agent-mcp"), true)
   assert.equal(isEditorialArticle("markz.fun", "blog/index"), false)
@@ -59,7 +67,7 @@ test("social images use article assets when present and preserve canonical host 
   )
 })
 
-test("structured data connects a BlogPosting to its page, author, and website", () => {
+test("structured data connects a BlogPosting to the independent blog entity", () => {
   const structured = createStructuredData({
     canonicalUrl: "https://markz.fun/blog/agent-mcp",
     title: "Agent MCP 完全指南",
@@ -71,7 +79,11 @@ test("structured data connects a BlogPosting to its page, author, and website", 
     tags: ["AI 工程", "MCP"],
   })
   const graph = structured["@graph"] as Record<string, unknown>[]
+  const website = graph.find((node) => node["@type"] === "WebSite")
+  const blog = graph.find((node) => node["@type"] === "Blog")
   const article = graph.find((node) => node["@type"] === "BlogPosting")
+  assert.equal(website?.name, "MarkZ 个人博客")
+  assert.equal(blog?.name, "MarkZ 个人博客")
   assert.ok(article)
   assert.equal(article.headline, "Agent MCP 完全指南")
   assert.equal(article.datePublished, "2026-07-07T00:00:00.000Z")
@@ -79,6 +91,7 @@ test("structured data connects a BlogPosting to its page, author, and website", 
   assert.deepEqual(article.mainEntityOfPage, {
     "@id": "https://markz.fun/blog/agent-mcp#webpage",
   })
+  assert.deepEqual(article.isPartOf, { "@id": "https://markz.fun/#blog" })
 })
 
 test("structured data serialization cannot terminate its script element", () => {

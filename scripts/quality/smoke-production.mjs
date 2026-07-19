@@ -44,28 +44,47 @@ const routes = [
     url: "https://markz.fun/",
     evidence: brandEvidence,
     title: "MarkZ · 个人博客",
-    applicationName: "MarkZ",
+    applicationName: "MarkZ 个人博客",
+    canonical: "https://markz.fun/",
+    description: tokens.brand.description,
+    siteName: "MarkZ 个人博客",
+    structuredTypes: ["WebSite", "Blog", "WebPage"],
+    forbiddenEvidence: ["JSONUtils"],
   },
   {
     url: "https://www.markz.fun/",
     evidence: brandEvidence,
     title: "MarkZ · 个人博客",
-    applicationName: "MarkZ",
+    applicationName: "MarkZ 个人博客",
   },
   {
     url: "https://note.markz.fun/",
     evidence: brandEvidence,
     title: "Notes · 公开笔记",
-    applicationName: "MarkZ",
+    applicationName: "MarkZ 公开笔记",
   },
   {
     url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
     evidence: [`data-slug="${linkedGraphSlug}"`],
     title: "Agent MCP 完全指南 · 公开笔记",
-    applicationName: "MarkZ",
+    applicationName: "MarkZ 公开笔记",
   },
-  { url: "https://jsonutils.markz.fun/", title: "JSONUtils - 专业版" },
-  { url: "https://jsonutils.markz.fun/admin", title: "JSON Utils - 后台管理" },
+  {
+    url: "https://jsonutils.markz.fun/",
+    title: "JSONUtils - 在线 JSON 格式化、校验与智能修复工具",
+    applicationName: "JSONUtils",
+    canonical: "https://jsonutils.markz.fun/",
+    description:
+      "JSONUtils 是面向开发者的在线 JSON 工具，支持格式化、语法校验与错误定位、智能修复、JSONPath 查询、差异对比和 TypeScript 类型生成。",
+    siteName: "JSONUtils",
+    structuredTypes: ["WebSite", "WebApplication"],
+    forbiddenEvidence: ["MarkZ 个人博客"],
+  },
+  {
+    url: "https://jsonutils.markz.fun/admin",
+    title: "JSON Utils - 后台管理",
+    responseHeaders: { "x-robots-tag": "noindex, nofollow" },
+  },
   { url: "https://zhangjihao.markz.fun/", title: "智能装箱单生成器" },
   { url: "https://jsonutils.markz.fun/api/health" },
   {
@@ -74,6 +93,30 @@ const routes = [
   },
   { url: "https://markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
   { url: "https://note.markz.fun/api/reactions/health", evidence: ['"status":"ok"'] },
+  {
+    url: "https://markz.fun/robots.txt",
+    evidence: ["Sitemap: https://markz.fun/sitemap.xml"],
+    forbiddenEvidence: ["jsonutils.markz.fun"],
+    contentType: "text/plain",
+  },
+  {
+    url: "https://markz.fun/sitemap.xml",
+    evidence: ["<loc>https://markz.fun/"],
+    forbiddenEvidence: ["jsonutils.markz.fun"],
+    contentType: "xml",
+  },
+  {
+    url: "https://jsonutils.markz.fun/robots.txt",
+    evidence: ["Sitemap: https://jsonutils.markz.fun/sitemap.xml"],
+    forbiddenEvidence: ["Sitemap: https://markz.fun/"],
+    contentType: "text/plain",
+  },
+  {
+    url: "https://jsonutils.markz.fun/sitemap.xml",
+    evidence: ["<loc>https://jsonutils.markz.fun/</loc>"],
+    forbiddenEvidence: ["<loc>https://markz.fun/"],
+    contentType: "xml",
+  },
   { url: "https://markz.fun/static/__security-header-smoke__.png", status: 404 },
 ]
 const legacyPackingListRedirects = [
@@ -88,6 +131,17 @@ const legacyPackingListRedirects = [
 ]
 
 const failures = []
+
+function structuredDataTypes(payloads) {
+  return new Set(
+    payloads.flatMap((payload) => [
+      payload?.["@type"],
+      ...(Array.isArray(payload?.["@graph"])
+        ? payload["@graph"].map((node) => node?.["@type"])
+        : []),
+    ]),
+  )
+}
 
 function validateSecurityHeaders(label, response) {
   for (const [header, expectedValues] of expectedSecurityHeaders) {
@@ -113,32 +167,83 @@ function validateSecurityHeaders(label, response) {
 }
 
 await Promise.all(
-  routes.map(async ({ url, evidence = [], status = 200, title, applicationName }) => {
-    try {
-      const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15000) })
-      const body = await response.text()
-      if (response.status !== status)
-        failures.push(`${url} returned ${response.status}, expected ${status}`)
-      validateSecurityHeaders(url, response)
-      for (const snippet of evidence) {
-        if (!body.includes(snippet)) failures.push(`${url} is missing ${snippet}`)
+  routes.map(
+    async ({
+      url,
+      evidence = [],
+      forbiddenEvidence = [],
+      status = 200,
+      title,
+      applicationName,
+      canonical,
+      description,
+      siteName,
+      structuredTypes = [],
+      contentType,
+      responseHeaders = {},
+    }) => {
+      try {
+        const response = await fetch(url, {
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000),
+        })
+        const body = await response.text()
+        if (response.status !== status)
+          failures.push(`${url} returned ${response.status}, expected ${status}`)
+        validateSecurityHeaders(url, response)
+        for (const [header, expected] of Object.entries(responseHeaders)) {
+          const actual = response.headers.get(header)
+          if (actual !== expected) {
+            failures.push(
+              `${url} has invalid ${header}: ${actual ?? "missing"}; expected ${expected}`,
+            )
+          }
+        }
+        for (const snippet of evidence) {
+          if (!body.includes(snippet)) failures.push(`${url} is missing ${snippet}`)
+        }
+        for (const snippet of forbiddenEvidence) {
+          if (body.includes(snippet)) failures.push(`${url} must not contain ${snippet}`)
+        }
+        if (contentType && !response.headers.get("content-type")?.includes(contentType)) {
+          failures.push(`${url} has invalid content-type ${response.headers.get("content-type")}`)
+        }
+        if (
+          title ||
+          applicationName ||
+          canonical ||
+          description ||
+          siteName ||
+          structuredTypes.length
+        ) {
+          const facts = inspectHtml(body)
+          if (title && facts.title !== title) {
+            failures.push(`${url} has title ${JSON.stringify(facts.title)}, expected ${title}`)
+          }
+          if (applicationName && facts.meta.get("application-name") !== applicationName) {
+            failures.push(`${url} has invalid application-name`)
+          }
+          if (applicationName && facts.meta.get("apple-mobile-web-app-title") !== applicationName) {
+            failures.push(`${url} has invalid apple-mobile-web-app-title`)
+          }
+          if (canonical && facts.canonical !== canonical)
+            failures.push(`${url} has invalid canonical`)
+          if (description && facts.meta.get("description") !== description) {
+            failures.push(`${url} has invalid description`)
+          }
+          if (siteName && facts.meta.get("og:site_name") !== siteName) {
+            failures.push(`${url} has invalid og:site_name`)
+          }
+          const types = structuredDataTypes(facts.structuredData)
+          for (const type of structuredTypes) {
+            if (!types.has(type)) failures.push(`${url} is missing ${type} structured data`)
+          }
+        }
+      } catch (error) {
+        failures.push(`${url} failed: ${error.message}`)
       }
-      if (title || applicationName) {
-        const facts = inspectHtml(body)
-        if (title && facts.title !== title) {
-          failures.push(`${url} has title ${JSON.stringify(facts.title)}, expected ${title}`)
-        }
-        if (applicationName && facts.meta.get("application-name") !== applicationName) {
-          failures.push(`${url} has invalid application-name`)
-        }
-        if (applicationName && facts.meta.get("apple-mobile-web-app-title") !== applicationName) {
-          failures.push(`${url} has invalid apple-mobile-web-app-title`)
-        }
-      }
-    } catch (error) {
-      failures.push(`${url} failed: ${error.message}`)
-    }
-  }),
+    },
+  ),
 )
 
 await Promise.all(

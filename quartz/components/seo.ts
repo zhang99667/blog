@@ -3,6 +3,11 @@ import { simplifySlug } from "../util/path"
 const BLOG_ORIGIN = "https://markz.fun/"
 const NOTES_ORIGIN = "https://note.markz.fun/"
 const NOTES_FALLBACK_BASE_URL = "markz.fun/notes"
+const BLOG_SITE_NAME = "MarkZ 个人博客"
+const NOTES_SITE_NAME = "MarkZ 公开笔记"
+const BLOG_DESCRIPTION =
+  "MarkZ 的个人博客，记录 AI 开发、软件工具、系统设计与产品实践，以及值得长期保留的技术思考。"
+const NOTES_DESCRIPTION = "MarkZ 的公开笔记库。"
 
 export interface StructuredDataInput {
   canonicalUrl: string
@@ -27,6 +32,10 @@ function siteRoot(baseUrl: string): URL {
 
 export function canonicalSiteRootUrl(baseUrl: string): string {
   return siteRoot(baseUrl).toString()
+}
+
+export function canonicalSiteName(baseUrl: string): string {
+  return canonicalBaseUrl(baseUrl) === "note.markz.fun" ? NOTES_SITE_NAME : BLOG_SITE_NAME
 }
 
 export function canonicalPageUrl(baseUrl: string, slug: string, filePath = ""): string {
@@ -80,6 +89,7 @@ export function createStructuredData({
   const isBlog = canonical.origin === new URL(BLOG_ORIGIN).origin
   const websiteUrl = isBlog ? BLOG_ORIGIN : NOTES_ORIGIN
   const websiteId = `${websiteUrl}#website`
+  const blogId = `${BLOG_ORIGIN}#blog`
   const personId = `${BLOG_ORIGIN}#person`
   const pageId = `${canonicalUrl}#webpage`
   const graph: Record<string, unknown>[] = [
@@ -93,21 +103,36 @@ export function createStructuredData({
       "@type": "WebSite",
       "@id": websiteId,
       url: websiteUrl,
-      name: isBlog ? "MarkZ" : "MarkZ 公开笔记",
-      description: isBlog ? "技术、产品与日常的个人记录。" : "MarkZ 的公开笔记库。",
+      name: isBlog ? BLOG_SITE_NAME : NOTES_SITE_NAME,
+      alternateName: isBlog ? ["MarkZ", "MarkZ Blog"] : "MarkZ 笔记",
+      description: isBlog ? BLOG_DESCRIPTION : NOTES_DESCRIPTION,
       inLanguage: "zh-CN",
       publisher: { "@id": personId },
     },
-    {
-      "@type": "WebPage",
-      "@id": pageId,
-      url: canonicalUrl,
-      name: title,
-      description,
-      inLanguage: "zh-CN",
-      isPartOf: { "@id": websiteId },
-    },
   ]
+
+  if (isBlog) {
+    graph.push({
+      "@type": "Blog",
+      "@id": blogId,
+      url: BLOG_ORIGIN,
+      name: BLOG_SITE_NAME,
+      description: BLOG_DESCRIPTION,
+      inLanguage: "zh-CN",
+      publisher: { "@id": personId },
+      isPartOf: { "@id": websiteId },
+    })
+  }
+
+  graph.push({
+    "@type": "WebPage",
+    "@id": pageId,
+    url: canonicalUrl,
+    name: title,
+    description,
+    inLanguage: "zh-CN",
+    isPartOf: { "@id": websiteId },
+  })
 
   if (isArticle) {
     graph.push({
@@ -122,7 +147,7 @@ export function createStructuredData({
       inLanguage: "zh-CN",
       mainEntityOfPage: { "@id": pageId },
       author: { "@id": personId },
-      isPartOf: { "@id": websiteId },
+      isPartOf: { "@id": blogId },
     })
   }
 

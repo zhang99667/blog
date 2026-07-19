@@ -377,6 +377,11 @@ export async function collectRoutingContractFailures(root = defaultRoot) {
       failures.push(`edge nginx is missing ${host}`)
     }
   }
+  const adminNoindexHeaders =
+    nginx.match(/add_header X-Robots-Tag "noindex, nofollow" always;/g) ?? []
+  if (adminNoindexHeaders.length < 2) {
+    failures.push("JSONUtils admin routes must send noindex, nofollow response headers")
+  }
   if (deploy.includes("docker-compose.override") || deploy.includes("JSONUTILS_REMOTE_DIR")) {
     failures.push("deployment is coupled to the JSONUtils Compose lifecycle")
   }

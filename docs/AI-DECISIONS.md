@@ -280,3 +280,12 @@
 - 反例：根据手机 UA 下发另一套页面；用 JavaScript 检测 `CSSLayerBlockRule` 后才补样式；告诉读者刷新或清缓存；为了兼容而恢复内联执行、放宽 CSP；分别转译多个 CSS 文件，因为 CSSTools 无法跨文件恢复正确 layer 顺序；手工给大量选择器追加 ID 或 `!important` 模拟 layer 优先级。
 - 边界：这项决策保证旧浏览器获得完整静态阅读布局，不承诺所有远古 WebView 支持现代图谱、灯箱或 SPA 增强；脚本失败时文章正文和导航仍必须可读。带哈希的长期静态缓存策略不变，CSS 内容变化会产生新 URL。
 - 锁定证据：构建器只对包含基础、组件和自定义规则的完整 bundle 运行 CSSTools，产物只有一个关键 `index-*.css` 且不含 `@layer quartz-base`；兼容契约单测；`quality:build` 扫描所有产物；320/390/1440 双主题浏览器矩阵；生产 smoke 从真实文章逐一抓取 CSS、验证状态、单 bundle 和无未转译 layer。
+
+## D-032 搜索身份按独立公网产品隔离
+
+- 日期：2026-07-19
+- 触发：用户发现百度仍把历史 JSONUtils 首页展示在 `markz.fun` 下，同时 JSONUtils 搜索摘要退化成功能词拼盘，说明只隔离运行时路由不足以隔离搜索身份。
+- 决策：`markz.fun` 只声明“MarkZ 个人博客”的站点名、自然语言摘要、Blog 结构化数据、robots 与 sitemap；`jsonutils.markz.fun` 只声明“JSONUtils”的工具标题、开发者用途摘要、WebApplication 能力和自己的发现文件。搜索文案使用“品牌 + 核心用途”和可读句子，不用关键词堆砌。JSONUtils 配置不得再把博客裸域或 `www` 当作主站别名；后台入口必须发送 noindex 响应头。
+- 反例：让两个站共享 `og:site_name`、canonical 或 sitemap；把 `markz.fun` 继续列进 JSONUtils `server_name`；只添加 `keywords` 元标签；把几十个功能名无语法地塞进 description；因为旧搜索结果尚未刷新就回滚正确的新身份。
+- 边界：搜索引擎何时重抓和最终展示的标题、摘要不由站点保证；本决策锁定的是可抓取源、域名归属和提交入口。文章自己的标题与摘要继续来自 frontmatter，公开笔记仍保持独立 `note.markz.fun` 身份。
+- 锁定证据：`seo.test.ts`、构建质量门禁的站点名与 sitemap host 断言、生产 smoke 的两站标题/摘要/canonical/结构化数据/robots/sitemap 精确检查，以及 Nginx 后台 `X-Robots-Tag`。

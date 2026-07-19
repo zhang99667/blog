@@ -231,17 +231,22 @@ for (const target of pages) {
         const reactions = await mockReactions(page)
         await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
         const expectedTitleSuffix = target.id.startsWith("blog") ? " · 个人博客" : " · 公开笔记"
+        const expectedSiteName = target.id.startsWith("blog") ? "MarkZ 个人博客" : "MarkZ 公开笔记"
         const browserTitle = await page.title()
         expect(browserTitle).not.toMatch(/json\s*utils/i)
         expect(browserTitle.endsWith(expectedTitleSuffix)).toBe(true)
         await expect(page.locator("head title")).toHaveAttribute("data-page-title", browserTitle)
         await expect(page.locator('meta[name="application-name"]')).toHaveAttribute(
           "content",
-          "MarkZ",
+          expectedSiteName,
         )
         await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
           "content",
-          "MarkZ",
+          expectedSiteName,
+        )
+        await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute(
+          "content",
+          expectedSiteName,
         )
         await page.evaluate(() =>
           Promise.race([

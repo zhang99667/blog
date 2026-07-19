@@ -6,7 +6,7 @@ export const brandIdentity = {
   "name": "MarkZ",
   "wordmark": "MarkZ.",
   "tagline": "个人博客",
-  "description": "技术、产品与日常的个人记录。",
+  "description": "MarkZ 的个人博客，记录 AI 开发、软件工具、系统设计与产品实践，以及值得长期保留的技术思考。",
   "domain": "markz.fun",
   "assets": {
     "icon": "markz-icon-v3.png",

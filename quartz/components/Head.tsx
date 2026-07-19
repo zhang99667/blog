@@ -8,6 +8,7 @@ import { CustomOgImagesEmitterName } from "../../.quartz/plugins"
 import { brandIdentity } from "../brand.generated"
 import {
   canonicalPageUrl,
+  canonicalSiteName,
   createStructuredData,
   isEditorialArticle,
   isNotesFallback,
@@ -45,6 +46,7 @@ export default (() => {
       ? url.toString()
       : canonicalPageUrl(cfg.baseUrl ?? "example.com", slug, String(fileData.filePath ?? ""))
     const feedUrl = rssFeedUrl(cfg.baseUrl ?? "example.com")
+    const siteName = canonicalSiteName(cfg.baseUrl ?? "example.com")
     const isArticle = isEditorialArticle(cfg.baseUrl ?? "", slug)
     const noIndex = isNotFound || isNotesFallback(cfg.baseUrl ?? "")
     const tags = Array.isArray(fileData.frontmatter?.tags)
@@ -98,8 +100,8 @@ export default (() => {
           </>
         )}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="application-name" content={cfg.pageTitle} />
-        <meta name="apple-mobile-web-app-title" content={cfg.pageTitle} />
+        <meta name="application-name" content={siteName} />
+        <meta name="apple-mobile-web-app-title" content={siteName} />
         <meta name="author" content={brandIdentity.name} />
         {noIndex && <meta name="robots" content="noindex, follow" />}
         {!isNotFound && <link rel="canonical" href={canonicalUrl} />}
@@ -107,12 +109,12 @@ export default (() => {
           <link
             rel="alternate"
             type="application/rss+xml"
-            title={`${cfg.pageTitle} RSS`}
+            title={`${siteName} RSS`}
             href={feedUrl}
           />
         )}
 
-        <meta property="og:site_name" content={cfg.pageTitle}></meta>
+        <meta property="og:site_name" content={siteName}></meta>
         <meta property="og:locale" content="zh_CN" />
         <meta property="og:title" content={title} />
         <meta property="og:type" content={isArticle ? "article" : "website"} />

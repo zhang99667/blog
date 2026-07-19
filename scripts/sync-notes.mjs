@@ -763,7 +763,7 @@ async function writeHome(posts) {
 
   const body = `---
 title: ${brand.name}
-description: ${brand.name} 的个人博客，记录技术、产品与日常。
+description: ${JSON.stringify(brand.description)}
 ---
 
 <div class="blog-home">
