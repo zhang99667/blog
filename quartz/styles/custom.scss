@@ -641,6 +641,10 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   opacity: 1;
 }
 
+.page[data-frame="default"] > #quartz-body > footer ul {
+  flex-wrap: wrap;
+}
+
 .page[data-frame="default"] > #quartz-body .sidebar {
   gap: 1rem;
   overflow-y: auto;

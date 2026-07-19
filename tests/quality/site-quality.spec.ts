@@ -316,6 +316,26 @@ for (const target of pages) {
           await expect
             .poll(() => explorerContent.evaluate((content) => getComputedStyle(content).display))
             .toBe("none")
+
+          const notesFooterLayout = await page
+            .locator("#quartz-body > footer ul")
+            .evaluate((list) => {
+              const viewportWidth = document.documentElement.clientWidth
+              const links = Array.from(list.querySelectorAll<HTMLElement>("li")).map((item) => {
+                const bounds = item.getBoundingClientRect()
+                return { left: bounds.left, right: bounds.right }
+              })
+              return {
+                flexWrap: getComputedStyle(list).flexWrap,
+                linksStayInViewport: links.every(
+                  ({ left, right }) => left >= -1 && right <= viewportWidth + 1,
+                ),
+              }
+            })
+          expect(notesFooterLayout).toEqual({
+            flexWrap: "wrap",
+            linksStayInViewport: true,
+          })
         }
 
         const brand = page.locator(".brand-mark").first()
