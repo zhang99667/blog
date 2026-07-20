@@ -224,6 +224,70 @@ async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
   return { likeCounts, viewCounts, likeWrites, viewWrites, visitorWrites }
 }
 
+async function inspectNotesPageScrollingToc(page: Page, safeEdge: number) {
+  return page.evaluate(async (safeEdge) => {
+    const rail = document.querySelector<HTMLElement>(".sidebar.right")
+    const toc = rail?.querySelector<HTMLElement>("ul.toc-content.overflow")
+    const reaction = document.querySelector<HTMLElement>("[data-article-reaction]")
+    const links = toc
+      ? Array.from(toc.querySelectorAll<HTMLElement>("li:not(.overflow-end) > a"))
+      : []
+    const lastLink = links.at(-1)
+    if (!rail || !toc || !reaction || !lastLink) return null
+
+    const initialWindowScrollY = window.scrollY
+    const initialScrollBehavior = document.documentElement.style.scrollBehavior
+    document.documentElement.style.scrollBehavior = "auto"
+    lastLink.scrollIntoView({ block: "center" })
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+
+    const railBounds = rail.getBoundingClientRect()
+    const lastLinkBounds = lastLink.getBoundingClientRect()
+    const reactionBounds = reaction.getBoundingClientRect()
+    const railStyle = getComputedStyle(rail)
+    const tocStyle = getComputedStyle(toc)
+    const horizontalOverlap =
+      Math.min(railBounds.right, reactionBounds.right) -
+      Math.max(railBounds.left, reactionBounds.left)
+    const nestedScrollers = [rail, ...Array.from(rail.querySelectorAll<HTMLElement>("*"))]
+      .filter((element) => {
+        const bounds = element.getBoundingClientRect()
+        const overflowY = getComputedStyle(element).overflowY
+        return (
+          bounds.width > 0 &&
+          bounds.height > 0 &&
+          /^(auto|scroll)$/.test(overflowY) &&
+          element.scrollHeight > element.clientHeight + 1
+        )
+      })
+      .map((element) => element.tagName.toLowerCase())
+
+    const result = {
+      railPosition: railStyle.position,
+      railOverflowY: railStyle.overflowY,
+      tocOverflowY: tocStyle.overflowY,
+      railMaxScroll: rail.scrollHeight - rail.clientHeight,
+      tocMaxScroll: toc.scrollHeight - toc.clientHeight,
+      railScrollTop: rail.scrollTop,
+      tocScrollTop: toc.scrollTop,
+      windowScrollDistance: Math.abs(window.scrollY - initialWindowScrollY),
+      lastLinkTop: lastLinkBounds.top,
+      lastLinkBottom: lastLinkBounds.bottom,
+      clearsReaction:
+        horizontalOverlap <= 0 || lastLinkBounds.bottom <= reactionBounds.top - safeEdge,
+      hasDynamicClearance:
+        rail.hasAttribute("data-reaction-clearance") || toc.hasAttribute("data-reaction-clearance"),
+      nestedScrollers,
+      viewportHeight: document.documentElement.clientHeight,
+    }
+    window.scrollTo(0, initialWindowScrollY)
+    document.documentElement.style.scrollBehavior = initialScrollBehavior
+    return result
+  }, safeEdge)
+}
+
 for (const target of pages) {
   for (const viewport of manifest.requiredViewports) {
     for (const theme of manifest.requiredThemes) {
@@ -709,10 +773,27 @@ for (const target of pages) {
           expect(expandedBounds!.y).toBeGreaterThanOrEqual(0)
           expect(expandedBounds!.y + expandedBounds!.height).toBeLessThanOrEqual(viewport.height)
 
-          if (
-            (target.id === "notes-article" && viewport.width >= 1200) ||
-            (target.id === "blog-article" && viewport.width >= 1400)
-          ) {
+          if (target.id === "notes-article" && viewport.width >= 1200) {
+            const notesTocAccess = await inspectNotesPageScrollingToc(page, safeEdge)
+            expect(notesTocAccess).not.toBeNull()
+            expect(notesTocAccess!.railPosition).not.toBe("sticky")
+            expect(notesTocAccess!.railOverflowY).toBe("visible")
+            expect(notesTocAccess!.tocOverflowY).toBe("visible")
+            expect(notesTocAccess!.railMaxScroll).toBeLessThanOrEqual(1)
+            expect(notesTocAccess!.tocMaxScroll).toBeLessThanOrEqual(1)
+            expect(notesTocAccess!.railScrollTop).toBe(0)
+            expect(notesTocAccess!.tocScrollTop).toBe(0)
+            expect(notesTocAccess!.windowScrollDistance).toBeGreaterThan(1)
+            expect(notesTocAccess!.lastLinkTop).toBeGreaterThanOrEqual(0)
+            expect(notesTocAccess!.lastLinkBottom).toBeLessThanOrEqual(
+              notesTocAccess!.viewportHeight,
+            )
+            expect(notesTocAccess!.clearsReaction).toBe(true)
+            expect(notesTocAccess!.hasDynamicClearance).toBe(false)
+            expect(notesTocAccess!.nestedScrollers).toEqual([])
+          }
+
+          if (target.id === "blog-article" && viewport.width >= 1400) {
             const tocClearance = await page.evaluate(async () => {
               const rail = document.querySelector<HTMLElement>(".blog-article-toc, .sidebar.right")
               const toc = rail?.querySelector<HTMLElement>("ul.toc-content.overflow")
@@ -886,6 +967,8 @@ for (const target of pages.filter((page) => page.id.endsWith("-article"))) {
         const railBounds = rail.getBoundingClientRect()
         const tocBounds = toc.getBoundingClientRect()
         const reactionBounds = reaction.getBoundingClientRect()
+        const graph = rail.querySelector<HTMLElement>(".graph")
+        const graphOuter = graph?.querySelector<HTMLElement>(".graph-outer")
         const clearanceBottom = rail.classList.contains("sidebar")
           ? railBounds.bottom
           : tocBounds.bottom
@@ -898,26 +981,49 @@ for (const target of pages.filter((page) => page.id.endsWith("-article"))) {
             Math.max(tocBounds.top, reactionBounds.top),
           clearanceBottom,
           reactionTop: reactionBounds.top,
-          graphTop: document
-            .querySelector<HTMLElement>(".sidebar.right .graph")
-            ?.getBoundingClientRect().top,
+          graphTop: graph?.getBoundingClientRect().top,
+          graphHeight: graphOuter?.getBoundingClientRect().height,
+          tocHeight: tocBounds.height,
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,
         }
       })
       expect(railState).not.toBeNull()
       expect(railState!.horizontalOverlap).toBeGreaterThan(0)
-      expect(railState!.verticalOverlap).toBeLessThanOrEqual(0)
-      expect(railState!.clearanceBottom).toBeLessThanOrEqual(railState!.reactionTop - 16)
       expect(railState!.scrollWidth).toBeLessThanOrEqual(railState!.clientWidth + 1)
       if (target.id === "notes-article") {
         expect(railState!.graphTop).toBeCloseTo(32, 0)
+        expect(railState!.graphHeight).toBeGreaterThanOrEqual(150)
+        expect(railState!.graphHeight).toBeLessThanOrEqual(170)
+        expect(railState!.tocHeight).toBeGreaterThan(railState!.graphHeight!)
+      } else {
+        expect(railState!.verticalOverlap).toBeLessThanOrEqual(0)
+        expect(railState!.clearanceBottom).toBeLessThanOrEqual(railState!.reactionTop - 16)
       }
 
       await testInfo.attach(`${target.id}-wide-reading-${theme}`, {
         body: await page.screenshot({ fullPage: false }),
         contentType: "image/png",
       })
+
+      if (target.id === "notes-article") {
+        const lastTocAccess = await inspectNotesPageScrollingToc(page, 16)
+
+        expect(lastTocAccess).not.toBeNull()
+        expect(lastTocAccess!.windowScrollDistance).toBeGreaterThan(1)
+        expect(lastTocAccess!.railPosition).not.toBe("sticky")
+        expect(lastTocAccess!.railOverflowY).toBe("visible")
+        expect(lastTocAccess!.tocOverflowY).toBe("visible")
+        expect(lastTocAccess!.railMaxScroll).toBeLessThanOrEqual(1)
+        expect(lastTocAccess!.tocMaxScroll).toBeLessThanOrEqual(1)
+        expect(lastTocAccess!.railScrollTop).toBe(0)
+        expect(lastTocAccess!.tocScrollTop).toBe(0)
+        expect(lastTocAccess!.lastLinkTop).toBeGreaterThanOrEqual(0)
+        expect(lastTocAccess!.lastLinkBottom).toBeLessThanOrEqual(lastTocAccess!.viewportHeight)
+        expect(lastTocAccess!.clearsReaction).toBe(true)
+        expect(lastTocAccess!.hasDynamicClearance).toBe(false)
+        expect(lastTocAccess!.nestedScrollers).toEqual([])
+      }
     })
   }
 }

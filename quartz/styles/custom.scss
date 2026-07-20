@@ -927,7 +927,29 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
   }
 
   .page[data-frame="default"] > #quartz-body .sidebar.right {
+    position: relative;
+    height: auto;
+    align-self: start;
+    overflow-y: visible;
     padding-top: var(--brand-space-8);
+  }
+
+  .page[data-frame="default"] > #quartz-body .sidebar.right .graph > .graph-outer {
+    height: 10rem;
+  }
+
+  .page[data-frame="default"] > #quartz-body .sidebar.right .toc {
+    max-height: none;
+    flex: none;
+    overflow-y: visible;
+  }
+
+  .page[data-frame="default"] > #quartz-body .sidebar.right ul.overflow,
+  .page[data-frame="default"] > #quartz-body .sidebar.right ol.overflow {
+    max-height: none;
+    overflow-y: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 }
 
