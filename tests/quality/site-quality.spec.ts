@@ -432,6 +432,20 @@ for (const target of pages) {
           const firstPost = await page.locator(".post-row").first().boundingBox()
           expect(firstPost).not.toBeNull()
           expect(firstPost!.y).toBeLessThan(viewport.height)
+          const firstPostDivider = await page
+            .locator(".post-row")
+            .first()
+            .evaluate((element) => {
+              const style = getComputedStyle(element)
+              return {
+                color: style.borderTopColor,
+                style: style.borderTopStyle,
+                width: style.borderTopWidth,
+              }
+            })
+          expect(firstPostDivider.style).toBe("solid")
+          expect(Number.parseFloat(firstPostDivider.width)).toBeGreaterThanOrEqual(1)
+          expect(firstPostDivider.color).not.toBe("rgba(0, 0, 0, 0)")
         }
         if (target.id === "blog-author") {
           await expect(page.getByRole("heading", { level: 1, name: "关于 MarkZ" })).toHaveCount(1)

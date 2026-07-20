@@ -22,6 +22,7 @@
   border: 1px solid var(--gray);
   border-radius: var(--brand-control-radius);
   background: var(--light);
+  box-shadow: 0 4px 16px var(--lightgray);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--dark) 12%, transparent);
 }
 
@@ -38,6 +39,7 @@
   border-radius: var(--brand-control-radius);
   color: var(--darkgray);
   background: var(--light);
+  box-shadow: 0 4px 16px var(--lightgray);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--dark) 12%, transparent);
   cursor: pointer;
   touch-action: manipulation;

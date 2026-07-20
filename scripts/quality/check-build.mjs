@@ -185,6 +185,7 @@ function stylesheetFilename(reference) {
 export function validateLegacyStylesheetCompatibility(stylesheets, cssSources) {
   const failures = []
   const localStylesheets = stylesheets.map(stylesheetFilename).filter(Boolean)
+  const combinedCss = cssSources.join("\n")
   const baseStylesheets = localStylesheets.filter((name) =>
     /^index(?:-[0-9a-f]+)?\.css$/.test(name),
   )
@@ -200,6 +201,24 @@ export function validateLegacyStylesheetCompatibility(stylesheets, cssSources) {
   }
   if (cssSources.some((source) => /@layer\s+quartz-base\b/.test(source))) {
     failures.push("must not hide required styles inside the quartz-base cascade layer")
+  }
+
+  for (const [property, fallback] of [
+    ["surface", "light"],
+    ["surface-muted", "lightgray"],
+    ["ink-soft", "darkgray"],
+    ["line", "lightgray"],
+  ]) {
+    const declaration = new RegExp(`--${property}\\s*:`)
+    if (!declaration.test(combinedCss)) continue
+
+    const fallbackDeclaration = new RegExp(`--${property}\\s*:\\s*var\\(--${fallback}\\)`)
+    const mixedDeclaration = new RegExp(`--${property}\\s*:\\s*color-mix\\(`)
+    const fallbackIndex = combinedCss.search(fallbackDeclaration)
+    const mixedIndex = combinedCss.search(mixedDeclaration)
+    if (fallbackIndex < 0 || (mixedIndex >= 0 && fallbackIndex > mixedIndex)) {
+      failures.push(`core color variable --${property} needs a legacy fallback before color-mix`)
+    }
   }
 
   return failures

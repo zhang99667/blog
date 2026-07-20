@@ -54,6 +54,26 @@ test("legacy CSS contract rejects split or untranslated required styles", () => 
   )
 })
 
+test("legacy CSS contract requires core color fallbacks before color-mix enhancements", () => {
+  assert.deepEqual(
+    validateLegacyStylesheetCompatibility(
+      ["../index-a1b2c3d4.css"],
+      [
+        ":root{--surface:var(--light);--surface-muted:var(--lightgray);--ink-soft:var(--darkgray);--line:var(--lightgray)}@supports (color:color-mix(in srgb,currentColor,transparent)){:root{--surface:color-mix(in srgb,var(--light) 90%,white 10%);--surface-muted:color-mix(in srgb,var(--light) 78%,var(--lightgray) 22%);--ink-soft:color-mix(in srgb,var(--darkgray) 78%,var(--gray) 22%);--line:color-mix(in srgb,var(--lightgray) 82%,var(--gray) 18%)}}",
+      ],
+    ),
+    [],
+  )
+
+  assert.deepEqual(
+    validateLegacyStylesheetCompatibility(
+      ["../index-a1b2c3d4.css"],
+      [":root{--line:color-mix(in srgb,var(--lightgray) 82%,var(--gray) 18%)}"],
+    ),
+    ["core color variable --line needs a legacy fallback before color-mix"],
+  )
+})
+
 test("SEO redirects use redirect metadata instead of content-page metadata", () => {
   const facts = inspectHtml(`<!doctype html>
     <html lang="en-us"><head>

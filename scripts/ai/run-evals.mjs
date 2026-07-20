@@ -486,6 +486,7 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     'toHaveAttribute("aria-expanded", "false")',
     'toHaveAttribute("data-side", "end")',
     "data-reaction-clearance",
+    "firstPostDivider",
   ]) {
     if (!browserSuite.includes(snippet)) failures.push(`browser matrix is missing ${snippet}`)
   }
@@ -494,6 +495,17 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     !customStyles.includes("position: sticky")
   ) {
     failures.push("blog table of contents must keep its governed responsive layout")
+  }
+  for (const snippet of [
+    "--surface: var(--light);",
+    "--surface-muted: var(--lightgray);",
+    "--ink-soft: var(--darkgray);",
+    "--line: var(--lightgray);",
+    "@supports (color: color-mix",
+  ]) {
+    if (!customStyles.includes(snippet)) {
+      failures.push(`legacy color fallback contract is missing ${snippet}`)
+    }
   }
   for (const snippet of [
     "preferredLeft",
