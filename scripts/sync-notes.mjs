@@ -182,9 +182,11 @@ export function buildReactionAliases(records, { generatedAt, sourceCommit }) {
   }
 }
 
-function shouldSkipRelative(rel) {
+export function shouldSkipRelative(rel) {
   const parts = rel.split("/")
-  if (parts.some((part) => part === ".git" || part === ".obsidian" || part === ".DS_Store")) {
+  // 隐藏目录和文件是 Vault 的工作区数据或历史备份，不属于公开内容表面。
+  // 即使其中的旧 Markdown 仍保留 publish 标记，也不能重新进入博客或笔记站。
+  if (parts.some((part) => part.startsWith("."))) {
     return true
   }
   if (parts.some((part) => excludeDirs.has(part))) return true

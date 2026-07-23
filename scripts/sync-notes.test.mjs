@@ -14,6 +14,7 @@ import {
   resolveCollections,
   resolveSourceDates,
   rewritePublicNoteMarkdown,
+  shouldSkipRelative,
   stableReactionId,
   withStableDates,
 } from "./sync-notes.mjs"
@@ -72,6 +73,13 @@ test("public note sync requires an explicit publish marker", () => {
   assert.equal(isPublicFrontmatter({ publish: false }), false)
   assert.equal(isPublicFrontmatter({ publish: true, draft: true }), false)
   assert.equal(isPublicFrontmatter({ publish: true, private: true }), false)
+})
+
+test("hidden Vault paths never enter the public content surface", () => {
+  assert.equal(shouldSkipRelative("AI/.backups/old-public-post.md"), true)
+  assert.equal(shouldSkipRelative("AI/.draft.md"), true)
+  assert.equal(shouldSkipRelative(".obsidian/workspace.json"), true)
+  assert.equal(shouldSkipRelative("AI/Agent MCP 完全指南.md"), false)
 })
 
 test("only type post enters the blog while config remains presentation metadata", () => {
