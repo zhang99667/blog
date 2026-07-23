@@ -373,10 +373,12 @@ export async function collectAiInfraFailures(root = defaultRoot) {
 
   const publishWorkflow = await readText(root, ".github/workflows/markz-publish.yaml")
   for (const snippet of [
+    'cron: "17 */6 * * *"',
     "zhang99667/note",
     "NOTE_REPO_SSH_KEY",
     "NOTE_REPO_PRECHECKED_OUT",
     "fetch-depth: 0",
+    "npm run install-plugins",
     "playwright install",
     "npm run deploy",
     "npm run smoke:production",

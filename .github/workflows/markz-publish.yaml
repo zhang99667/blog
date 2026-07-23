@@ -5,7 +5,8 @@ on:
     branches:
       - main
   schedule:
-    - cron: "17 * * * *"
+    # UTC 每 6 小时执行一次，保留 17 分钟错峰，避免整点高峰。
+    - cron: "17 */6 * * *"
   repository_dispatch:
     types:
       - notes-updated
@@ -45,7 +46,7 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx quartz plugin install
+      - run: npm run install-plugins
       - run: npx playwright install --with-deps chromium
 
       - name: Configure pinned deployment SSH

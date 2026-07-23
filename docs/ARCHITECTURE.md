@@ -191,7 +191,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 
 ## 自动同步
 
-`markz-publish.yaml` 在 `main` 更新、每小时定时、手动触发或收到 `notes-updated` dispatch 时运行。它使用只读 deploy key 将私有 note 仓库签出到 `.cache/note`，然后执行仓库内唯一的同步实现。
+`markz-publish.yaml` 在 `main` 更新、每 6 小时定时、手动触发或收到 `notes-updated` dispatch 时运行。它使用只读 deploy key 将私有 note 仓库签出到 `.cache/note`，然后执行仓库内唯一的同步实现。
 
 同步分两层增量：
 

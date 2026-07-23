@@ -20,7 +20,7 @@ private note repository
 `.github/workflows/markz-publish.yaml` 在以下场景运行完整构建、浏览器检查、部署和线上 smoke：
 
 - `main` 更新；
-- 每小时定时同步；
+- 每 6 小时定时同步；
 - 手动触发；
 - 收到可选的 `notes-updated` repository dispatch。
 

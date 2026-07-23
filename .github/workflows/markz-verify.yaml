@@ -24,7 +24,7 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx quartz plugin install
+      - run: npm run install-plugins
       - run: npm run check
       - run: npm test
       - run: npm run evals:check

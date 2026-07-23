@@ -4,7 +4,7 @@
 
 ```bash
 npm ci
-npx quartz plugin install
+npm run install-plugins
 npm run sync
 npm run check
 npm test
@@ -31,7 +31,7 @@ npm run build
 
 ### 自动发布
 
-`.github/workflows/markz-publish.yaml` 是生产发布入口。它响应 `main` push、每小时 cron、手动触发和 `notes-updated` repository dispatch，并依次：
+`.github/workflows/markz-publish.yaml` 是生产发布入口。它响应 `main` push、每 6 小时 cron、手动触发和 `notes-updated` repository dispatch，并依次：
 
 1. 使用只读 deploy key 将私有 `zhang99667/note` 签出到 `.cache/note`。
 2. 安装固定版本依赖和 Chromium。
@@ -238,7 +238,7 @@ GitHub 仓库需要以下 Actions 配置：
 
 ### 是否需要 note Action
 
-- 每小时同步：不需要，blog 的 schedule 会主动读取 note。
+- 每 6 小时同步：不需要，blog 的 schedule 会主动读取 note。
 - 手动立即同步：在 blog 仓库运行 `MarkZ Publish`。
 - push 后立即同步：可选地在 note 仓库发送 `notes-updated` repository dispatch。该 Action 只做通知，不能持有服务器 SSH 私钥。
 

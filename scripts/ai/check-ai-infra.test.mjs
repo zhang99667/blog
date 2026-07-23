@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
   validateAiManifest,
+  collectAiInfraFailures,
   validateDecisionLog,
   validateEvalCases,
   validateEvolutionWorkflow,
@@ -162,4 +163,9 @@ steps:
       workflow.replace("  schedule:", '    paths:\n      - "ai/**"\n  schedule:'),
     ).includes("evolution workflow must audit every main push without a path filter"),
   )
+})
+
+test("repository workflow requires the governed six-hour publish cadence", async () => {
+  const failures = await collectAiInfraFailures()
+  assert.ok(!failures.some((failure) => failure.includes("17 */6 * * *")))
 })
