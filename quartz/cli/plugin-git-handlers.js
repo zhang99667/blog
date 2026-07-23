@@ -1152,6 +1152,8 @@ export async function handlePluginInstallUnified({
     console.log(styleText("green", `✓ Installed ${installed} plugin(s)`))
   } else {
     console.log(styleText("yellow", `⚠ Installed ${installed} plugin(s), ${failed} failed`))
+    // 残缺插件集合会让后续 typecheck/build 产生误导性错误，安装命令必须向调用方返回失败。
+    process.exitCode = 1
   }
 }
 

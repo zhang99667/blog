@@ -1,4 +1,3 @@
-import { ContentDetails } from "../../.quartz/plugins"
 import { FullSlug, joinSegments } from "./path"
 
 interface FileTrieData {
@@ -7,7 +6,8 @@ interface FileTrieData {
   filePath: string
 }
 
-export class FileTrieNode<T extends FileTrieData = ContentDetails> {
+// 默认类型只依赖 trie 本身真正使用的字段，避免插件尚未安装时类型检查被缓存目录阻断。
+export class FileTrieNode<T extends FileTrieData = FileTrieData> {
   isFolder: boolean
   children: Array<FileTrieNode<T>>
 

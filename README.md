@@ -34,7 +34,7 @@ private note repository
 
 ```bash
 npm ci
-npx quartz plugin install
+npm run install-plugins
 npm run sync
 npm run check
 npm test
