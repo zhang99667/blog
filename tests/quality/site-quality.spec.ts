@@ -1107,12 +1107,15 @@ test("editorial articles expose one decodable title-specific social image", asyn
   const breadcrumb = structuredData["@graph"].find(
     (node: { "@type"?: string }) => node["@type"] === "BreadcrumbList",
   )
+  const visibleTitle = (await page.locator(".article-title").textContent())?.trim()
+  expect(visibleTitle).toBeTruthy()
   expect(article.image).toEqual([ogImage])
   expect(article.publisher).toEqual({ "@id": "https://markz.fun/#person" })
+  expect(article.headline).toBe(visibleTitle)
   expect(breadcrumb.itemListElement.map((item: { name: string }) => item.name)).toEqual([
     "MarkZ",
     "文章",
-    "Agent MCP 完全指南",
+    visibleTitle,
   ])
   const contentImageAlts = await page
     .locator("article img")
