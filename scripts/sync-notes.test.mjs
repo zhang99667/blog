@@ -10,6 +10,7 @@ import {
   findStaleGeneratedPaths,
   isPublicFrontmatter,
   parseGitDateLog,
+  publicNotePath,
   rankRelatedPosts,
   resolveCollections,
   resolveSourceDates,
@@ -80,6 +81,13 @@ test("hidden Vault paths never enter the public content surface", () => {
   assert.equal(shouldSkipRelative("AI/.draft.md"), true)
   assert.equal(shouldSkipRelative(".obsidian/workspace.json"), true)
   assert.equal(shouldSkipRelative("AI/Agent MCP 完全指南.md"), false)
+})
+
+test("public note URLs use the canonical Quartz slug", () => {
+  assert.equal(
+    publicNotePath("ai/Codex Plugin CC Rescue 原理.md"),
+    "/ai/codex-plugin-cc-rescue-%E5%8E%9F%E7%90%86",
+  )
 })
 
 test("only type post enters the blog while config remains presentation metadata", () => {

@@ -268,17 +268,6 @@ body[data-slug="blog/index"] .page[data-frame="blog"] .page-header {
   font-size: 0.9rem;
 }
 
-.article-byline {
-  margin: -1.9rem 0 2.75rem;
-  color: var(--gray);
-  font-size: 0.86rem;
-}
-
-.article-byline a {
-  color: var(--secondary);
-  font-weight: 650;
-}
-
 .blog-article-toc {
   min-width: 0;
   margin: 0 0 var(--brand-space-10);
@@ -896,7 +885,6 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
   }
 
   .blog-main[data-has-toc="true"] > .page-header,
-  .blog-main[data-has-toc="true"] > .article-byline,
   .blog-main[data-has-toc="true"] > article,
   .blog-main[data-has-toc="true"] > .page-footer {
     grid-column: 1;
@@ -906,23 +894,19 @@ body[data-slug="index"] .page[data-frame="default"] .page-listing {
     grid-row: 1;
   }
 
-  .blog-main[data-has-toc="true"] > .article-byline {
+  .blog-main[data-has-toc="true"] > article {
     grid-row: 2;
   }
 
-  .blog-main[data-has-toc="true"] > article {
-    grid-row: 3;
-  }
-
   .blog-main[data-has-toc="true"] > .page-footer {
-    grid-row: 4;
+    grid-row: 3;
   }
 
   .blog-main[data-has-toc="true"] > .blog-article-toc {
     position: sticky;
     top: var(--brand-space-6);
     grid-column: 2;
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 3;
     max-height: calc(100vh - var(--brand-space-12));
     margin: 0;
     border-bottom: 0;

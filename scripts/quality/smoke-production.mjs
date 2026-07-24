@@ -87,6 +87,14 @@ const routes = [
     applicationName: "MarkZ 公开笔记",
   },
   {
+    url: "https://note.markz.fun/__missing-note-contract__",
+    status: 404,
+    evidence: ['data-slug="404"'],
+    forbiddenEvidence: ['data-slug="index"'],
+    title: "无法找到 · 公开笔记",
+    applicationName: "MarkZ 公开笔记",
+  },
+  {
     url: "https://jsonutils.markz.fun/",
     title: "JSONUtils - 在线 JSON 格式化、校验与智能修复工具",
     applicationName: "JSONUtils",

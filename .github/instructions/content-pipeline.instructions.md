@@ -2,7 +2,7 @@
 applyTo: "scripts/sync-notes.mjs,scripts/blog.config.mjs,content/**"
 ---
 
-Read `docs/ARCHITECTURE.md` before changing publication behavior.
+Read `docs/ARCHITECTURE.md` and `docs/NOTES-CONTRACT.md` before changing publication behavior.
 
 - Obsidian source and sync rules are authoritative; generated `content/` files are not editing sources.
 - Preserve the distinction between polished blog posts and networked public notes.

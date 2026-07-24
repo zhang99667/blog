@@ -29,6 +29,10 @@ const graphAppendCanvasPattern = new RegExp(
   `([,;])(${identifierPattern})\\.appendChild\\((${identifierPattern})\\.canvas\\);?`,
   "g",
 )
+const graphMinimumHeightPattern = new RegExp(
+  `Math\\.max\\((${identifierPattern})\\.offsetHeight,250\\)`,
+  "g",
+)
 const overrideSource = "local:markz-graph-compatibility"
 
 type GraphConstructor = QuartzComponentConstructor<Record<string, unknown> | undefined>
@@ -74,6 +78,22 @@ export function patchGraphPathDecoding(resource: StringResource): StringResource
 
   if (matches !== 1) {
     throw new Error(`Expected one Graph URL pathname lookup, found ${matches}`)
+  }
+
+  return Array.isArray(resource) ? patched : patched[0]
+}
+
+export function patchGraphContainerHeight(resource: StringResource): StringResource {
+  const scripts = Array.isArray(resource) ? resource : resource ? [resource] : []
+  let matches = 0
+  const patched = scripts.map((script) => {
+    const scriptMatches = [...script.matchAll(graphMinimumHeightPattern)]
+    matches += scriptMatches.length
+    return script.replace(graphMinimumHeightPattern, "$1.offsetHeight")
+  })
+
+  if (matches !== 1) {
+    throw new Error(`Expected one Graph minimum-height override, found ${matches}`)
   }
 
   return Array.isArray(resource) ? patched : patched[0]
@@ -132,7 +152,9 @@ const GraphWithCanonicalSlug: GraphConstructor = (options) => {
   Object.assign(graph, original)
   graph.afterDOMLoaded = isGraphRuntimeSite()
     ? patchGraphRenderGeneration(
-        patchGraphPathDecoding(patchGraphRuntimeSources(original.afterDOMLoaded)),
+        patchGraphContainerHeight(
+          patchGraphPathDecoding(patchGraphRuntimeSources(original.afterDOMLoaded)),
+        ),
       )
     : undefined
   return graph

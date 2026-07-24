@@ -517,6 +517,30 @@ export function referenceCandidates(outputRoot, htmlFile, reference) {
   return [target, `${target}.html`, path.join(target, "index.html")]
 }
 
+export function publishedNoteReferenceCandidates(root, reference) {
+  let url
+  try {
+    url = new URL(reference)
+  } catch {
+    return []
+  }
+  if (url.origin !== "https://note.markz.fun") return []
+
+  const outputRoot = path.join(root, "public-notes")
+  let pathname = url.pathname
+  try {
+    pathname = decodeURIComponent(pathname)
+  } catch {
+    // Leave malformed paths intact so they fail the build lookup below.
+  }
+  const relative = pathname.replace(/^\/+/, "")
+  if (!relative) return [path.join(outputRoot, "index.html")]
+
+  const target = path.resolve(outputRoot, relative)
+  if (!target.startsWith(`${outputRoot}${path.sep}`)) return []
+  return [target, `${target}.html`, path.join(target, "index.html")]
+}
+
 async function existingCandidate(candidates) {
   for (const candidate of candidates) {
     try {
@@ -1013,6 +1037,10 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
           if (useLinkBaseline && !knownBrokenSet.has(key)) {
             failures.push(`${relativePath} has a new broken local reference: ${reference}`)
           }
+        }
+        const noteCandidates = publishedNoteReferenceCandidates(root, reference)
+        if (noteCandidates.length > 0 && !(await existingCandidate(noteCandidates))) {
+          failures.push(`${relativePath} has a broken published note reference: ${reference}`)
         }
       }
     }

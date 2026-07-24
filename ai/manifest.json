@@ -5,6 +5,7 @@
   "authorities": [
     { "id": "agent-entry", "path": "AGENTS.md", "kind": "instruction" },
     { "id": "architecture", "path": "docs/ARCHITECTURE.md", "kind": "architecture" },
+    { "id": "notes-contract", "path": "docs/NOTES-CONTRACT.md", "kind": "contract" },
     { "id": "operations", "path": "docs/OPERATIONS.md", "kind": "runbook" },
     { "id": "visual-tokens", "path": "design-system/tokens.json", "kind": "source" },
     { "id": "surface-boundaries", "path": "design-system/manifest.json", "kind": "contract" },

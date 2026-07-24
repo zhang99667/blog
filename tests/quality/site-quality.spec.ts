@@ -533,7 +533,8 @@ for (const target of pages) {
         const blogArticleToc = page.locator(".blog-article-toc")
         if (target.id === "blog-article") {
           await expect(blogArticleToc).toHaveCount(1)
-          await expect(page.locator('.article-byline a[rel="author"]')).toHaveAttribute(
+          await expect(page.locator(".article-byline")).toHaveCount(0)
+          await expect(page.locator('.blog-site-footer a[rel="author"]')).toHaveAttribute(
             "href",
             "/about",
           )
@@ -1057,6 +1058,28 @@ test("blog listing and article display the same editorial date", async ({ page }
   expect(articleDate?.slice(0, 10)).toBe(listedDate)
 })
 
+test("article source links open canonical styled note pages", async ({ page }) => {
+  await mockReactions(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(`${blogArticlePage.baseUrl}${blogArticlePage.path}`, {
+    waitUntil: "domcontentloaded",
+  })
+
+  const href = await page.locator(".article-source a").getAttribute("href")
+  expect(href).toBeTruthy()
+  const noteUrl = new URL(href!)
+  expect(noteUrl.origin).toBe("https://note.markz.fun")
+
+  await page.goto(`http://127.0.0.1:4174${noteUrl.pathname}`, {
+    waitUntil: "domcontentloaded",
+  })
+  await expect(page.locator("body")).not.toHaveAttribute("data-slug", "index")
+  await expect(page.locator('.page[data-frame="default"] > #quartz-body')).toHaveCSS(
+    "display",
+    "grid",
+  )
+})
+
 test("blog reading layout remains styled without JavaScript", async ({ browser }) => {
   const context = await browser.newContext({
     javaScriptEnabled: false,
@@ -1496,6 +1519,19 @@ test.describe("notes linked graph", () => {
         const graphCanvas = page.locator(".graph-container canvas")
         await expect(graphCanvas).toHaveCount(1, { timeout: 20_000 })
         await expect(graphCanvas).toBeVisible()
+        const graphGeometry = await page.locator(".graph-container").evaluate((container) => {
+          const canvas = container.querySelector("canvas")
+          const containerBounds = container.getBoundingClientRect()
+          const canvasBounds = canvas?.getBoundingClientRect()
+          return {
+            containerWidth: containerBounds.width,
+            containerHeight: containerBounds.height,
+            canvasWidth: canvasBounds?.width ?? 0,
+            canvasHeight: canvasBounds?.height ?? 0,
+          }
+        })
+        expect(graphGeometry.canvasWidth).toBeCloseTo(graphGeometry.containerWidth, 0)
+        expect(graphGeometry.canvasHeight).toBeCloseTo(graphGeometry.containerHeight, 0)
 
         await expect
           .poll(

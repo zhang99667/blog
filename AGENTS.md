@@ -9,9 +9,10 @@
 3. `docs/ARCHITECTURE.md`：系统边界、数据流和所有权。
 4. `design-system/manifest.json`
 5. 涉及 UI 时读取 `docs/DESIGN-SYSTEM.md` 和 `docs/SYSTEM-BENCHMARKS.md`
-6. 涉及历史纠偏或部署时读取 `docs/AI-DECISIONS.md` 和 `docs/OPERATIONS.md`
-7. 涉及 AI 资产时读取 `docs/AI-ASSET-REGISTRY.md`
-8. 涉及成熟度巡检或自主迭代时读取 `ai/evolution.json`，先运行 `npm run evolve:report`
+6. 涉及公开笔记内容、页面、图谱或路由时读取 `docs/NOTES-CONTRACT.md`
+7. 涉及历史纠偏或部署时读取 `docs/AI-DECISIONS.md` 和 `docs/OPERATIONS.md`
+8. 涉及 AI 资产时读取 `docs/AI-ASSET-REGISTRY.md`
+9. 涉及成熟度巡检或自主迭代时读取 `ai/evolution.json`，先运行 `npm run evolve:report`
 
 ## 不可破坏的边界
 

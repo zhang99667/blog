@@ -387,6 +387,15 @@ export async function collectRoutingContractFailures(root = defaultRoot) {
       failures.push(`edge nginx is missing ${host}`)
     }
   }
+  const noteServerStart = nginx.indexOf("server_name note.markz.fun;")
+  const noteServerEnd = nginx.indexOf("\nserver {", noteServerStart)
+  const noteServer = nginx.slice(noteServerStart, noteServerEnd < 0 ? undefined : noteServerEnd)
+  if (!noteServer.includes("error_page 404 /404.html;")) {
+    failures.push("notes must render the governed 404 page for missing routes")
+  }
+  if (!noteServer.includes("try_files $uri $uri.html $uri/ =404;")) {
+    failures.push("notes must not fall back missing routes to the homepage")
+  }
   const adminNoindexHeaders =
     nginx.match(/add_header X-Robots-Tag "noindex, nofollow" always;/g) ?? []
   if (adminNoindexHeaders.length < 2) {

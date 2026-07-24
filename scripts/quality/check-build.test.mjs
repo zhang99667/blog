@@ -8,6 +8,7 @@ import {
   inspectHtml,
   literalModuleReferences,
   maxInitialJavaScriptBytes,
+  publishedNoteReferenceCandidates,
   referenceCandidates,
   validateArticleSocialMetadata,
   validateContentSecurityPolicy,
@@ -110,6 +111,21 @@ test("canonical URL expectations collapse index pages and deduplicate notes fall
     expectedCanonicalUrl("notes", "ai/Agent MCP 完全指南.html"),
     "https://note.markz.fun/ai/Agent%20MCP%20%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
   )
+})
+
+test("published note URLs resolve against canonical note build paths", () => {
+  assert.deepEqual(
+    publishedNoteReferenceCandidates(
+      "/repo",
+      "https://note.markz.fun/ai/codex-plugin-cc-rescue-%E5%8E%9F%E7%90%86",
+    ),
+    [
+      "/repo/public-notes/ai/codex-plugin-cc-rescue-原理",
+      "/repo/public-notes/ai/codex-plugin-cc-rescue-原理.html",
+      "/repo/public-notes/ai/codex-plugin-cc-rescue-原理/index.html",
+    ],
+  )
+  assert.deepEqual(publishedNoteReferenceCandidates("/repo", "https://example.com/ai/note"), [])
 })
 
 test("article SEO contract requires canonical discovery, dates, JSON-LD, and local fonts", () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 import {
+  patchGraphContainerHeight,
   patchGraphPathDecoding,
   patchGraphRenderGeneration,
   patchGraphRuntimeSources,
@@ -26,6 +27,23 @@ describe("Graph runtime compatibility", () => {
   test("rejects upstream runtime URL drift", () => {
     assert.throws(() => patchGraphRuntimeSources('loadScript("https://example.com/d3.js")'), {
       message: /Expected one Graph runtime URL for each dependency/,
+    })
+  })
+})
+
+describe("Graph viewport compatibility", () => {
+  test("renders the local graph at the governed container height", () => {
+    const source = "const width=container.offsetWidth,height=Math.max(container.offsetHeight,250)"
+
+    assert.equal(
+      patchGraphContainerHeight(source),
+      "const width=container.offsetWidth,height=container.offsetHeight",
+    )
+  })
+
+  test("fails when an upstream update changes the minimum-height expression", () => {
+    assert.throws(() => patchGraphContainerHeight("const height=250"), {
+      message: "Expected one Graph minimum-height override, found 0",
     })
   })
 })

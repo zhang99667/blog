@@ -162,6 +162,10 @@ export function stableReactionId(sourcePath) {
   return `v1/${hashBuffer(Buffer.from(`markz-content\0${normalized}`, "utf8"))}`
 }
 
+export function publicNotePath(markdownPath) {
+  return `/${encodeURI(slugifyFilePath(markdownPath))}`
+}
+
 export function buildReactionAliases(records, { generatedAt, sourceCommit }) {
   return {
     version: 1,
@@ -673,7 +677,7 @@ function buildRecord(destRel, sourceRel, collection, text, sourceDates, hash) {
     id,
     sourcePath: sourceRel,
     path: destRel,
-    url: `/${encodeURI(id)}`,
+    url: publicNotePath(destRel),
     title,
     summary,
     tags: extractTags(text, fm),

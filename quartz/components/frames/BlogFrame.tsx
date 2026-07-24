@@ -55,14 +55,6 @@ export const BlogFrame: PageFrame = {
                 ))}
               </div>
             </div>
-            {isArticle && (
-              <p class="article-byline">
-                作者{" "}
-                <a href="/about" rel="author">
-                  MarkZ
-                </a>
-              </p>
-            )}
             {tableOfContents && (
               <aside class="blog-article-toc" aria-label="文章目录">
                 {tableOfContents}
@@ -92,7 +84,9 @@ export const BlogFrame: PageFrame = {
             </span>
           </div>
           <nav aria-label="页脚导航">
-            <a href="/about">关于</a>
+            <a href="/about" rel="author">
+              关于
+            </a>
             <a href="/index.xml">RSS</a>
             <a href="https://note.markz.fun/">笔记</a>
             <a href="https://github.com/zhang99667">GitHub</a>
