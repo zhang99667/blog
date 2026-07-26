@@ -76,6 +76,42 @@ function firstArticle(
   return `/${selected.replace(/\.html$/, "")}`
 }
 
+const hasMermaidDiagram = (html: string) => /<code[^>]*class="[^"]*\bmermaid\b/.test(html)
+
+function firstMermaidArticle() {
+  const candidates = [
+    {
+      baseUrl: "http://127.0.0.1:4173",
+      outputRoot: path.join(root, "public/blog"),
+      prefix: "/blog",
+      ignoredPrefixes: ["index"],
+    },
+    {
+      baseUrl: "http://127.0.0.1:4174",
+      outputRoot: path.join(root, "public-notes"),
+      prefix: "",
+      ignoredPrefixes: ["404", "tags/", "all-tags"],
+    },
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      return {
+        baseUrl: candidate.baseUrl,
+        path: `${candidate.prefix}${firstArticle(
+          candidate.outputRoot,
+          candidate.ignoredPrefixes,
+          hasMermaidDiagram,
+        )}`,
+      }
+    } catch {
+      // A site may legitimately have no Mermaid pages after a post is reclassified as a note.
+    }
+  }
+
+  throw new Error("No Mermaid article page found in the generated sites")
+}
+
 const pages = [
   { id: "blog-home", baseUrl: "http://127.0.0.1:4173", path: "/" },
   { id: "blog-author", baseUrl: "http://127.0.0.1:4173", path: "/about" },
@@ -92,6 +128,7 @@ const pages = [
   },
 ]
 const blogArticlePage = pages.find(({ id }) => id === "blog-article")!
+const mermaidArticlePage = firstMermaidArticle()
 
 const hasArticleImage = (html: string) => /<article\b[\s\S]*?<img\b/.test(html)
 const imagePages = [
@@ -1177,7 +1214,7 @@ test("editorial pages enforce CSP and render Mermaid from the local runtime", as
     if (url.hostname === "cdnjs.cloudflare.com") remoteMermaidRequests.push(request.url())
   })
 
-  const response = await page.goto("http://127.0.0.1:4173/blog/ai-client-request-proxy", {
+  const response = await page.goto(`${mermaidArticlePage.baseUrl}${mermaidArticlePage.path}`, {
     waitUntil: "domcontentloaded",
   })
   const policy = response?.headers()["content-security-policy"] ?? ""
