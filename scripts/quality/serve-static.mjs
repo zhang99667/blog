@@ -1,6 +1,6 @@
 import { createServer } from "node:http"
 import path from "node:path"
-import handler from "serve-handler"
+import sirv from "sirv"
 import { loadContentSecurityPolicy } from "./content-security-policy.mjs"
 
 const [rootArg, portArg] = process.argv.slice(2)
@@ -12,9 +12,10 @@ if (!rootArg || !portArg || !Number.isInteger(Number(portArg))) {
 const publicDir = path.resolve(rootArg)
 const port = Number(portArg)
 const { value: contentSecurityPolicy } = await loadContentSecurityPolicy()
+const serveStatic = sirv(publicDir, { dev: true, etag: true })
 const server = createServer((request, response) => {
   response.setHeader("Content-Security-Policy", contentSecurityPolicy)
-  return handler(request, response, { public: publicDir, cleanUrls: true })
+  return serveStatic(request, response)
 })
 
 server.listen(port, "127.0.0.1", () => {

@@ -10,7 +10,7 @@ import chokidar from "chokidar"
 import prettyBytes from "pretty-bytes"
 import { execSync, spawnSync } from "child_process"
 import http from "http"
-import serveHandler from "serve-handler"
+import sirv from "sirv"
 import { WebSocketServer } from "ws"
 import { randomUUID } from "crypto"
 import { Mutex } from "async-mutex"
@@ -453,6 +453,18 @@ export async function handleBuild(argv) {
     }
 
     await build(clientRefresh)
+    const serveStatic = sirv(argv.output, {
+      dev: true,
+      etag: true,
+      setHeaders: (res, pathname) => {
+        res.setHeader("Content-Disposition", "inline")
+        if (pathname.endsWith(".webp")) {
+          res.setHeader("Content-Type", "image/webp")
+        } else if (pathname.endsWith(".avif")) {
+          res.setHeader("Content-Type", "image/avif")
+        }
+      },
+    })
     const server = http.createServer(async (req, res) => {
       if (argv.baseDir && !req.url?.startsWith(argv.baseDir)) {
         console.log(
@@ -471,32 +483,21 @@ export async function handleBuild(argv) {
 
       const serve = async () => {
         const release = await buildMutex.acquire()
-        await serveHandler(req, res, {
-          public: argv.output,
-          directoryListing: false,
-          headers: [
-            {
-              source: "**/*.*",
-              headers: [{ key: "Content-Disposition", value: "inline" }],
-            },
-            {
-              source: "**/*.webp",
-              headers: [{ key: "Content-Type", value: "image/webp" }],
-            },
-            // fixes bug where avif images are displayed as text instead of images (future proof)
-            {
-              source: "**/*.avif",
-              headers: [{ key: "Content-Type", value: "image/avif" }],
-            },
-          ],
-        })
-        const status = res.statusCode
-        const statusString =
-          status >= 200 && status < 300
-            ? styleText("green", `[${status}]`)
-            : styleText("red", `[${status}]`)
-        console.log(statusString + styleText("gray", ` ${argv.baseDir}${req.url}`))
-        release()
+        let released = false
+        const finish = () => {
+          if (released) return
+          released = true
+          const status = res.statusCode
+          const statusString =
+            status >= 200 && status < 300
+              ? styleText("green", `[${status}]`)
+              : styleText("red", `[${status}]`)
+          console.log(statusString + styleText("gray", ` ${argv.baseDir}${req.url}`))
+          release()
+        }
+        res.once("finish", finish)
+        res.once("close", finish)
+        serveStatic(req, res)
       }
 
       const redirect = (newFp) => {
