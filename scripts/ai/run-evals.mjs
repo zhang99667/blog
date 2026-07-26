@@ -475,6 +475,10 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
   const blogFrame = await readText(root, "quartz/components/frames/BlogFrame.tsx")
   const browserSuite = await readText(root, "tests/quality/site-quality.spec.ts")
   const customStyles = await readText(root, "quartz/styles/custom.scss")
+  const accessibilityScript = await readText(
+    root,
+    "quartz/components/scripts/accessibility.inline.ts",
+  )
   const reactionScript = await readText(
     root,
     "quartz/components/scripts/articleReactions.inline.ts",
@@ -496,6 +500,7 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     'toHaveAttribute("data-side", "end")',
     "data-reaction-clearance",
     "firstPostDivider",
+    "inspectCurrentTocFollowing",
   ]) {
     if (!browserSuite.includes(snippet)) failures.push(`browser matrix is missing ${snippet}`)
   }
@@ -504,6 +509,22 @@ export async function collectBrowserContractFailures(root = defaultRoot) {
     !customStyles.includes("position: sticky")
   ) {
     failures.push("blog table of contents must keep its governed responsive layout")
+  }
+  for (const snippet of [
+    'setAttribute("aria-current", "location")',
+    "requestAnimationFrame",
+    "ResizeObserver",
+    "prefers-reduced-motion: reduce",
+    "alignCurrentTocLink",
+  ]) {
+    if (!accessibilityScript.includes(snippet)) {
+      failures.push(`scroll-following table of contents is missing ${snippet}`)
+    }
+  }
+  for (const snippet of [".sidebar.right .toc", "align-self: stretch", "overflow-y: auto"]) {
+    if (!customStyles.includes(snippet)) {
+      failures.push(`notes table of contents layout is missing ${snippet}`)
+    }
   }
   for (const snippet of [
     "--surface: var(--light);",

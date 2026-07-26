@@ -176,7 +176,9 @@ function clearReadingRail(root: HTMLElement, safeEdge: number) {
   resetReadingRailClearance()
 
   const rootBounds = root.getBoundingClientRect()
-  const rails = document.querySelectorAll<HTMLElement>(".blog-article-toc, .sidebar.right")
+  const rails = document.querySelectorAll<HTMLElement>(
+    ".blog-article-toc, .sidebar.right, .sidebar.right > .toc",
+  )
   for (const rail of rails) {
     const railStyle = getComputedStyle(rail)
     if (railStyle.display === "none" || railStyle.position !== "sticky") continue

@@ -275,7 +275,7 @@ async function inspectNotesPageScrollingToc(page: Page, safeEdge: number) {
     const initialWindowScrollY = window.scrollY
     const initialScrollBehavior = document.documentElement.style.scrollBehavior
     document.documentElement.style.scrollBehavior = "auto"
-    lastLink.scrollIntoView({ block: "center" })
+    toc.scrollTop = toc.scrollHeight
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     )
@@ -304,6 +304,7 @@ async function inspectNotesPageScrollingToc(page: Page, safeEdge: number) {
     const result = {
       railPosition: railStyle.position,
       railOverflowY: railStyle.overflowY,
+      tocPosition: getComputedStyle(rail.querySelector<HTMLElement>(".toc") ?? toc).position,
       tocOverflowY: tocStyle.overflowY,
       railMaxScroll: rail.scrollHeight - rail.clientHeight,
       tocMaxScroll: toc.scrollHeight - toc.clientHeight,
@@ -318,11 +319,61 @@ async function inspectNotesPageScrollingToc(page: Page, safeEdge: number) {
         rail.hasAttribute("data-reaction-clearance") || toc.hasAttribute("data-reaction-clearance"),
       nestedScrollers,
       viewportHeight: document.documentElement.clientHeight,
+      currentLinks: toc.querySelectorAll('a[aria-current="location"]').length,
     }
     window.scrollTo(0, initialWindowScrollY)
     document.documentElement.style.scrollBehavior = initialScrollBehavior
     return result
   }, safeEdge)
+}
+
+async function inspectCurrentTocFollowing(page: Page) {
+  return page.evaluate(async () => {
+    const article = document.querySelector<HTMLElement>("main.center > article.popover-hint")
+    const list = document.querySelector<HTMLElement>(".toc ul.toc-content.overflow")
+    const headings = article
+      ? Array.from(
+          article.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"),
+        )
+      : []
+    if (!article || !list || headings.length < 2) return null
+
+    const initialScrollBehavior = document.documentElement.style.scrollBehavior
+    document.documentElement.style.scrollBehavior = "auto"
+    const before = list.querySelector<HTMLAnchorElement>('a[aria-current="location"]')?.dataset.for
+    const target =
+      headings[Math.min(headings.length - 1, Math.max(1, Math.floor(headings.length * 0.5)))]
+    const readingLine = Math.max(96, Math.min(window.innerHeight * 0.35, 280))
+    target.scrollIntoView({ block: "start", behavior: "auto" })
+    window.scrollBy({
+      top: target.getBoundingClientRect().top - readingLine + 1,
+      behavior: "auto",
+    })
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 120))),
+    )
+
+    const current = list.querySelector<HTMLAnchorElement>('a[aria-current="location"]')
+    const listBounds = list.getBoundingClientRect()
+    const currentBounds = current?.getBoundingClientRect()
+    const result = {
+      before,
+      target: target.id,
+      current: current?.dataset.for,
+      changed: before !== current?.dataset.for,
+      visible:
+        currentBounds !== undefined &&
+        currentBounds.top >= listBounds.top - 1 &&
+        currentBounds.bottom <= listBounds.bottom + 1,
+      centerDelta:
+        currentBounds === undefined
+          ? null
+          : currentBounds.top + currentBounds.height / 2 - (listBounds.top + listBounds.height / 2),
+      listScrollTop: list.scrollTop,
+    }
+    document.documentElement.style.scrollBehavior = initialScrollBehavior
+    return result
+  })
 }
 
 for (const target of pages) {
@@ -826,26 +877,36 @@ for (const target of pages) {
           expect(expandedBounds!.y + expandedBounds!.height).toBeLessThanOrEqual(viewport.height)
 
           if (target.id === "notes-article" && viewport.width >= 1200) {
+            const tocFollowing = await inspectCurrentTocFollowing(page)
+            expect(tocFollowing).not.toBeNull()
+            expect(tocFollowing!.changed).toBe(true)
+            expect(tocFollowing!.visible).toBe(true)
             const notesTocAccess = await inspectNotesPageScrollingToc(page, safeEdge)
             expect(notesTocAccess).not.toBeNull()
             expect(notesTocAccess!.railPosition).not.toBe("sticky")
             expect(notesTocAccess!.railOverflowY).toBe("visible")
-            expect(notesTocAccess!.tocOverflowY).toBe("visible")
+            expect(notesTocAccess!.tocPosition).toBe("sticky")
+            expect(notesTocAccess!.tocOverflowY).toBe("auto")
             expect(notesTocAccess!.railMaxScroll).toBeLessThanOrEqual(1)
-            expect(notesTocAccess!.tocMaxScroll).toBeLessThanOrEqual(1)
+            expect(notesTocAccess!.tocMaxScroll).toBeGreaterThan(1)
             expect(notesTocAccess!.railScrollTop).toBe(0)
-            expect(notesTocAccess!.tocScrollTop).toBe(0)
-            expect(notesTocAccess!.windowScrollDistance).toBeGreaterThan(1)
+            expect(notesTocAccess!.tocScrollTop).toBeGreaterThan(1)
+            expect(notesTocAccess!.windowScrollDistance).toBeLessThanOrEqual(1)
             expect(notesTocAccess!.lastLinkTop).toBeGreaterThanOrEqual(0)
             expect(notesTocAccess!.lastLinkBottom).toBeLessThanOrEqual(
               notesTocAccess!.viewportHeight,
             )
             expect(notesTocAccess!.clearsReaction).toBe(true)
-            expect(notesTocAccess!.hasDynamicClearance).toBe(false)
-            expect(notesTocAccess!.nestedScrollers).toEqual([])
+            expect(notesTocAccess!.hasDynamicClearance).toBe(true)
+            expect(notesTocAccess!.nestedScrollers).toEqual(["ul"])
+            expect(notesTocAccess!.currentLinks).toBe(1)
           }
 
           if (target.id === "blog-article" && viewport.width >= 1400) {
+            const tocFollowing = await inspectCurrentTocFollowing(page)
+            expect(tocFollowing).not.toBeNull()
+            expect(tocFollowing!.changed).toBe(true)
+            expect(tocFollowing!.visible).toBe(true)
             const tocClearance = await page.evaluate(async () => {
               const rail = document.querySelector<HTMLElement>(".blog-article-toc, .sidebar.right")
               const toc = rail?.querySelector<HTMLElement>("ul.toc-content.overflow")
@@ -1062,19 +1123,21 @@ for (const target of pages.filter((page) => page.id.endsWith("-article"))) {
         const lastTocAccess = await inspectNotesPageScrollingToc(page, 16)
 
         expect(lastTocAccess).not.toBeNull()
-        expect(lastTocAccess!.windowScrollDistance).toBeGreaterThan(1)
+        expect(lastTocAccess!.windowScrollDistance).toBeLessThanOrEqual(1)
         expect(lastTocAccess!.railPosition).not.toBe("sticky")
         expect(lastTocAccess!.railOverflowY).toBe("visible")
-        expect(lastTocAccess!.tocOverflowY).toBe("visible")
+        expect(lastTocAccess!.tocPosition).toBe("sticky")
+        expect(lastTocAccess!.tocOverflowY).toBe("auto")
         expect(lastTocAccess!.railMaxScroll).toBeLessThanOrEqual(1)
-        expect(lastTocAccess!.tocMaxScroll).toBeLessThanOrEqual(1)
+        expect(lastTocAccess!.tocMaxScroll).toBeGreaterThan(1)
         expect(lastTocAccess!.railScrollTop).toBe(0)
-        expect(lastTocAccess!.tocScrollTop).toBe(0)
+        expect(lastTocAccess!.tocScrollTop).toBeGreaterThan(1)
         expect(lastTocAccess!.lastLinkTop).toBeGreaterThanOrEqual(0)
         expect(lastTocAccess!.lastLinkBottom).toBeLessThanOrEqual(lastTocAccess!.viewportHeight)
         expect(lastTocAccess!.clearsReaction).toBe(true)
-        expect(lastTocAccess!.hasDynamicClearance).toBe(false)
-        expect(lastTocAccess!.nestedScrollers).toEqual([])
+        expect(lastTocAccess!.hasDynamicClearance).toBe(true)
+        expect(lastTocAccess!.nestedScrollers).toEqual(["ul"])
+        expect(lastTocAccess!.currentLinks).toBe(1)
       }
     })
   }
