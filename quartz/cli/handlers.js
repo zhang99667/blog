@@ -453,15 +453,30 @@ export async function handleBuild(argv) {
     }
 
     await build(clientRefresh)
+    const setStaticHeaders = (res, pathname) => {
+      res.setHeader("Content-Disposition", "inline")
+      if (pathname.endsWith(".webp")) {
+        res.setHeader("Content-Type", "image/webp")
+      } else if (pathname.endsWith(".avif")) {
+        res.setHeader("Content-Type", "image/avif")
+      }
+    }
     const serveStatic = sirv(argv.output, {
       dev: true,
       etag: true,
-      setHeaders: (res, pathname) => {
-        res.setHeader("Content-Disposition", "inline")
-        if (pathname.endsWith(".webp")) {
-          res.setHeader("Content-Type", "image/webp")
-        } else if (pathname.endsWith(".avif")) {
-          res.setHeader("Content-Type", "image/avif")
+      setHeaders: setStaticHeaders,
+      onNoMatch: async (req, res) => {
+        try {
+          const html = await promises.readFile(path.join(argv.output, "404.html"))
+          res.writeHead(404, {
+            "Content-Disposition": "inline",
+            "Content-Length": html.byteLength,
+            "Content-Type": "text/html; charset=utf-8",
+          })
+          res.end(req.method === "HEAD" ? undefined : html)
+        } catch {
+          res.statusCode = 404
+          res.end()
         }
       },
     })
