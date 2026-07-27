@@ -500,6 +500,11 @@ for (const target of pages) {
             page.locator('.blog-nav a[href="https://zhangjihao.markz.fun/"]'),
           ).toHaveText("装箱单")
           await expect(page.locator('.blog-nav a[href^="/zhangjihao"]')).toHaveCount(0)
+          // Temporarily hide public notes until vault content is redacted.
+          await expect(page.locator('.blog-nav a[href="https://note.markz.fun/"]')).toHaveCount(0)
+          await expect(
+            page.locator('.blog-site-footer a[href="https://note.markz.fun/"]'),
+          ).toHaveCount(0)
         }
         if (target.id === "blog-home") {
           await expect(

@@ -797,7 +797,6 @@ description: MarkZ 是本博客与公开笔记的作者，持续记录 AI 开发
     <h2 id="author-links">站内与公开身份</h2>
     <div class="author-link-grid">
       <a href="/blog/"><strong>文章归档</strong><span>阅读经过整理的长文</span></a>
-      <a href="https://note.markz.fun/"><strong>公开笔记</strong><span>查看研究过程与资料网络</span></a>
       <a href="https://github.com/zhang99667" rel="me"><strong>GitHub</strong><span>核对公开代码与项目活动</span></a>
     </div>
   </section>

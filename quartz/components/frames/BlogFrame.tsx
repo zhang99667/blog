@@ -40,7 +40,7 @@ export const BlogFrame: PageFrame = {
               <a href="/blog/" aria-current={isBlogSection(slug) ? "page" : undefined}>
                 文章
               </a>
-              <a href="https://note.markz.fun/">笔记</a>
+              {/* Temporarily hidden: public notes need redaction before re-linking. */}
               <a href="https://jsonutils.markz.fun/">JSONUtils</a>
               <a href="https://zhangjihao.markz.fun/">装箱单</a>
               <a href="https://github.com/zhang99667">GitHub</a>
@@ -88,7 +88,7 @@ export const BlogFrame: PageFrame = {
               关于
             </a>
             <a href="/index.xml">RSS</a>
-            <a href="https://note.markz.fun/">笔记</a>
+            {/* Temporarily hidden: public notes need redaction before re-linking. */}
             <a href="https://github.com/zhang99667">GitHub</a>
           </nav>
         </footer>
