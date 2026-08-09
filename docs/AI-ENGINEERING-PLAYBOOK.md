@@ -79,7 +79,7 @@
 | 构建元数据、断链、资产和体积预算 | `npm run quality:build`    |
 | 真实页面布局、主题和 WCAG        | `npm run quality:web`      |
 | 代表性 AI 场景                   | `npm run evals:check`      |
-| 高危依赖漏洞                     | `npm run security:check`   |
+| 手工检查高危依赖漏洞             | `npm run security:check`   |
 | 线上域名、品牌、API、端口所有权  | `npm run smoke:production` |
 
 ## 风险分级
@@ -134,7 +134,7 @@ D-022 已把异地 Artifact 备份记为用户明确不采纳：源码工具只�
 
 - 权威源已更新，生成物由脚本产出。
 - 自动检查与测试通过。
-- 代表性 eval、构建质量、依赖安全和浏览器质量门禁通过。
+- 代表性 eval、构建质量和浏览器质量门禁通过；需要时另行手工执行依赖审计。
 - 要求覆盖的页面、视口和主题已视觉验证。
 - 线上路由和产品边界未退化。
 - 新的可复用经验已写回规则和门禁。

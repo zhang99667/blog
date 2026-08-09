@@ -35,7 +35,7 @@
     "deploy": "npm run verify && npm run quality:web && node scripts/deploy.mjs",
     "docs": "npx quartz build --serve -d docs",
     "check": "tsc --noEmit && npm run design:check && npm run ai:check && npm run evolve:check && npx prettier . --check",
-    "verify": "npm run check && npm test && npm run build && npm run quality:build && npm run evals:check && npm run security:check",
+    "verify": "npm run check && npm test && npm run build && npm run quality:build && npm run evals:check",
     "format": "npx prettier . --write",
     "test": "tsx --test",
     "profile": "0x -D prof ./quartz/bootstrap-cli.mjs build --concurrency=1",

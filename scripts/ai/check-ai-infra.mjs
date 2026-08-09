@@ -349,6 +349,14 @@ export async function collectAiInfraFailures(root = defaultRoot) {
   if (!packageJson.scripts?.deploy?.includes("npm run quality:web")) {
     failures.push("deploy must run browser quality checks")
   }
+  if (packageJson.scripts?.["security:check"] !== "npm audit --audit-level=high") {
+    failures.push("security:check must remain available as the explicit manual dependency audit")
+  }
+  for (const script of ["verify", "deploy"]) {
+    if (/(?:security:check|npm\s+audit)/.test(packageJson.scripts?.[script] ?? "")) {
+      failures.push(`${script} must not run the manual dependency audit`)
+    }
+  }
   for (const script of ["build:blog", "build:notes-fallback", "build:notes"]) {
     if (!packageJson.scripts?.[script]?.includes("QUARTZ_INCLUDE_GITIGNORED=1")) {
       failures.push(`${script} must include generated, gitignored content`)
@@ -366,9 +374,19 @@ export async function collectAiInfraFailures(root = defaultRoot) {
     "npm test",
     "npm run evals:check",
     "npm run evolve:check",
-    "npm run security:check",
   ]) {
     requireSnippet(verifyWorkflow, ".github/workflows/markz-verify.yaml", command, failures)
+  }
+
+  const workflowDirectory = path.join(root, ".github/workflows")
+  const workflowFiles = (await fs.readdir(workflowDirectory)).filter((file) =>
+    /\.ya?ml$/.test(file),
+  )
+  for (const file of workflowFiles) {
+    const workflow = await fs.readFile(path.join(workflowDirectory, file), "utf8")
+    if (/(?:npm run security:check|npm\s+audit)/.test(workflow)) {
+      failures.push(`${file} must not run the manual dependency audit`)
+    }
   }
 
   const publishWorkflow = await readText(root, ".github/workflows/markz-publish.yaml")

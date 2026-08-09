@@ -35,7 +35,7 @@ npm run build
 
 1. 使用只读 deploy key 将私有 `zhang99667/note` 签出到 `.cache/note`。
 2. 安装固定版本依赖和 Chromium。
-3. 运行 `npm run deploy`，其中包含完整 `verify`、浏览器质量门禁和差量部署。
+3. 运行 `npm run deploy`，其中包含完整 `verify`、浏览器质量门禁和差量部署。自动链不运行 `npm audit`，外部安全公告数据库变化不会单独阻断笔记同步；需要审计时手工执行 `npm run security:check`。
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
 
