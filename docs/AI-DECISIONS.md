@@ -424,3 +424,12 @@
 - 反例：关闭空 `alt` 或断链门禁；只硬编码本次六个文件名；把 Vault 文件和目录原地全部小写；依赖 macOS 文件存在检查代表 Linux 生产路径；给所有无描述图片填“文章配图”等通用占位；手改生成 Markdown 或 HTML。
 - 边界：SVG `<title>` 是源资产自带的作者描述，可以安全复用；无显式描述、无人工映射且无 SVG 标题的图片仍应失败，特别是语义未知的位图。规范化只作用于公开 URL，不改私有 Vault 路径、生成内容身份、图片字节或 Obsidian 原文。
 - 锁定证据：同步器单测同时断言混合大小写资产生成 Quartz canonical URL、SVG XML 实体解码和标题继承；使用失败运行相同的私有笔记提交完成三站构建与 `quality:build`；GitHub `MarkZ Publish` 在 Linux 上通过 Verify and deploy、浏览器矩阵、生产 smoke 和证据上传。
+
+## D-048 Evolution Issue 写回容忍 GitHub API 瞬时故障
+
+- 日期：2026-08-17
+- 触发：图片同步修复推送后，Evolution 的探针、eval 和报告生成全部成功，但更新唯一成熟度 Issue 时 GitHub GraphQL API 单次返回 HTTP 503，导致整个工作流失败并产生新的维护邮件。
+- 决策：Evolution 对 Issue 查询、编辑和创建统一执行最多 4 次有限指数退避重试，等待间隔为 5、10、20 秒。任何一次成功即继续；全部尝试失败仍返回非零状态并保留日志与报告 artifact。
+- 反例：把 Issue 更新改成 `continue-on-error`；吞掉所有 `gh` 失败并把工作流标绿；因单次 5xx 要求人手重跑整条成熟度巡检；无限重试占住 runner；只重试编辑却让查询或首次创建继续单点失败。
+- 边界：重试只保护 GitHub Issue 控制面写回，不改变成熟度评分、报告内容、发布链或生产部署。持续服务故障、权限错误、无效请求和重试耗尽仍必须显式失败；已有并发取消和 10 分钟任务超时继续生效。
+- 锁定证据：AI 基础设施契约要求 Evolution 工作流包含重试函数、4 次上限和退避等待；单测拒绝移除这些片段；新的 `MarkZ Evolution` 运行完成 Issue 写回和 artifact 上传。

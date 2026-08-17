@@ -137,6 +137,9 @@ export function validateEvolutionWorkflow(source) {
     "npm run evals:check",
     "npm run evolve:report",
     "gh issue",
+    "retry_gh",
+    "max_attempts=4",
+    'sleep "$delay_seconds"',
     "upload-artifact",
     "include-hidden-files: true",
   ]) {

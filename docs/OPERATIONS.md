@@ -23,6 +23,8 @@ npm run build
 
 `.github/workflows/markz-evolve.yaml` 每周一和相关控制面变更后运行。它安装锁定依赖，执行成熟度探针与代表性 eval，更新唯一的 `[AI Evolution] MarkZ maturity backlog` issue，并保存 Markdown/JSON 报告。
 
+Issue 查询或写回遇到 GitHub API 瞬时失败时会进行 4 次有限指数退避重试（5、10、20 秒）。重试耗尽后工作流仍返回失败，以保留权限错误、持续服务故障等真实信号；不需要因单次 5xx 手工重跑整条巡检。
+
 该工作流只做审计和排队，不提交代码、不触发部署、不读取生产 SSH 密钥。`critical` 路由、隐私、破坏性操作、外部密钥和任何证据不足的能力都必须由人工选择任务后走标准开发、验证和发布流程。若报告与仓库事实不符，先修探针或模型，不能手工改 issue 文案冒充能力完成。
 
 发现与分发产物由构建生成：博客根 RSS 只包含 `/blog/<slug>` 成稿；两站 robots 指向各自 canonical sitemap；博客 sitemap 的文章 `lastmod` 与 JSON-LD `dateModified` 精确一致；JSONUtils sitemap 只列工具首页和由自身生成器维护的真实指南页；笔记回退页指向 `note.markz.fun` 并禁止索引。`npm run quality:build` 还会解析每个 HTML，拒绝可执行内联脚本、事件属性、JavaScript URL、未获策略许可的资源源站，以及 Mermaid/Explorer 运行时回退到外部执行。

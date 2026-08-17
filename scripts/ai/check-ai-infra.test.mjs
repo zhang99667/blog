@@ -152,7 +152,12 @@ steps:
   - run: npm run evolve:check
   - run: npm run evals:check
   - run: npm run evolve:report
-  - run: gh issue edit
+  - run: |
+      retry_gh() {
+        local max_attempts=4
+        sleep "$delay_seconds"
+      }
+      retry_gh gh issue edit
   - uses: actions/upload-artifact@v4
     with:
       include-hidden-files: true
