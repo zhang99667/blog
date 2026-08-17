@@ -166,6 +166,29 @@ export function publicNotePath(markdownPath) {
   return `/${encodeURI(slugifyFilePath(markdownPath))}`
 }
 
+export function publicAssetPath(assetPath) {
+  return `/${encodeURI(slugifyFilePath(assetPath))}`
+}
+
+function decodeXmlText(value) {
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export function extractSvgTitle(source) {
+  const title = String(source).match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]
+  return title ? decodeXmlText(title) : ""
+}
+
 export function buildReactionAliases(records, { generatedAt, sourceCommit }) {
   return {
     version: 1,
@@ -416,12 +439,14 @@ async function syncContent() {
       if (shouldSkipRelative(srcRel) || !isPublishableFile(srcRel)) continue
 
       const relInsideCollection = normalizeRel(path.relative(sourceRoot, sourceFile))
+      const ext = path.extname(srcRel).toLowerCase()
       inputs.push({
         collection,
         sourceFile,
         srcRel,
         destRel: normalizeRel(path.posix.join(collection.slug, relInsideCollection)),
-        ext: path.extname(srcRel).toLowerCase(),
+        ext,
+        embeddedAlt: ext === ".svg" ? extractSvgTitle(await fs.readFile(sourceFile, "utf8")) : "",
       })
     }
   }
@@ -1045,14 +1070,35 @@ function resolveAssetTarget(target, input, assetLookup) {
   return basenameMatches.find((match) => match.collection.slug === input.collection.slug)
 }
 
+function resolveAssetAlt(asset, explicitAlt = "") {
+  return (
+    explicitAlt.trim() ||
+    blogConfig.imageAlts?.[path.posix.basename(asset.destRel)] ||
+    asset.embeddedAlt ||
+    ""
+  )
+}
+
+function parseEmbedOptions(options = "") {
+  const parts = String(options)
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const width = parts.find((part) => /^\d+$/.test(part))
+  return {
+    width,
+    alt: parts.filter((part) => part !== width).join(" "),
+  }
+}
+
 function rewriteNoteAssetTargets(markdown, input, assetLookup) {
   const renderImage = (asset, alt, options = "") => {
-    const optionWidth = options.match(/\|(\d+)/)?.[1]
+    const { width: optionWidth, alt: optionAlt } = parseEmbedOptions(options)
     const altWidth = alt.match(/\|(\d+)$/)?.[1]
     const width = optionWidth ?? altWidth
-    const cleanAlt = alt.replace(/\|\d+$/, "")
+    const cleanAlt = resolveAssetAlt(asset, alt.replace(/\|\d+$/, "") || optionAlt)
     const widthAttr = width ? ` width="${width}"` : ""
-    return `<img src="/${encodeURI(asset.destRel)}" alt="${htmlEscape(cleanAlt)}"${widthAttr} />`
+    return `<img src="${publicAssetPath(asset.destRel)}" alt="${htmlEscape(cleanAlt)}"${widthAttr} />`
   }
 
   return rewriteOutsideCode(markdown, (text) =>
@@ -1337,10 +1383,10 @@ function rewriteBlogMarkdown(markdown, post, noteLookup, assetLookup) {
           if (!shouldRewriteAssetTarget(cleanTarget)) return match
           const asset = resolveAssetTarget(cleanTarget, input, assetLookup)
           if (!asset) return match
-          const src = `${noteOrigin}/${encodeURI(asset.destRel)}`
-          const width = options.match(/\|(\d+)/)?.[1]
+          const src = `${noteOrigin}${publicAssetPath(asset.destRel)}`
+          const { width, alt: optionAlt } = parseEmbedOptions(options)
           const widthAttr = width ? ` width="${width}"` : ""
-          const alt = blogConfig.imageAlts?.[path.posix.basename(asset.destRel)] ?? ""
+          const alt = resolveAssetAlt(asset, optionAlt)
           return `<img src="${src}" alt="${htmlEscape(alt)}"${widthAttr} />`
         },
       )
@@ -1348,7 +1394,7 @@ function rewriteBlogMarkdown(markdown, post, noteLookup, assetLookup) {
         if (!shouldRewriteAssetTarget(target)) return match
         const asset = resolveAssetTarget(target, input, assetLookup)
         if (!asset) return match
-        return `![${alt}](${noteOrigin}/${encodeURI(asset.destRel)})`
+        return `![${resolveAssetAlt(asset, alt)}](${noteOrigin}${publicAssetPath(asset.destRel)})`
       })
       .replace(
         /\[\[([^|\]#]+)(?:#([^|\]]+))?(?:\|([^\]]+))?\]\]/g,

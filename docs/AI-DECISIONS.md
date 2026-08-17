@@ -415,3 +415,12 @@
 - 反例：用 `|| true` 或 `continue-on-error` 执行审计后伪装成功；只从 Publish 删除审计、却让它通过 `verify` 或独立 Verify 工作流间接返回；为了减少失败邮件顺便删除测试、构建、CSP、安全响应头、浏览器检查或生产 smoke；启用未经用户要求的 Dependabot 自动合并作为替代。
 - 边界：自动链不再发现或阻断高危依赖漏洞，公告只有在人工运行 `npm run security:check` 时可见，这是用户接受的风险。代码、锁文件、安装完整性、运行时安全头和生产行为仍由原门禁保护；依赖审计命令本身不删除，便于按需检查。
 - 锁定证据：`check-ai-infra.mjs` 要求手工审计命令精确保留，同时扫描 `verify`、`deploy` 和 `.github/workflows` 禁止自动调用；完整本地验证和浏览器矩阵通过；新的 `MarkZ Publish` 运行完成 Verify and deploy、生产 smoke 与浏览器证据上传，且日志中没有依赖审计步骤。
+
+## D-047 公开图片继承源描述并使用 Quartz 规范路径
+
+- 日期：2026-08-17
+- 触发：相同博客源码在私有 Vault 新增六张 SVG 后连续四次定时发布失败。同步器把 Obsidian 的宽度参数保留下来，却丢弃 SVG 已有的 `<title>`，导致博客图片生成空 `alt`；同时资产 URL 保留 `Android基础` 的大写字母，而 Quartz 发射路径为 `android基础`。macOS 大小写不敏感文件系统让本地断链检查误通过，Linux CI 才稳定失败。
+- 决策：博客和笔记正文中的公开资产 URL 统一复用 Quartz `slugifyFilePath`，不再直接拼接复制路径。图片替代文本按“Markdown/Obsidian 显式描述、`blog.config.mjs` 人工映射、SVG `<title>`”的顺序解析；只有宽度参数的 SVG 嵌入自动继承文件作者已经写入的标题。XML 标题先解码并转义后再进入生成 HTML。
+- 反例：关闭空 `alt` 或断链门禁；只硬编码本次六个文件名；把 Vault 文件和目录原地全部小写；依赖 macOS 文件存在检查代表 Linux 生产路径；给所有无描述图片填“文章配图”等通用占位；手改生成 Markdown 或 HTML。
+- 边界：SVG `<title>` 是源资产自带的作者描述，可以安全复用；无显式描述、无人工映射且无 SVG 标题的图片仍应失败，特别是语义未知的位图。规范化只作用于公开 URL，不改私有 Vault 路径、生成内容身份、图片字节或 Obsidian 原文。
+- 锁定证据：同步器单测同时断言混合大小写资产生成 Quartz canonical URL、SVG XML 实体解码和标题继承；使用失败运行相同的私有笔记提交完成三站构建与 `quality:build`；GitHub `MarkZ Publish` 在 Linux 上通过 Verify and deploy、浏览器矩阵、生产 smoke 和证据上传。

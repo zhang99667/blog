@@ -204,6 +204,8 @@ GitHub 仓库需要以下 Actions 配置：
 2. 检查公开标记、排除规则与 slug 冲突。
 3. 检查 `.cache/publish-manifest.json`，不要手改生成 Markdown。
 4. 在 GitHub Actions 中确认 `MarkZ Publish` 最近一次运行成功，私有 note 签出使用的是只读 deploy key。
+5. 图片提示空替代文本时，依次检查源 Markdown/Obsidian 描述、`blog.config.mjs` 人工映射和 SVG 自带 `<title>`；不要删除无障碍门禁或给全部图片填通用占位。
+6. 资产只在 Linux CI 断链时，对比同步器生成 URL 与 Quartz `slugifyFilePath` 的规范路径；macOS 大小写不敏感文件系统上的本地存在检查不能作为通过证据。
 
 ### 新互动或访客接口返回 404
 

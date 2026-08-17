@@ -7,9 +7,11 @@ import {
   classifyPost,
   comparePostsByEditorialDate,
   createNoteLookup,
+  extractSvgTitle,
   findStaleGeneratedPaths,
   isPublicFrontmatter,
   parseGitDateLog,
+  publicAssetPath,
   publicNotePath,
   rankRelatedPosts,
   resolveCollections,
@@ -88,6 +90,47 @@ test("public note URLs use the canonical Quartz slug", () => {
     publicNotePath("ai/Codex Plugin CC Rescue 原理.md"),
     "/ai/codex-plugin-cc-rescue-%E5%8E%9F%E7%90%86",
   )
+})
+
+test("public assets use Quartz canonical paths and embedded SVG titles", () => {
+  const collection = { source: "Android", slug: "android", title: "Android" }
+  const input = {
+    srcRel: "Android/Android基础/示例.md",
+    destRel: "android/Android基础/示例.md",
+    collection,
+  }
+  const asset = {
+    srcRel: "Android/Android基础/img/view-id-symbol-and-instance.svg",
+    destRel: "android/Android基础/img/view-id-symbol-and-instance.svg",
+    collection,
+    embeddedAlt: "同名 View ID 从资源符号到运行时实例",
+  }
+  const assetLookup = {
+    bySource: new Map([["android/android基础/img/view-id-symbol-and-instance.svg", asset]]),
+    byDest: new Map(),
+    byBasename: new Map(),
+  }
+
+  assert.equal(
+    decodeURI(publicAssetPath(asset.destRel)),
+    "/android/android基础/img/view-id-symbol-and-instance.svg",
+  )
+  assert.equal(
+    extractSvgTitle(
+      '<svg><title id="title">同名 View ID &amp; 运行时实例</title><desc>detail</desc></svg>',
+    ),
+    "同名 View ID & 运行时实例",
+  )
+
+  const rewritten = rewritePublicNoteMarkdown(
+    "![[img/view-id-symbol-and-instance.svg|900]]",
+    input,
+    createNoteLookup([]),
+    assetLookup,
+  )
+  assert.match(rewritten, /src="\/android\/android%E5%9F%BA%E7%A1%80\/img\//)
+  assert.match(rewritten, /alt="同名 View ID 从资源符号到运行时实例"/)
+  assert.match(rewritten, /width="900"/)
 })
 
 test("only type post enters the blog while config remains presentation metadata", () => {
