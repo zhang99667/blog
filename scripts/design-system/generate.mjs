@@ -108,6 +108,133 @@ export function renderBrandStyles(tokens) {
   return lines.join("\n")
 }
 
+function colorWithAlpha(hex, alpha) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+    throw new Error(`Expected a six-digit hex color, received ${hex}`)
+  }
+  const alphaByte = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, "0")
+  return `${hex}${alphaByte}`
+}
+
+export function renderGiscusTheme(tokens, mode) {
+  if (mode !== "lightMode" && mode !== "darkMode") {
+    throw new Error(`Unsupported Giscus theme mode: ${mode}`)
+  }
+
+  const colors = tokens.theme.colors[mode]
+  const dark = mode === "darkMode"
+  const canvas = colors.light
+  const foreground = colors.dark
+  const muted = colors.gray
+  const subtle = colors.darkgray
+  const line = colors.lightgray
+  const accent = colors.secondary
+  const signal = colors.tertiary
+  const softLine = colorWithAlpha(foreground, dark ? 0.16 : 0.14)
+  const faintLine = colorWithAlpha(foreground, dark ? 0.1 : 0.08)
+  const softAccent = colorWithAlpha(accent, dark ? 0.2 : 0.14)
+  const mutedFill = colorWithAlpha(muted, dark ? 0.22 : 0.16)
+  const primaryText = dark ? canvas : tokens.fixedColors.brandSurface
+
+  const variables = {
+    "color-prettylights-syntax-comment": muted,
+    "color-prettylights-syntax-constant": accent,
+    "color-prettylights-syntax-entity": signal,
+    "color-prettylights-syntax-storage-modifier-import": foreground,
+    "color-prettylights-syntax-entity-tag": accent,
+    "color-prettylights-syntax-keyword": signal,
+    "color-prettylights-syntax-string": subtle,
+    "color-prettylights-syntax-variable": signal,
+    "color-prettylights-syntax-brackethighlighter-unmatched": signal,
+    "color-prettylights-syntax-invalid-illegal-text": canvas,
+    "color-prettylights-syntax-invalid-illegal-bg": signal,
+    "color-prettylights-syntax-carriage-return-text": canvas,
+    "color-prettylights-syntax-carriage-return-bg": signal,
+    "color-prettylights-syntax-string-regexp": accent,
+    "color-prettylights-syntax-markup-list": signal,
+    "color-prettylights-syntax-markup-heading": accent,
+    "color-prettylights-syntax-markup-italic": foreground,
+    "color-prettylights-syntax-markup-bold": foreground,
+    "color-prettylights-syntax-markup-deleted-text": signal,
+    "color-prettylights-syntax-markup-deleted-bg": colorWithAlpha(signal, 0.14),
+    "color-prettylights-syntax-markup-inserted-text": accent,
+    "color-prettylights-syntax-markup-inserted-bg": softAccent,
+    "color-prettylights-syntax-markup-changed-text": signal,
+    "color-prettylights-syntax-markup-changed-bg": colorWithAlpha(signal, 0.12),
+    "color-prettylights-syntax-markup-ignored-text": foreground,
+    "color-prettylights-syntax-markup-ignored-bg": softAccent,
+    "color-prettylights-syntax-meta-diff-range": signal,
+    "color-prettylights-syntax-brackethighlighter-angle": muted,
+    "color-prettylights-syntax-sublimelinter-gutter-mark": muted,
+    "color-prettylights-syntax-constant-other-reference-link": accent,
+    "color-btn-text": foreground,
+    "color-btn-bg": canvas,
+    "color-btn-border": softLine,
+    "color-btn-shadow": `0 1px 0 ${faintLine}`,
+    "color-btn-inset-shadow": `inset 0 1px 0 ${faintLine}`,
+    "color-btn-hover-bg": line,
+    "color-btn-hover-border": softLine,
+    "color-btn-active-bg": line,
+    "color-btn-active-border": colorWithAlpha(foreground, 0.24),
+    "color-btn-selected-bg": line,
+    "color-btn-primary-text": primaryText,
+    "color-btn-primary-bg": accent,
+    "color-btn-primary-border": softLine,
+    "color-btn-primary-shadow": `0 1px 0 ${faintLine}`,
+    "color-btn-primary-inset-shadow": `inset 0 1px 0 ${faintLine}`,
+    "color-btn-primary-hover-bg": accent,
+    "color-btn-primary-hover-border": colorWithAlpha(foreground, 0.24),
+    "color-btn-primary-selected-bg": accent,
+    "color-btn-primary-selected-shadow": `inset 0 1px 0 ${softLine}`,
+    "color-btn-primary-disabled-text": colorWithAlpha(primaryText, 0.72),
+    "color-btn-primary-disabled-bg": colorWithAlpha(accent, 0.58),
+    "color-btn-primary-disabled-border": faintLine,
+    "color-action-list-item-default-hover-bg": mutedFill,
+    "color-segmented-control-bg": mutedFill,
+    "color-segmented-control-button-bg": canvas,
+    "color-segmented-control-button-selected-border": muted,
+    "color-fg-default": foreground,
+    "color-fg-muted": muted,
+    "color-fg-subtle": subtle,
+    "color-canvas-default": canvas,
+    "color-canvas-overlay": canvas,
+    "color-canvas-inset": line,
+    "color-canvas-subtle": colorWithAlpha(line, dark ? 0.48 : 0.62),
+    "color-border-default": line,
+    "color-border-muted": faintLine,
+    "color-neutral-muted": mutedFill,
+    "color-accent-fg": accent,
+    "color-accent-emphasis": accent,
+    "color-accent-muted": colorWithAlpha(accent, 0.38),
+    "color-accent-subtle": softAccent,
+    "color-success-fg": accent,
+    "color-attention-fg": signal,
+    "color-attention-muted": colorWithAlpha(signal, 0.38),
+    "color-attention-subtle": colorWithAlpha(signal, 0.12),
+    "color-danger-fg": signal,
+    "color-danger-muted": colorWithAlpha(signal, 0.38),
+    "color-danger-subtle": colorWithAlpha(signal, 0.12),
+    "color-primer-shadow-inset": `inset 0 1px 0 ${faintLine}`,
+    "color-scale-gray-1": line,
+    "color-scale-gray-7": line,
+    "color-scale-blue-1": softAccent,
+    "color-scale-blue-8": softAccent,
+    "color-social-reaction-bg-hover": line,
+    "color-social-reaction-bg-reacted-hover": softAccent,
+  }
+
+  const declarations = Object.entries(variables)
+    .map(([name, value]) => `--${name}:${value}`)
+    .join(";")
+  return [
+    "/* Generated from design-system/tokens.json. Do not edit by hand. */",
+    `main{color-scheme:${dark ? "dark" : "light"};${declarations}}`,
+    "",
+  ].join("\n")
+}
+
 function renderIconSvg(tokens) {
   const colors = tokens.fixedColors
   return `
@@ -163,6 +290,16 @@ export async function generateDesignSystem(root = defaultRoot) {
   await Promise.all([
     writeTextArtifact(root, "quartz/brand.generated.ts", renderBrandModule(tokens)),
     writeTextArtifact(root, "quartz/styles/_brand.generated.scss", renderBrandStyles(tokens)),
+    writeTextArtifact(
+      root,
+      "quartz/static/giscus/markz-light.css",
+      renderGiscusTheme(tokens, "lightMode"),
+    ),
+    writeTextArtifact(
+      root,
+      "quartz/static/giscus/markz-dark.css",
+      renderGiscusTheme(tokens, "darkMode"),
+    ),
     writeFontArtifact(root, tokens),
   ])
   await writeImageArtifacts(root, tokens)
@@ -211,6 +348,18 @@ export async function checkGeneratedDesignSystem(root = defaultRoot) {
       root,
       "quartz/styles/_brand.generated.scss",
       renderBrandStyles(tokens),
+      failures,
+    ),
+    checkTextArtifact(
+      root,
+      "quartz/static/giscus/markz-light.css",
+      renderGiscusTheme(tokens, "lightMode"),
+      failures,
+    ),
+    checkTextArtifact(
+      root,
+      "quartz/static/giscus/markz-dark.css",
+      renderGiscusTheme(tokens, "darkMode"),
       failures,
     ),
     checkImage(root, "quartz/static/icon.png", 512, 512, failures),

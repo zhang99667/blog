@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { contrastRatio, findLiteralColors, validateDesignTokens } from "./check.mjs"
+import { renderGiscusTheme } from "./generate.mjs"
 
 const validTokens = {
   version: "1.0.0",
@@ -19,6 +20,7 @@ const validTokens = {
     colors: {
       lightMode: {
         light: "#fafaf8",
+        lightgray: "#e3e2dc",
         gray: "#646962",
         darkgray: "#454842",
         dark: "#191c17",
@@ -28,6 +30,7 @@ const validTokens = {
       },
       darkMode: {
         light: "#171916",
+        lightgray: "#343733",
         gray: "#858b84",
         darkgray: "#d9ddd7",
         dark: "#f1f4ed",
@@ -122,4 +125,17 @@ test("reading rail breakpoint must follow the wide layout", () => {
   tokens.breakpoints.readingRail = "1100px"
 
   assert.deepEqual(validateDesignTokens(tokens), ["breakpoints must be ordered pixel values"])
+})
+
+test("Giscus themes are generated from the governed light and dark palettes", () => {
+  const light = renderGiscusTheme(validTokens, "lightMode")
+  const dark = renderGiscusTheme(validTokens, "darkMode")
+
+  assert.match(light, /color-scheme:light/)
+  assert.match(light, /--color-canvas-default:#fafaf8/)
+  assert.match(light, /--color-accent-fg:#1759b6/)
+  assert.match(dark, /color-scheme:dark/)
+  assert.match(dark, /--color-canvas-default:#171916/)
+  assert.match(dark, /--color-accent-fg:#84b2f4/)
+  assert.doesNotMatch(`${light}\n${dark}`, /https?:\/\//)
 })

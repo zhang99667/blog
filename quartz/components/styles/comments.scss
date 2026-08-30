@@ -1,0 +1,27 @@
+.article-comments {
+  margin-top: var(--brand-space-12);
+  padding-top: var(--brand-space-8);
+  border-top: 1px solid var(--line);
+}
+
+.article-comments__title {
+  margin: 0 0 var(--brand-space-6);
+  font-size: var(--brand-type-title-size);
+  line-height: var(--brand-type-title-line);
+}
+
+.giscus,
+.giscus-frame {
+  width: 100%;
+  min-height: 150px;
+}
+
+.giscus-frame {
+  display: block;
+  border: 0;
+  color-scheme: light dark;
+}
+
+.giscus-frame--loading {
+  opacity: 0;
+}

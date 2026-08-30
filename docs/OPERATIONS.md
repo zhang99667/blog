@@ -19,6 +19,8 @@ npm run build
 
 本地调试互动 API 使用 `npm run reactions:serve`，默认数据库位于 `.cache/reactions-dev.sqlite`。Quartz 预览和 reactions 服务分别启动；生产页面只请求同源 `/api/reactions`、`/api/reactions/view` 和博客专属 `/api/visitors`。
 
+正文评论由 Giscus/GitHub Discussions 托管，不增加本站数据库或常驻服务。Giscus App 只安装在 `zhang99667/blog`，权限固定为 Metadata 只读、Discussions 读写；Comments 插件和 Repo/Category ID 固定在源码中。开发与 CI 的浏览器门禁使用本地可控 widget 响应，不依赖 Giscus 外网稳定性；生产 smoke 只核对评论静态边界、生成主题和精确 CSP，不会为了第三方短暂故障让笔记同步失败。
+
 ## AI 演进巡检
 
 `.github/workflows/markz-evolve.yaml` 每周一和相关控制面变更后运行。它安装锁定依赖，执行成熟度探针与代表性 eval，更新唯一的 `[AI Evolution] MarkZ maturity backlog` issue，并保存 Markdown/JSON 报告。
@@ -40,6 +42,8 @@ Issue 查询或写回遇到 GitHub API 瞬时失败时会进行 4 次有限指�
 3. 运行 `npm run deploy`，其中包含完整 `verify`、浏览器质量门禁和差量部署。自动链不运行 `npm audit`，外部安全公告数据库变化不会单独阻断笔记同步；需要审计时手工执行 `npm run security:check`。
 4. 运行 `npm run smoke:production`，检查所有域名、API 和端口所有权。
 5. 保存浏览器报告 14 天。
+
+评论 iframe 在部署后由浏览器直接访问 Giscus；它不进入服务器差量同步之外的运行服务，也不改变上述发布步骤。评论区空白时先按下方专项流程诊断，不要手工重跑或关闭同步门禁。
 
 部署会先同步 `services/reactions/`、同步器生成的 `.cache/reaction-aliases.json`、`nginx.conf` 和集中式 `security-headers.inc`。已有备份服务健康时，部署脚本先强制生成一份已验证在线快照，再重建并等待 `markz-reactions` 与 `markz-reactions-backup` 健康；新服务在启动事务中把旧路由计数合并到稳定 content ID，随后才执行 Nginx 配置测试和 edge 重建。SQLite 位于 `/home/markz/apps/blog/reactions-data/reactions.sqlite`，本机快照位于 `/home/markz/apps/blog/reactions-backups/`；两者都不会被静态站差量同步删除。生产 smoke 还会从最新快照恢复一个隔离数据库并校验表行数，检查页面、API、静态资源和 404 的安全响应头，并精确比较博客与笔记 CSP；独立工具只检查公共安全基线，不强行继承编辑站 CSP。
 
@@ -186,6 +190,15 @@ GitHub 仓库需要以下 Actions 配置：
 4. Explorer 若需要自定义排序或过滤，先增加声明式选项和兼容测试；不要恢复序列化函数与 `new Function`。
 5. CSP 值只在 `deploy/nginx.conf` host map 修改；`security-headers.inc` 只发射映射值。默认值必须为空，避免接管 JSONUtils 和装箱单策略。
 6. 运行完整浏览器矩阵、远端 `nginx -t` 和生产 smoke；一次无报错刷新不能证明 SPA、404、图谱和双主题都合规。
+
+### 正文评论空白或 GitHub 登录回跳异常
+
+1. 先确认当前页面是博客成稿或 `note.markz.fun` 标准 Markdown 笔记；首页、归档、关于、标签、文件夹、404、Canvas、Bases、Excalidraw 和 `/notes/` 回退没有评论是预期行为。
+2. 查看页面是否只有一个 `[data-article-comments] iframe.giscus-frame`，其地址必须是 `https://giscus.app/<lang>/widget`；若出现 `client.js` 请求，说明受治理兼容层发生回退，必须修源码而不是放宽 `script-src`。
+3. 通过 GitHub API 核对仓库 Discussions 已启用、分类 ID 仍对应 `Announcements`，并确认 Giscus App 对 `zhang99667/blog` 仍只有 Metadata 只读与 Discussions 读写。不要创建 App 私钥或把用户 OAuth session 放入 Secrets。
+4. 登录回跳后地址栏中的 `giscus` 参数与 hash 应被清理，`giscus-session` 只存在浏览器 `localStorage`；登出或凭证失效会自动删除。清理浏览器站点数据只会要求重新登录，不会删除 Discussion。
+5. 浅深主题异常时检查 `/static/giscus/markz-light.css` 与 `markz-dark.css` 是否来自当前设计生成链，再检查 iframe 收到的 `setConfig.theme`；不要手改生成 CSS。
+6. Giscus 或 GitHub 暂时不可用时，确认正文、目录、本站点赞和站内导航仍可用即可。第三方恢复后评论会自动恢复，不应因此阻断构建、部署或定时笔记同步。
 
 ### 部分 Android 浏览器只显示裸 HTML
 

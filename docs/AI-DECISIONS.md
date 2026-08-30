@@ -433,3 +433,12 @@
 - 反例：把 Issue 更新改成 `continue-on-error`；吞掉所有 `gh` 失败并把工作流标绿；因单次 5xx 要求人手重跑整条成熟度巡检；无限重试占住 runner；只重试编辑却让查询或首次创建继续单点失败。
 - 边界：重试只保护 GitHub Issue 控制面写回，不改变成熟度评分、报告内容、发布链或生产部署。持续服务故障、权限错误、无效请求和重试耗尽仍必须显式失败；已有并发取消和 10 分钟任务超时继续生效。
 - 锁定证据：AI 基础设施契约要求 Evolution 工作流包含重试函数、4 次上限和退避等待；单测拒绝移除这些片段；新的 `MarkZ Evolution` 运行完成 Issue 写回和 artifact 上传。
+
+## D-049 正文评论使用受治理的 Giscus iframe
+
+- 日期：2026-08-30
+- 触发：用户要求给博客笔记增加评论功能，并确认安装 Giscus GitHub App；同时明确优先使用 API，只有必须操作 GUI 时才使用 Edge。站点现有匿名点赞已经承担轻量反馈，严格 CSP 又禁止直接执行 Giscus 的远程 `client.js`。
+- 决策：评论固定使用仓库级 Giscus App 与 `zhang99667/blog` 的 `Announcements` Discussions 分类，App 权限收敛为 Metadata 只读、Discussions 读写。Quartz Comments 插件固定到完整提交 `42c5023e42cf62495219095a862b2ea144b65600`，讨论映射使用 `pathname + strict`，关闭 Giscus reactions 避免与本站点赞重复。评论只出现在博客成稿正文和 `note.markz.fun` 的标准 Markdown 笔记；首页、归档、关于、标签、文件夹、404、Canvas、Bases、Excalidraw 与 `markz.fun/notes` 回退表面不渲染。浅深主题由 `design-system/tokens.json` 生成本域 CSS。本站脚本仍只允许 `'self'`，本地兼容层直接创建 `https://giscus.app/<lang>/widget` iframe、处理 OAuth session、主题消息、高度和 Quartz SPA 清理；CSP 只在 `frame-src` 增加精确 `https://giscus.app`，不开放远程脚本或连接源。
+- 反例：加载 `https://giscus.app/client.js` 并把它加入 `script-src`；为省事加入 `https:`、通配 frame 或远程 connect；恢复 Giscus reactions；让评论出现在目录与特殊文档；手改 `.quartz/plugins/comments`；把 GitHub OAuth token、App 私钥或用户 session 写进仓库、服务端日志或构建产物；因 Giscus 不可用阻断正文、笔记同步、构建或部署。
+- 边界：访客阅读静态正文不依赖 GitHub；发表评论需要用户自行登录 GitHub，评论数据和账号处理属于 GitHub Discussions/Giscus。浏览器只把 Giscus 返回的 session 保存在本站 `localStorage`，登出或凭证失效时立即清理；它不是博客账号系统。路径变化会得到新的讨论映射，若未来需要合并必须显式迁移，不能按标题猜测。Giscus/App/API 暂时故障只使评论区降级，不改变本站 SQLite 点赞、公开笔记筛选或发布连续性。
+- 锁定证据：插件完整 SHA、Repo/Category ID 与关闭 reactions 的配置；评论可见性单测；生成主题漂移检查；CSP 精确源站测试与构建产物拒绝远程 client；紧凑主题生成物和仅覆盖新增按需主题的 255 KB/128 KB 双站总 CSS 预算；博客/笔记正文 320/390/1440 双主题 iframe 矩阵、非正文无评论、SPA 单实例、主题 `postMessage`、OAuth URL/session 清理和失败降级；`governed-article-comments` eval、GitHub API 分类核验、发布流水线与生产 smoke。

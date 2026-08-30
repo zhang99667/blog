@@ -11,6 +11,7 @@ design-system/tokens.json
   -> scripts/design-system/generate.mjs
   -> quartz/brand.generated.ts
   -> quartz/styles/_brand.generated.scss
+  -> quartz/static/giscus/markz-light.css + markz-dark.css
   -> BrandMark / Quartz theme / favicon / social card
   -> blog + notes
 
@@ -24,6 +25,7 @@ synchronized article frontmatter + design tokens + pinned build fonts
 
 - 只在 `design-system/tokens.json` 修改颜色、字体、圆角、主要宽度和品牌资产版本。
 - `quartz/brand.generated.ts`、`quartz/styles/_brand.generated.scss` 和品牌 PNG 都是生成物，不手改。
+- Giscus 浅深主题同样由现有颜色令牌生成，不手改 `quartz/static/giscus/`。
 - `quartz/components/BrandMark.tsx` 是应用中的字标组件。
 - `design-system/reference/markz-wordmark.png` 是用户确认的视觉参考，不直接作为网页图片使用。
 - 修改后运行 `npm run design:generate`，再运行 `npm run design:check`。
@@ -125,6 +127,13 @@ synchronized article frontmatter + design tokens + pinned build fonts
 - 分享图构建固定使用仓库内已校验的 Noto Sans SC WOFF，不从系统字体或远程字体服务取字。完整中文字体只作为构建输入；页面仅发布 18 KB 的拉丁字标子集。
 - 修改字标或通用品牌图后递增 `brand.assetRevision`；修改文章卡片布局时递增文章渲染器版本，避免旧缓存继续生效。
 - 产品截图必须展示真实界面，不使用模糊的氛围图代替产品状态。
+
+### 评论
+
+- 评论区沿用正文分隔线、标题层级和阅读宽度，不做独立营销卡片。
+- Giscus iframe 的浅深主题从 MarkZ 语义色生成，主题变化不能改变几何结构或引入远程字体、图片和主题依赖。
+- 评论 reactions 保持关闭，本站点赞继续是唯一的轻量反应入口。
+- 320px 与 390px 下 iframe 不得产生横向滚动；加载或第三方故障不能隐藏正文。
 
 ### 无障碍与阅读
 

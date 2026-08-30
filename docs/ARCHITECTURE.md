@@ -13,6 +13,7 @@
 | Quartz 构建     | 博客、笔记和回退路由                 | `quartz.ts`、`quartz.config.yaml`   | `public/`、`public-notes/`        |
 | 发现与分发      | canonical、结构化数据、RSS、robots   | `Head.tsx`、`build-site-extras.mjs` | HTML 元数据与站点发现文件         |
 | 匿名互动与访问  | 文章点赞、唯一浏览、站点访客与持久化 | `services/reactions/`               | SQLite 数据文件                   |
+| 公开正文评论    | GitHub 身份评论与 Discussions 托管   | `CommentsCompatibility.tsx`、Giscus | GitHub Discussions                |
 | 运行时本机备份  | 在线一致快照、校验、保留与恢复演练   | `services/reactions/backup.mjs`     | 加密前的本机私有快照              |
 | 异地恢复层      | 用户不采纳后的手动休眠恢复工具       | `markz-backup.yaml`、备份工具       | 当前不生成外部 Artifact           |
 | AI 演进控制面   | 能力盘点、证据探针、处置和定时报告   | `ai/evolution.json`                 | 报告与唯一 GitHub 改进任务        |
@@ -58,6 +59,18 @@ blog visitor counter
   -> markz-reactions
   -> SQLite visitors + daily_visitors
 ```
+
+公开评论使用独立的第三方身份链路，不进入匿名互动数据库：
+
+```text
+governed Comments component on canonical article/note pages
+  -> local self-hosted comments runtime
+  -> exact https://giscus.app widget iframe
+  -> repo-scoped Giscus App
+  -> zhang99667/blog Announcements Discussions
+```
+
+主题 CSS 从设计令牌生成并由博客、独立笔记域名分别自托管；OAuth 回跳 session 只保存在当前浏览器。iframe、GitHub 或 Giscus 故障不参与同步、构建和部署成功判定，静态正文与本站匿名点赞继续独立可用。
 
 互动数据库的本机恢复链路独立于请求服务：
 
@@ -162,6 +175,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - `markz-reactions` 只加入 edge 内部网络，不发布宿主机端口，也不加入 JSONUtils 网络。
 - `markz-reactions-backup` 不加入任何 Docker 网络，只读挂载运行时数据库目录；它只能写独立备份目录，也不发布宿主机端口。
 - `MarkZ Runtime Backup` 默认由仓库变量关闭；启用后只通过固定 SSH 主机身份读取已验证快照，不修改在线数据库，也不持有解密身份。
+- 博客成稿与独立笔记域名的标准 Markdown 正文可以嵌入 Giscus iframe；首页、归档、关于、标签、文件夹、404、Canvas、Bases、Excalidraw 和 `/notes/` 回退入口不嵌入评论。CSP 只允许精确的 Giscus frame，不允许其远程 client script。
 
 ## 所有权规则
 
@@ -188,6 +202,7 @@ deploy/nginx.conf CSP host map (one policy literal)
 - 异地备份编排归 `markz-backup.yaml`，格式校验与恢复归 `offsite-backup.mjs` 和 `scripts/runtime-backup/`。专用 age 私钥归用户且必须位于仓库、服务器和 Actions 之外；仓库只允许公钥 recipient。启用变量、密钥创建、recipient 轮换和生产替换都需要明确批准。
 - 用户纠偏归 `docs/AI-DECISIONS.md`，可判定规则必须进入自动门禁。
 - 第三方组件的兼容修复归本仓库源码和浏览器门禁，不能依赖 `.quartz/` 插件缓存中的手工改动。
+- 评论展示范围、Giscus 配置、OAuth/SPA 兼容与本域主题归 `CommentsCompatibility.tsx`、`CommentVisibility.ts`、本地评论脚本和设计生成器；Discussion 内容与 GitHub 身份归 Giscus/GitHub。评论不可用不能改变内容公开范围或发布结果。
 
 ## 自动同步
 
@@ -235,5 +250,6 @@ Quartz 的内容索引和 404 恢复脚本由外部 `prescript`、组件资源�
 | 运行时灾备  | 本机快照、异地密文与密钥     | 审批、完整性、加解密、恢复、保留和远端运行       |
 | 安全响应头  | 所有 edge 域名与响应类型     | Nginx 上下文、Compose 挂载、2xx/404 生产 smoke   |
 | CSP         | 博客、笔记和动态运行时       | HTML 解析、资源源站、52 场景违规监听、生产精确值 |
+| 正文评论    | 博客成稿、标准公开笔记       | 显隐边界、双主题三视口、SPA/OAuth、CSP、故障降级 |
 | edge 配置   | 所有公网域名                 | Nginx 测试、端口所有权、生产 smoke               |
 | AI 规则     | Agent 行为与 CI              | manifest、eval runner、资产注册表                |

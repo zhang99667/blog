@@ -19,6 +19,19 @@ const brandEvidence = [
   `markz-icon-${tokens.brand.assetRevision}.png`,
   `markz-card-${tokens.brand.assetRevision}.png`,
 ]
+const commentEvidence = [
+  "data-article-comments",
+  'data-repo="zhang99667/blog"',
+  'data-repo-id="R_kgDOTVGXZg"',
+  'data-category="Announcements"',
+  'data-category-id="DIC_kwDOTVGXZs4DEfJg"',
+  'data-mapping="pathname"',
+  'data-strict="1"',
+  'data-reactions-enabled="0"',
+  'data-light-theme="markz-light"',
+  'data-dark-theme="markz-dark"',
+  'data-lang="zh-CN"',
+]
 const linkedGraphSlug = "ai/agent-mcp-完全指南"
 const pairedReactionRoutes = [
   {
@@ -54,6 +67,7 @@ const routes = [
       "JSONUtils - 在线 JSON 格式化、校验与智能修复工具",
       "fonts.googleapis.com",
       "fonts.gstatic.com",
+      "data-article-comments",
     ],
   },
   {
@@ -72,17 +86,18 @@ const routes = [
     siteName: "MarkZ 个人博客",
     structuredTypes: ["WebPage", "ProfilePage", "Person"],
     compressed: true,
+    forbiddenEvidence: ["data-article-comments"],
   },
   {
     url: "https://note.markz.fun/",
     evidence: brandEvidence,
     title: "Notes · 公开笔记",
     applicationName: "MarkZ 公开笔记",
-    forbiddenEvidence: ["fonts.googleapis.com", "fonts.gstatic.com"],
+    forbiddenEvidence: ["fonts.googleapis.com", "fonts.gstatic.com", "data-article-comments"],
   },
   {
     url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
-    evidence: [`data-slug="${linkedGraphSlug}"`],
+    evidence: [`data-slug="${linkedGraphSlug}"`, ...commentEvidence],
     title: "Agent MCP 完全指南 · 公开笔记",
     applicationName: "MarkZ 公开笔记",
   },
@@ -90,7 +105,7 @@ const routes = [
     url: "https://note.markz.fun/__missing-note-contract__",
     status: 404,
     evidence: ['data-slug="404"'],
-    forbiddenEvidence: ['data-slug="index"'],
+    forbiddenEvidence: ['data-slug="index"', "data-article-comments"],
     title: "无法找到 · 公开笔记",
     applicationName: "MarkZ 公开笔记",
   },
@@ -165,6 +180,38 @@ const routes = [
   {
     url: `https://markz.fun/static/fonts/markz-wordmark-latin-${tokens.brand.assetRevision}.woff`,
     contentType: "font/woff",
+  },
+  {
+    url: "https://markz.fun/static/giscus/markz-light.css",
+    evidence: [
+      "Generated from design-system/tokens.json",
+      `--color-canvas-default:${tokens.theme.colors.lightMode.light}`,
+    ],
+    contentType: "text/css",
+  },
+  {
+    url: "https://markz.fun/static/giscus/markz-dark.css",
+    evidence: [
+      "Generated from design-system/tokens.json",
+      `--color-canvas-default:${tokens.theme.colors.darkMode.light}`,
+    ],
+    contentType: "text/css",
+  },
+  {
+    url: "https://note.markz.fun/static/giscus/markz-light.css",
+    evidence: [
+      "Generated from design-system/tokens.json",
+      `--color-accent-fg:${tokens.theme.colors.lightMode.secondary}`,
+    ],
+    contentType: "text/css",
+  },
+  {
+    url: "https://note.markz.fun/static/giscus/markz-dark.css",
+    evidence: [
+      "Generated from design-system/tokens.json",
+      `--color-accent-fg:${tokens.theme.colors.darkMode.secondary}`,
+    ],
+    contentType: "text/css",
   },
   { url: "https://markz.fun/static/__security-header-smoke__.png", status: 404 },
 ]
@@ -338,7 +385,20 @@ try {
   })
   if (!articleResponse.ok) throw new Error(`article returned ${articleResponse.status}`)
   validateSecurityHeaders("https://markz.fun/blog/agent-mcp", articleResponse)
-  const facts = inspectHtml(await articleResponse.text())
+  const articleBody = await articleResponse.text()
+  const commentSections = articleBody.match(/\bdata-article-comments\b/g)?.length ?? 0
+  if (commentSections !== 1) {
+    failures.push(`production agent-mcp must contain one comment section, found ${commentSections}`)
+  }
+  for (const snippet of commentEvidence) {
+    if (!articleBody.includes(snippet)) {
+      failures.push(`production agent-mcp comments are missing ${snippet}`)
+    }
+  }
+  if (articleBody.includes("https://giscus.app/client.js")) {
+    failures.push("production agent-mcp must not embed the remote Giscus client script")
+  }
+  const facts = inspectHtml(articleBody)
   failures.push(...validateArticleSocialMetadata("production agent-mcp", facts, entry))
   const localStylesheets = facts.stylesheets.filter((reference) => !/^https?:\/\//i.test(reference))
   const productionCss = await Promise.all(
@@ -504,6 +564,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, governed comments, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
   )
 }

@@ -9,7 +9,14 @@ import {
 test("loads one host-scoped editorial policy from Nginx", async () => {
   const policy = await loadContentSecurityPolicy()
   assert.deepEqual(policy.directives.get("script-src"), ["'self'"])
+  assert.deepEqual(policy.directives.get("connect-src"), ["'self'"])
   assert.deepEqual(policy.directives.get("script-src-attr"), ["'none'"])
+  assert.deepEqual(policy.directives.get("frame-src"), [
+    "'self'",
+    "https://www.youtube.com",
+    "https://www.youtube-nocookie.com",
+    "https://giscus.app",
+  ])
   assert.equal(policy.value.includes("'unsafe-eval'"), false)
 })
 

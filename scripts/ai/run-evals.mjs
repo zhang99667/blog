@@ -236,6 +236,7 @@ export async function collectContentSecurityPolicyFailures(root = defaultRoot) {
     ["base-uri", ["'none'"]],
     ["frame-ancestors", ["'none'"]],
     ["object-src", ["'none'"]],
+    ["connect-src", ["'self'"]],
     ["script-src", ["'self'"]],
     ["script-src-attr", ["'none'"]],
   ]) {
@@ -245,6 +246,16 @@ export async function collectContentSecurityPolicyFailures(root = defaultRoot) {
     }
   }
   if (policy.value.includes("'unsafe-eval'")) failures.push("CSP must reject unsafe eval")
+  const frameSources = policy.directives.get("frame-src") ?? []
+  const expectedFrameSources = [
+    "'self'",
+    "https://www.youtube.com",
+    "https://www.youtube-nocookie.com",
+    "https://giscus.app",
+  ]
+  if (JSON.stringify(frameSources) !== JSON.stringify(expectedFrameSources)) {
+    failures.push("CSP frame-src must allow only governed self, video, and Giscus origins")
+  }
   for (const directive of ["style-src", "style-src-attr", "style-src-elem"]) {
     if (!policy.directives.get(directive)?.includes("'unsafe-inline'")) {
       failures.push(`CSP ${directive} must cover generated and legacy presentation styles`)
@@ -876,6 +887,112 @@ export async function collectArticleSocialImageFailures(root = defaultRoot) {
   return failures
 }
 
+export async function collectCommentIntegrationFailures(root = defaultRoot) {
+  const failures = []
+  const [
+    yaml,
+    lock,
+    compatibility,
+    visibility,
+    runtime,
+    generator,
+    manifest,
+    quality,
+    browser,
+    decisions,
+  ] = await Promise.all([
+    readText(root, "quartz.config.yaml"),
+    readJson(root, "quartz.lock.json"),
+    readText(root, "quartz/components/CommentsCompatibility.tsx"),
+    readText(root, "quartz/components/CommentVisibility.ts"),
+    readText(root, "quartz/components/scripts/comments.inline.ts"),
+    readText(root, "scripts/design-system/generate.mjs"),
+    readJson(root, "design-system/manifest.json"),
+    readText(root, "scripts/quality/check-build.mjs"),
+    readText(root, "tests/quality/site-quality.spec.ts"),
+    readText(root, "docs/AI-DECISIONS.md"),
+  ])
+
+  const config = parseYaml(yaml)
+  const comments = (config.plugins ?? []).find((plugin) =>
+    String(plugin.source).startsWith("github:quartz-community/comments"),
+  )
+  const expectedCommit = "42c5023e42cf62495219095a862b2ea144b65600"
+  if (comments?.source !== `github:quartz-community/comments#${expectedCommit}`) {
+    failures.push("Comments plugin must be pinned to its governed full commit")
+  }
+  if (lock.plugins?.comments?.commit !== expectedCommit) {
+    failures.push("Comments lockfile entry must match the governed plugin commit")
+  }
+  const options = comments?.options?.options ?? {}
+  for (const [name, expected] of Object.entries({
+    repo: "zhang99667/blog",
+    repoId: "R_kgDOTVGXZg",
+    category: "Announcements",
+    categoryId: "DIC_kwDOTVGXZs4DEfJg",
+    mapping: "pathname",
+    strict: true,
+    reactionsEnabled: false,
+    inputPosition: "bottom",
+    lightTheme: "markz-light",
+    darkTheme: "markz-dark",
+    lang: "zh-CN",
+  })) {
+    if (options[name] !== expected) {
+      failures.push(`Comments option ${name} must remain ${JSON.stringify(expected)}`)
+    }
+  }
+
+  for (const [source, label, snippets] of [
+    [
+      compatibility,
+      "Comments compatibility",
+      ["shouldRenderComments", "data-article-comments", "CommentsWithGovernedRuntime"],
+    ],
+    [visibility, "comment visibility", ["blog/index", "tags/", "excalidraw", "notesHost"]],
+    [
+      runtime,
+      "comments runtime",
+      ["/widget?", "giscus-session", "themechange", "prenav", "postMessage"],
+    ],
+    [generator, "design generator", ["renderGiscusTheme", "markz-light.css", "markz-dark.css"]],
+    [
+      quality,
+      "build quality",
+      ["validateCommentRuntime", "must not load the remote Giscus client script"],
+    ],
+    [browser, "browser gate", ["giscusWidgetMock", "data-article-comments", "giscus-session"]],
+  ]) {
+    for (const snippet of snippets) {
+      if (!source.includes(snippet)) failures.push(`${label} is missing ${snippet}`)
+    }
+  }
+  if (runtime.includes("https://giscus.app/client.js")) {
+    failures.push("comments runtime must not execute the remote Giscus client script")
+  }
+  for (const asset of [
+    "quartz/static/giscus/markz-light.css",
+    "quartz/static/giscus/markz-dark.css",
+  ]) {
+    if (!manifest.generatedArtifacts?.includes(asset)) {
+      failures.push(`design manifest must register ${asset}`)
+    }
+  }
+
+  const policy = await loadContentSecurityPolicy(root)
+  if (!policy.directives.get("frame-src")?.includes("https://giscus.app")) {
+    failures.push("editorial CSP must allow the exact Giscus frame origin")
+  }
+  if (JSON.stringify(policy.directives.get("script-src") ?? []) !== JSON.stringify(["'self'"])) {
+    failures.push("editorial CSP script-src must remain self-only for comments")
+  }
+  if (JSON.stringify(policy.directives.get("connect-src") ?? []) !== JSON.stringify(["'self'"])) {
+    failures.push("editorial CSP connect-src must remain self-only for comments")
+  }
+  if (!decisions.includes("## D-049")) failures.push("AI decisions must record D-049")
+  return failures
+}
+
 const providers = {
   "design-contract": collectDesignSystemFailures,
   "ai-contract": collectAiInfraFailures,
@@ -889,6 +1006,7 @@ const providers = {
   "ci-action-lifecycle": collectCiActionLifecycleFailures,
   "security-header-policy": collectSecurityHeaderPolicyFailures,
   "content-security-policy": collectContentSecurityPolicyFailures,
+  "comment-integration": collectCommentIntegrationFailures,
 }
 
 export async function runEvalCases(root = defaultRoot) {

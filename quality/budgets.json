@@ -1,10 +1,10 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "outputs": [
     {
       "id": "blog",
       "root": "public",
-      "maxTotalCssBytes": 250000,
+      "maxTotalCssBytes": 255000,
       "maxInitialJsBytes": 200000,
       "maxTotalJsBytes": 3700000,
       "maxHtmlBytes": 500000,
@@ -15,7 +15,7 @@
     {
       "id": "notes",
       "root": "public-notes",
-      "maxTotalCssBytes": 125000,
+      "maxTotalCssBytes": 128000,
       "maxInitialJsBytes": 200000,
       "maxTotalJsBytes": 3500000,
       "maxHtmlBytes": 500000,

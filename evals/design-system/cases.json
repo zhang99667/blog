@@ -1,5 +1,5 @@
 {
-  "version": "2.9.0",
+  "version": "3.0.0",
   "cases": [
     {
       "id": "brand-wordmark-iteration",
@@ -195,6 +195,30 @@
         "npm run smoke:production"
       ],
       "automatedChecks": ["security-header-policy", "content-security-policy"]
+    },
+    {
+      "id": "governed-article-comments",
+      "risk": "high",
+      "prompt": "给博客和公开笔记正文增加评论，直接加载 Giscus 的远程 client.js 就行。",
+      "mustRead": [
+        "docs/ARCHITECTURE.md",
+        "docs/NOTES-CONTRACT.md",
+        "deploy/nginx.conf",
+        "design-system/tokens.json"
+      ],
+      "invariants": [
+        "Show comments only on editorial blog posts and canonical Markdown notes, never on listings, folders, special documents, 404 pages, or the notes fallback surface",
+        "Pin the Comments plugin and Giscus repository/category identifiers, disable duplicate reactions, and generate both themes from MarkZ design tokens",
+        "Keep executable scripts self-hosted, allow only the exact Giscus frame origin, and make iframe or OAuth failure non-blocking for static content and publishing"
+      ],
+      "validation": [
+        "npm test",
+        "npm run build",
+        "npm run quality:build",
+        "npm run quality:web",
+        "npm run smoke:production"
+      ],
+      "automatedChecks": ["design-contract", "content-security-policy", "comment-integration"]
     }
   ]
 }

@@ -8,7 +8,54 @@ const root = process.cwd()
 const tokens = JSON.parse(readFileSync(path.join(root, "design-system/tokens.json"), "utf8"))
 const manifest = JSON.parse(readFileSync(path.join(root, "design-system/manifest.json"), "utf8"))
 
+interface GiscusMock {
+  requests: string[]
+}
+
+const giscusMocks = new WeakMap<Page, GiscusMock>()
+
+async function giscusWidgetMock(page: Page): Promise<GiscusMock> {
+  const existing = giscusMocks.get(page)
+  if (existing) return existing
+
+  const mock: GiscusMock = { requests: [] }
+  giscusMocks.set(page, mock)
+  await page.route("https://giscus.app/**", async (route) => {
+    const url = new URL(route.request().url())
+    if (!url.pathname.endsWith("/widget")) {
+      await route.abort()
+      return
+    }
+
+    mock.requests.push(url.toString())
+    const theme = url.searchParams.get("theme") ?? ""
+    const session = url.searchParams.get("session") ?? ""
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: `<!doctype html>
+        <html lang="zh-CN" data-theme=${JSON.stringify(theme)} data-session=${JSON.stringify(session)}>
+          <head><style>
+            :root { color-scheme: light; }
+            :root[data-theme*="markz-dark.css"] { color-scheme: dark; }
+            body { color: CanvasText; background: Canvas; }
+          </style></head>
+          <body><main><p>Giscus quality fixture</p></main>
+          <script>
+            addEventListener("message", (event) => {
+              const nextTheme = event.data?.giscus?.setConfig?.theme
+              if (typeof nextTheme === "string") document.documentElement.dataset.theme = nextTheme
+            })
+            parent.postMessage({ giscus: { resizeHeight: 240 } }, "*")
+          </script></body>
+        </html>`,
+    })
+  })
+  return mock
+}
+
 test.beforeEach(async ({ page }) => {
+  await giscusWidgetMock(page)
   await page.addInitScript(() => {
     const state = globalThis as typeof globalThis & {
       __markzCspViolations?: Array<Record<string, string | number>>
@@ -382,6 +429,7 @@ for (const target of pages) {
       test(`${target.id} ${viewport.name} ${theme}`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
         await page.addInitScript((savedTheme) => localStorage.setItem("theme", savedTheme), theme)
+        const giscus = await giscusWidgetMock(page)
         const reactions = await mockReactions(page)
         await page.goto(`${target.baseUrl}${target.path}`, { waitUntil: "domcontentloaded" })
         const expectedTitleSuffix = target.id.startsWith("blog") ? " · 个人博客" : " · 公开笔记"
@@ -402,6 +450,41 @@ for (const target of pages) {
           "content",
           expectedSiteName,
         )
+
+        const comments = page.locator("[data-article-comments]")
+        if (target.id.endsWith("-article")) {
+          await expect(comments).toHaveCount(1)
+          await expect(comments.getByRole("heading", { level: 2, name: "评论" })).toBeVisible()
+          const container = comments.locator(".giscus")
+          await expect(container).toHaveAttribute("data-repo", "zhang99667/blog")
+          await expect(container).toHaveAttribute("data-repo-id", "R_kgDOTVGXZg")
+          await expect(container).toHaveAttribute("data-category", "Announcements")
+          await expect(container).toHaveAttribute("data-category-id", "DIC_kwDOTVGXZs4DEfJg")
+          await expect(container).toHaveAttribute("data-mapping", "pathname")
+          await expect(container).toHaveAttribute("data-strict", "1")
+          await expect(container).toHaveAttribute("data-reactions-enabled", "0")
+          await expect(container).toHaveAttribute("data-lang", "zh-CN")
+          const frame = comments.locator("iframe.giscus-frame")
+          await expect(frame).toHaveCount(1)
+          const frameSource = new URL((await frame.getAttribute("src"))!)
+          expect(frameSource.origin).toBe("https://giscus.app")
+          expect(frameSource.pathname).toBe("/zh-CN/widget")
+          expect(frameSource.searchParams.get("repo")).toBe("zhang99667/blog")
+          expect(frameSource.searchParams.get("categoryId")).toBe("DIC_kwDOTVGXZs4DEfJg")
+          expect(frameSource.searchParams.get("strict")).toBe("1")
+          expect(frameSource.searchParams.get("reactionsEnabled")).toBe("0")
+          expect(frameSource.searchParams.get("inputPosition")).toBe("bottom")
+          expect(frameSource.searchParams.get("term")).toBe(
+            new URL(`${target.baseUrl}${target.path}`).pathname.slice(1),
+          )
+          expect(frameSource.searchParams.get("theme")).toBe(
+            `https://${target.id.startsWith("blog") ? "markz.fun" : "note.markz.fun"}/static/giscus/markz-${theme}.css`,
+          )
+        } else {
+          await expect(comments).toHaveCount(0)
+          await expect(page.locator("iframe.giscus-frame")).toHaveCount(0)
+          expect(giscus.requests).toHaveLength(0)
+        }
         await page.evaluate(() =>
           Promise.race([
             document.fonts.ready,
@@ -714,6 +797,27 @@ for (const target of pages) {
           body: await page.screenshot({ fullPage: false }),
           contentType: "image/png",
         })
+
+        if (target.id.endsWith("-article")) {
+          await comments.scrollIntoViewIfNeeded()
+          const frame = comments.locator("iframe.giscus-frame")
+          await expect(frame).toBeInViewport()
+          await expect(comments.locator(".giscus")).toHaveAttribute("aria-busy", "false")
+          await expect(frame).toHaveCSS("height", "240px")
+          await expect
+            .poll(() => giscus.requests.length, { message: "Giscus widget request count" })
+            .toBe(1)
+          await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+            "data-theme",
+            `https://${target.id.startsWith("blog") ? "markz.fun" : "note.markz.fun"}/static/giscus/markz-${theme}.css`,
+          )
+          await testInfo.attach(`${target.id}-comments-${viewport.name}-${theme}`, {
+            body: await page.screenshot({ fullPage: false }),
+            contentType: "image/png",
+          })
+          await page.evaluate(() => window.scrollTo(0, 0))
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1)
+        }
 
         if (target.id.startsWith("blog-")) {
           const footer = page.locator(".blog-site-footer")
@@ -1306,6 +1410,122 @@ test("404 canonical-case recovery works with external scripts under CSP", async 
   await expect(page.locator('body[data-slug="blog/agent-skills"]')).toHaveCount(1)
 })
 
+test("comments update theme and keep one iframe across SPA navigation", async ({ page }) => {
+  const giscus = await giscusWidgetMock(page)
+  await mockReactions(page)
+  await page.addInitScript(() => localStorage.setItem("theme", "light"))
+  await page.goto(`${blogArticlePage.baseUrl}${blogArticlePage.path}`, {
+    waitUntil: "domcontentloaded",
+  })
+
+  const comments = page.locator("[data-article-comments]")
+  await expect(comments).toHaveCount(1)
+  await comments.scrollIntoViewIfNeeded()
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-theme",
+    "https://markz.fun/static/giscus/markz-light.css",
+  )
+  await expect.poll(() => giscus.requests.length).toBe(1)
+
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("saved-theme", "dark")
+    document.dispatchEvent(new CustomEvent("themechange", { detail: { theme: "dark" } }))
+  })
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-theme",
+    "https://markz.fun/static/giscus/markz-dark.css",
+  )
+
+  await page.evaluate(() =>
+    window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
+  )
+  await expect(page.locator("body")).toHaveAttribute("data-slug", "blog/macos-network-automount")
+  await expect(page.locator("[data-article-comments]")).toHaveCount(1)
+  await expect(page.locator("iframe.giscus-frame")).toHaveCount(1)
+  await page.locator("[data-article-comments]").scrollIntoViewIfNeeded()
+  await expect.poll(() => giscus.requests.length).toBe(2)
+  const secondSource = new URL((await page.locator("iframe.giscus-frame").getAttribute("src"))!)
+  expect(secondSource.searchParams.get("term")).toBe("blog/macos-network-automount")
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-theme",
+    "https://markz.fun/static/giscus/markz-dark.css",
+  )
+
+  await page.evaluate(() => window.spaNavigate(new URL("/", location.href)))
+  await expect(page.locator("body")).toHaveAttribute("data-slug", "index")
+  await expect(page.locator("[data-article-comments], iframe.giscus-frame")).toHaveCount(0)
+
+  await page.route("https://giscus.app/**", async (route) => route.abort())
+  await page.evaluate(() =>
+    window.spaNavigate(new URL("/blog/macos-network-automount", location.href)),
+  )
+  await expect(page.locator('body[data-slug="blog/macos-network-automount"] article')).toBeVisible()
+  await expect(page.locator("[data-article-comments]")).toHaveCount(1)
+  await expect(page.locator("iframe.giscus-frame")).toHaveCount(1)
+})
+
+test("comments persist and clear the Giscus OAuth session without leaking URL state", async ({
+  page,
+}) => {
+  await mockReactions(page)
+  const callbackUrl = new URL(`${blogArticlePage.baseUrl}${blogArticlePage.path}`)
+  callbackUrl.searchParams.set("source", "quality")
+  callbackUrl.searchParams.set("giscus", "quality-oauth-session")
+  callbackUrl.hash = "comments"
+  await page.goto(callbackUrl.toString(), { waitUntil: "domcontentloaded" })
+
+  await expect
+    .poll(() => {
+      const current = new URL(page.url())
+      return {
+        giscus: current.searchParams.get("giscus"),
+        source: current.searchParams.get("source"),
+        hash: current.hash,
+      }
+    })
+    .toEqual({ giscus: null, source: "quality", hash: "" })
+  expect(await page.evaluate(() => localStorage.getItem("giscus-session"))).toBe(
+    JSON.stringify("quality-oauth-session"),
+  )
+
+  await page.locator("[data-article-comments]").scrollIntoViewIfNeeded()
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-session",
+    "quality-oauth-session",
+  )
+  expect(
+    new URL((await page.locator("iframe.giscus-frame").getAttribute("src"))!).searchParams.get(
+      "session",
+    ),
+  ).toBe("quality-oauth-session")
+
+  await page.reload({ waitUntil: "domcontentloaded" })
+  await page.locator("[data-article-comments]").scrollIntoViewIfNeeded()
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-session",
+    "quality-oauth-session",
+  )
+
+  await page
+    .frameLocator("iframe.giscus-frame")
+    .locator("html")
+    .evaluate(() => {
+      parent.postMessage({ giscus: { signOut: true } }, "*")
+    })
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("giscus-session"))).toBeNull()
+  await expect
+    .poll(async () =>
+      new URL((await page.locator("iframe.giscus-frame").getAttribute("src"))!).searchParams.get(
+        "session",
+      ),
+    )
+    .toBeNull()
+  await expect(page.frameLocator("iframe.giscus-frame").locator("html")).toHaveAttribute(
+    "data-session",
+    "",
+  )
+})
+
 test("browser title self-heals after stale product history and SPA navigation", async ({
   page,
 }) => {
@@ -1385,6 +1605,7 @@ test.describe("article reactions", () => {
     await expect(page.locator("[data-article-reaction]")).toHaveCount(0)
     await expect(page.locator("[data-scroll-to-top]")).toHaveCount(0)
     await expect(page.locator("[data-blog-visitors]")).toHaveCount(0)
+    await expect(page.locator("[data-article-comments], iframe.giscus-frame")).toHaveCount(0)
   })
 })
 

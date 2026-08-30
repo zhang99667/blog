@@ -253,12 +253,28 @@ test("CSP validation accepts governed local, note-image, and structured-data res
   </head><body style="color: black">
     <img src="data:image/png;base64,AA==">
     <img src="https://note.markz.fun/images/diagram.png">
+    <iframe src="https://giscus.app/zh-CN/widget?repo=zhang99667%2Fblog"></iframe>
   </body></html>`)
 
   assert.deepEqual(
     validateContentSecurityPolicy("public/index.html", facts, policy, "https://markz.fun"),
     [],
   )
+})
+
+test("CSP permits Giscus only as a frame, not as a remote executable script", async () => {
+  const policy = await loadContentSecurityPolicy()
+  const facts = inspectHtml(`<!doctype html><html><head>
+    <script src="https://giscus.app/client.js"></script>
+  </head></html>`)
+  const failures = validateContentSecurityPolicy(
+    "public/remote-comments.html",
+    facts,
+    policy,
+    "https://markz.fun",
+  )
+
+  assert.ok(failures.some((failure) => failure.includes("blocked by script-src")))
 })
 
 test("CSP validation rejects inline execution and ungoverned origins", async () => {

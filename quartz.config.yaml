@@ -193,11 +193,22 @@ plugins:
       position: beforeBody
       priority: 5
       condition: not-index
-  - source: github:quartz-community/comments
-    enabled: false
+  - source: github:quartz-community/comments#42c5023e42cf62495219095a862b2ea144b65600
+    enabled: true
     options:
       provider: giscus
-      options: {}
+      options:
+        repo: zhang99667/blog
+        repoId: R_kgDOTVGXZg
+        category: Announcements
+        categoryId: DIC_kwDOTVGXZs4DEfJg
+        mapping: pathname
+        strict: true
+        reactionsEnabled: false
+        inputPosition: bottom
+        lightTheme: markz-light
+        darkTheme: markz-dark
+        lang: zh-CN
     layout:
       position: afterBody
       priority: 10

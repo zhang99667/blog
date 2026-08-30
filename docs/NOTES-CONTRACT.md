@@ -6,6 +6,7 @@
 
 - 正式入口固定为 `https://note.markz.fun/`；`https://markz.fun/notes/` 只负责跳转，不承载第二份可索引内容。
 - 笔记是保留网络结构和研究过程的工作台，博客是整理后的文章。笔记页可以有 Explorer、关系图谱、目录和回链，博客文章不复制这些组件。
+- `note.markz.fun` 的标准 Markdown 笔记可以显示托管评论；首页、文件夹、标签、404、Canvas、Bases、Excalidraw 与 `markz.fun/notes` 回退表面不显示评论。
 - Obsidian Vault 是内容权威源。Markdown 只有 `publish: true` 才进入公开笔记；精确的 `type: post` 才额外进入博客。
 - `content/notes/`、`public-notes/` 和博客中的笔记链接都是生成结果，不作为手工修复入口。
 
@@ -48,7 +49,9 @@ topic: AI
 
 - Explorer、正文链接、搜索结果和图谱节点都导航到 canonical slug。路径进入运行时前必须解码为与内容索引一致的 Unicode slug。
 - SPA 导航必须销毁旧图谱实例并只挂载一个新画布；主题切换可以重绘，但不能累积 Canvas、远程运行时或事件监听器。
+- SPA 导航必须同时销毁旧评论 iframe，新正文最多挂载一个；浅深主题通过受限 `postMessage` 更新。OAuth 回跳参数必须从地址栏清理，session 只保存在当前浏览器并在登出或失效时移除。
 - D3、Pixi、Mermaid 和页面脚本只从本站固定版本资源加载。CSP 违规、外部 CDN 回退或脚本失败不能影响静态正文阅读。
+- 评论兼容脚本同样只从本站加载；CSP 只为 `https://giscus.app` 开放 frame，不开放远程可执行脚本或连接源。Giscus/GitHub 不可用只能让评论区降级，不能影响笔记正文、图谱、同步或发布。
 - 页面初次打开保持在顶部；只有显式锚点可以改变初始滚动位置。
 
 ## 6. 验收契约
@@ -56,6 +59,7 @@ topic: AI
 - 同步和路由：`npm run sync`、`npm test`、`npm run build`、`npm run quality:build`。
 - 页面体验：`npm run quality:web` 覆盖笔记首页与正文、`320x800`、`390x844`、`1440x900`、浅色和深色。
 - 浏览器门禁至少检查 canonical 页面不是首页回退、主布局样式已生效、图谱画布与容器同宽同高、没有横向溢出和 CSP 违规。
+- 评论门禁覆盖 320/390/1440 与双主题，验证正文单 iframe、非正文零 iframe、SPA 清理、主题消息、OAuth session/URL 清理和外部故障降级。
 - 上线后：`npm run smoke:production` 同时验证 canonical 笔记返回 200、未知笔记返回带 `data-slug="404"` 的 404、静态资源和安全响应头正常。
 
 任何一层需要偏离本契约时，先更新本文件和 `docs/AI-DECISIONS.md`，再修改实现与自动检查。不能只在生成 HTML、Nginx 或截图阈值中做局部例外。

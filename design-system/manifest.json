@@ -1,5 +1,5 @@
 {
-  "version": "1.3.2",
+  "version": "1.3.3",
   "tokenVersion": "1.3.2",
   "sourceOfTruth": "design-system/tokens.json",
   "generatedArtifacts": [
@@ -9,7 +9,9 @@
     "quartz/static/og-image.png",
     "quartz/static/markz-icon-v3.png",
     "quartz/static/markz-card-v3.png",
-    "quartz/static/fonts/markz-wordmark-latin-v3.woff"
+    "quartz/static/fonts/markz-wordmark-latin-v3.woff",
+    "quartz/static/giscus/markz-light.css",
+    "quartz/static/giscus/markz-dark.css"
   ],
   "surfaces": {
     "blog": {

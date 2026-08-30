@@ -625,6 +625,40 @@ async function validateContentSecurityRuntime(root, outputRoot, outputId, jsFile
   }
 }
 
+async function validateCommentRuntime(outputRoot, outputId, jsFiles, failures) {
+  for (const theme of ["markz-light.css", "markz-dark.css"]) {
+    try {
+      const source = await fs.readFile(path.join(outputRoot, "static", "giscus", theme), "utf8")
+      if (!source.includes("Generated from design-system/tokens.json")) {
+        failures.push(`${outputId} Giscus theme is not generated from the design system: ${theme}`)
+      }
+      if (/https?:\/\//i.test(source)) {
+        failures.push(`${outputId} Giscus theme must not load remote theme assets: ${theme}`)
+      }
+    } catch {
+      failures.push(`${outputId} output is missing generated Giscus theme ${theme}`)
+    }
+  }
+
+  const javascript = (
+    await Promise.all(jsFiles.map(async (file) => fs.readFile(file, "utf8")))
+  ).join("\n")
+  if (javascript.includes("https://giscus.app/client.js")) {
+    failures.push(`${outputId} comments must not load the remote Giscus client script`)
+  }
+  for (const snippet of [
+    "https://giscus.app",
+    "/widget?",
+    "giscus-session",
+    "themechange",
+    "prenav",
+  ]) {
+    if (!javascript.includes(snippet)) {
+      failures.push(`${outputId} governed comments runtime is missing ${snippet}`)
+    }
+  }
+}
+
 async function validateDiscoveryFiles(outputRoot, outputId, failures) {
   const host = outputId === "notes" ? "note.markz.fun" : "markz.fun"
   try {
@@ -822,6 +856,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
     }
     await validateGraphRuntime(root, outputRoot, output.id, jsFiles, failures)
     await validateContentSecurityRuntime(root, outputRoot, output.id, jsFiles, failures)
+    await validateCommentRuntime(outputRoot, output.id, jsFiles, failures)
     await validateDiscoveryFiles(outputRoot, output.id, failures)
 
     const indexFile = path.join(outputRoot, "index.html")
@@ -848,6 +883,7 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
     const articleSocialEntries = new Map()
     const observedArticleSocialPaths = new Set()
     let articleSocialBytes = 0
+    let commentPageCount = 0
     if (output.id === "blog") {
       try {
         const manifest = JSON.parse(
@@ -888,6 +924,49 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
       const facts = inspectHtml(source)
       failures.push(...validateHtmlMetadata(relativePath, facts))
       const outputRelativePath = path.relative(outputRoot, htmlFile).replaceAll(path.sep, "/")
+      const commentSections = source.match(/\bdata-article-comments\b/g)?.length ?? 0
+      const isBlogArticle =
+        output.id === "blog" && /^blog\/(?!index\.html$)[^/]+\.html$/i.test(outputRelativePath)
+      const isQuietNotesPage =
+        output.id === "notes" &&
+        (outputRelativePath === "index.html" ||
+          outputRelativePath === "404.html" ||
+          outputRelativePath === "all-tags.html" ||
+          outputRelativePath.startsWith("tags/") ||
+          outputRelativePath.endsWith("/index.html"))
+      if (!facts.refresh) {
+        if (isBlogArticle && commentSections !== 1) {
+          failures.push(`${relativePath} editorial article must contain one comment section`)
+        }
+        if (output.id === "blog" && !isBlogArticle && commentSections !== 0) {
+          failures.push(`${relativePath} non-editorial page must not contain comments`)
+        }
+        if (isQuietNotesPage && commentSections !== 0) {
+          failures.push(`${relativePath} notes listing page must not contain comments`)
+        }
+      }
+      if (commentSections > 0) {
+        commentPageCount += 1
+        if (commentSections !== 1) {
+          failures.push(`${relativePath} must contain exactly one comment section`)
+        }
+        for (const snippet of [
+          'data-repo="zhang99667/blog"',
+          'data-repo-id="R_kgDOTVGXZg"',
+          'data-category="Announcements"',
+          'data-category-id="DIC_kwDOTVGXZs4DEfJg"',
+          'data-mapping="pathname"',
+          'data-strict="1"',
+          'data-reactions-enabled="0"',
+          'data-light-theme="markz-light"',
+          'data-dark-theme="markz-dark"',
+          'data-lang="zh-CN"',
+        ]) {
+          if (!source.includes(snippet)) {
+            failures.push(`${relativePath} comment container is missing ${snippet}`)
+          }
+        }
+      }
       if (!facts.refresh) {
         if (facts.titleAuthority !== facts.title) {
           failures.push(`${relativePath} page title must match its independent title authority`)
@@ -1043,6 +1122,10 @@ export async function inspectBuildQuality(root = defaultRoot, { useLinkBaseline 
           failures.push(`${relativePath} has a broken published note reference: ${reference}`)
         }
       }
+    }
+
+    if (commentPageCount === 0) {
+      failures.push(`${output.id} output must contain at least one governed comment page`)
     }
 
     if (output.id === "blog") {
