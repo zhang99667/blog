@@ -14,10 +14,21 @@ if (typeof fetchData !== "undefined") {
     if (pathname.endsWith(".html")) pathname = pathname.slice(0, -5)
     if (pathname.endsWith("/index")) pathname = pathname.slice(0, -6)
 
-    const lowered = pathname.toLowerCase()
-    if (lowered !== pathname && index[lowered] != null) {
+    // The content index stores decoded slugs ("blog/agent-hook-完全指南") while
+    // location.pathname is percent-encoded, so compare the decoded form and only
+    // lowercase literal characters (encoded octets keep their uppercase hex).
+    let decoded = pathname
+    try {
+      decoded = decodeURIComponent(pathname)
+    } catch {
+      // Malformed escape sequence: keep the raw pathname.
+    }
+    const lowered = decoded.replace(/%[0-9A-Fa-f]{2}|[^%]/g, (chunk) =>
+      chunk.startsWith("%") ? chunk.toUpperCase() : chunk.toLowerCase(),
+    )
+    if (lowered !== decoded && index[lowered] != null) {
       const prefix = hasBasePrefix ? basePath : ""
-      const target = prefix + (prefix.endsWith("/") ? "" : "/") + lowered
+      const target = prefix + (prefix.endsWith("/") ? "" : "/") + encodeURI(lowered)
       window.location.replace(target)
     }
   })

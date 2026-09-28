@@ -97,7 +97,7 @@ test.afterEach(async ({ page }) => {
 function firstArticle(
   outputRoot: string,
   ignoredPrefixes: string[],
-  accept: (html: string) => boolean = () => true,
+  options: { accept?: (html: string) => boolean; minimumTocEntries?: number } = {},
 ) {
   const candidates: string[] = []
   function visit(directory: string) {
@@ -108,7 +108,7 @@ function firstArticle(
     }
   }
   visit(outputRoot)
-  const selected = candidates
+  const accepted = candidates
     .map((file) => path.relative(outputRoot, file).replaceAll(path.sep, "/"))
     .filter(
       (file) => file !== "index.html" && !ignoredPrefixes.some((prefix) => file.startsWith(prefix)),
@@ -116,11 +116,24 @@ function firstArticle(
     // Linux also emits case-preserving SEO redirects; browser checks need a rendered article.
     .filter((file) => {
       const html = readFileSync(path.join(outputRoot, file), "utf8")
-      return html.includes("<article") && accept(html)
+      return html.includes("<article") && (options.accept?.(html) ?? true)
     })
-    .sort()[0]
+    .sort()
+  // The scrolling-TOC checks need an article whose table of contents actually
+  // overflows its container. Directory order changes whenever the notes vault is
+  // reorganized, so prefer a long TOC instead of whichever article sorts first.
+  const selected =
+    accepted.find(
+      (file) => countTocEntries(outputRoot, file) >= (options.minimumTocEntries ?? 0),
+    ) ?? accepted[0]
   if (!selected) throw new Error(`No article page found in ${outputRoot}`)
   return `/${selected.replace(/\.html$/, "")}`
+}
+
+function countTocEntries(outputRoot: string, file: string) {
+  const html = readFileSync(path.join(outputRoot, file), "utf8")
+  const list = html.match(/<ul id="list-0" class="toc-content overflow">([\s\S]*?)<\/ul>/)
+  return list ? (list[1].match(/<li /g) ?? []).length : 0
 }
 
 const hasMermaidDiagram = (html: string) => /<code[^>]*class="[^"]*\bmermaid\b/.test(html)
@@ -145,11 +158,9 @@ function firstMermaidArticle() {
     try {
       return {
         baseUrl: candidate.baseUrl,
-        path: `${candidate.prefix}${firstArticle(
-          candidate.outputRoot,
-          candidate.ignoredPrefixes,
-          hasMermaidDiagram,
-        )}`,
+        path: `${candidate.prefix}${firstArticle(candidate.outputRoot, candidate.ignoredPrefixes, {
+          accept: hasMermaidDiagram,
+        })}`,
       }
     } catch {
       // A site may legitimately have no Mermaid pages after a post is reclassified as a note.
@@ -171,7 +182,9 @@ const pages = [
   {
     id: "notes-article",
     baseUrl: "http://127.0.0.1:4174",
-    path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"]),
+    path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"], {
+      minimumTocEntries: 30,
+    }),
   },
 ]
 const blogArticlePage = pages.find(({ id }) => id === "blog-article")!
@@ -182,21 +195,21 @@ const imagePages = [
   {
     id: "blog-image",
     baseUrl: "http://127.0.0.1:4173",
-    path: `/blog${firstArticle(path.join(root, "public/blog"), [], hasArticleImage)}`,
+    path: `/blog${firstArticle(path.join(root, "public/blog"), [], { accept: hasArticleImage })}`,
   },
   {
     id: "notes-image",
     baseUrl: "http://127.0.0.1:4174",
-    path: firstArticle(
-      path.join(root, "public-notes"),
-      ["404", "tags/", "all-tags"],
-      hasArticleImage,
-    ),
+    path: firstArticle(path.join(root, "public-notes"), ["404", "tags/", "all-tags"], {
+      accept: hasArticleImage,
+    }),
   },
 ]
 
-const linkedGraphSlug = "ai/agent-mcp-完全指南"
-const linkedGraphRoute = "/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
+// Public notes were reorganized into capability layers on 2026-09-22; the
+// article now lives under ai/02-capability and the old route is a real 404.
+const linkedGraphSlug = "ai/02-capability/agent-mcp-完全指南"
+const linkedGraphRoute = "/ai/02-capability/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 
 async function mockReactions(page: Page, initialLikes = 12, initialViews = 32) {
   const initialTodayVisitors = 7
@@ -1403,11 +1416,20 @@ test("editorial pages enforce CSP and render Mermaid from the local runtime", as
 })
 
 test("404 canonical-case recovery works with external scripts under CSP", async ({ page }) => {
-  await page.goto("http://127.0.0.1:4173/BLOG/AGENT-SKILLS", {
+  // Derive the case-recovery target from the generated content index so the
+  // check survives content renames and notes reorganizations.
+  const index = JSON.parse(
+    readFileSync(path.join(root, "public/static/contentIndex.json"), "utf8"),
+  ) as Record<string, unknown>
+  const slug = Object.keys(index)
+    .filter((key) => key.startsWith("blog/"))
+    .sort()[0]
+  expect(slug).toBeTruthy()
+  await page.goto(`http://127.0.0.1:4173/${slug.toUpperCase()}`, {
     waitUntil: "domcontentloaded",
   })
-  await expect(page).toHaveURL("http://127.0.0.1:4173/blog/agent-skills")
-  await expect(page.locator('body[data-slug="blog/agent-skills"]')).toHaveCount(1)
+  await expect(page).toHaveURL(`http://127.0.0.1:4173/${slug}`)
+  await expect(page.locator(`body[data-slug="${slug}"]`)).toHaveCount(1)
 })
 
 test("comments update theme and keep one iframe across SPA navigation", async ({ page }) => {

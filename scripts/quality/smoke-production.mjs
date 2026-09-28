@@ -32,12 +32,16 @@ const commentEvidence = [
   'data-dark-theme="markz-dark"',
   'data-lang="zh-CN"',
 ]
-const linkedGraphSlug = "ai/agent-mcp-完全指南"
+// Public notes were reorganized into capability layers on 2026-09-22; the
+// article now lives under ai/02-capability and the old route is a real 404.
+const linkedGraphSlug = "ai/02-capability/agent-mcp-完全指南"
+const blogArticleSlug = "blog/agent-mcp-完全指南"
+const blogArticleUrl = "https://markz.fun/blog/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97"
 const pairedReactionRoutes = [
   {
     origin: "https://markz.fun",
     site: "blog",
-    slug: "blog/agent-mcp",
+    slug: blogArticleSlug,
   },
   {
     origin: "https://note.markz.fun",
@@ -96,7 +100,7 @@ const routes = [
     forbiddenEvidence: ["fonts.googleapis.com", "fonts.gstatic.com", "data-article-comments"],
   },
   {
-    url: "https://note.markz.fun/ai/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
+    url: "https://note.markz.fun/ai/02-capability/agent-mcp-%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97",
     evidence: [`data-slug="${linkedGraphSlug}"`, ...commentEvidence],
     title: "Agent MCP 完全指南 · 公开笔记",
     applicationName: "MarkZ 公开笔记",
@@ -380,11 +384,11 @@ try {
   const entry = socialManifest.entries?.find((item) => item.slug === "agent-mcp")
   if (!entry) throw new Error("agent-mcp is missing from the social image manifest")
 
-  const articleResponse = await fetch("https://markz.fun/blog/agent-mcp", {
+  const articleResponse = await fetch(blogArticleUrl, {
     signal: AbortSignal.timeout(15000),
   })
   if (!articleResponse.ok) throw new Error(`article returned ${articleResponse.status}`)
-  validateSecurityHeaders("https://markz.fun/blog/agent-mcp", articleResponse)
+  validateSecurityHeaders(blogArticleUrl, articleResponse)
   const articleBody = await articleResponse.text()
   const commentSections = articleBody.match(/\bdata-article-comments\b/g)?.length ?? 0
   if (commentSections !== 1) {
