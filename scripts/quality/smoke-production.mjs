@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process"
 import os from "node:os"
 import path from "node:path"
+import tls from "node:tls"
 import { promises as fs } from "node:fs"
 import sharp from "sharp"
 import {
@@ -49,6 +50,41 @@ const pairedReactionRoutes = [
     slug: linkedGraphSlug,
   },
 ]
+// markz-edge terminates public TLS for every one of these hosts with a single
+// certbot lineage. On 2026-10-08 that certificate expired silently: the
+// scheduled renewal had stopped months earlier, so nothing failed until the
+// certificate ran out and every host started refusing connections. Checking
+// trust and remaining lifetime here turns that class of failure into a red
+// production smoke roughly two weeks before the public sites go dark.
+const tlsHosts = [
+  "markz.fun",
+  "www.markz.fun",
+  "note.markz.fun",
+  "jsonutils.markz.fun",
+  "zhangjihao.markz.fun",
+  "browser.markz.fun",
+]
+const tlsExpiryFailDays = 14
+const tlsExpiryWarnDays = 21
+
+function readPeerCertificate(host) {
+  return new Promise((resolve, reject) => {
+    const socket = tls.connect(
+      { host, port: 443, servername: host, rejectUnauthorized: false, timeout: 15000 },
+      () => {
+        const result = {
+          authorized: socket.authorized,
+          authorizationError: socket.authorizationError,
+          certificate: socket.getPeerCertificate(),
+        }
+        socket.end()
+        resolve(result)
+      },
+    )
+    socket.once("timeout", () => socket.destroy(new Error("timed out")))
+    socket.once("error", reject)
+  })
+}
 const { value: expectedContentSecurityPolicy } = await loadContentSecurityPolicy(root)
 const expectedSecurityHeaders = new Map([
   ["strict-transport-security", ["max-age=31536000; includeSubDomains"]],
@@ -563,11 +599,41 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
   }
 }
 
+try {
+  const certificates = await Promise.all(
+    tlsHosts.map(async (host) => ({ host, ...(await readPeerCertificate(host)) })),
+  )
+  for (const { host, authorized, authorizationError, certificate } of certificates) {
+    if (authorized !== true) {
+      failures.push(
+        `production TLS for ${host} is not trusted: ${authorizationError ?? "unknown error"}`,
+      )
+    }
+    const validTo = Date.parse(String(certificate.valid_to ?? "").replace(/\s+/g, " "))
+    if (!Number.isFinite(validTo)) {
+      failures.push(`production TLS for ${host} did not return a readable expiry`)
+      continue
+    }
+    const remainingDays = (validTo - Date.now()) / 86400000
+    if (remainingDays < tlsExpiryFailDays) {
+      failures.push(
+        `production TLS for ${host} expires in ${remainingDays.toFixed(1)} days (${certificate.valid_to})`,
+      )
+    } else if (remainingDays < tlsExpiryWarnDays) {
+      console.warn(
+        `warning: production TLS for ${host} expires in ${remainingDays.toFixed(1)} days (${certificate.valid_to})`,
+      )
+    }
+  }
+} catch (error) {
+  failures.push(`production TLS certificate check failed: ${error.message}`)
+}
+
 if (failures.length > 0) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, governed comments, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, and port ownership are correct.",
+    "Production routes, governed comments, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, public TLS trust and expiry, and port ownership are correct.",
   )
 }

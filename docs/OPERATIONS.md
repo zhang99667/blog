@@ -146,7 +146,32 @@ GitHub 仓库需要以下 Actions 配置：
 
 本地部署默认读取 `~/.ssh/id_ed25519`，也可通过 `BLOG_SSH_KEY` 和 `BLOG_SSH_HOST` 覆盖。密钥不进入仓库；禁止在文档、脚本和 CI 配置中写入私钥或 API key。
 
+### 生产 TLS 证书
+
+公网 `80/443` 由 `markz-edge` 提供 TLS，证书是服务器上 certbot 的 `markz.fun` lineage，文件位于 `/www/server/panel/vhost/cert/39.97.237.248/`，经 `TLS_CERT_ROOT` 只读挂载进容器。宝塔面板不签发这张证书：面板的 `acme_v2.py` 订单只登记了 `jsonutils.markz.fun`，夜间续期永远报“没有找到30天内到期的SSL证书”，不能用面板的续期结果判断本站证书状态。接线、hook 安装命令和恢复命令见 `deploy/certbot/README.md`。
+
+续期依赖三个环节同时成立：`certbot-renew.timer` 真的在运行、80 端口 `/.well-known/acme-challenge/` 能取到 challenge、deploy hook 在复制证书后让 `markz-edge` 重新加载。`systemctl is-enabled` 返回 `enabled` 不代表定时器在运行，必须确认 `Active: active (waiting)` 和 `Trigger`。
+
+```bash
+systemctl status certbot-renew.timer --no-pager
+systemctl list-timers certbot-renew.timer
+sudo certbot certificates
+sudo certbot renew --cert-name markz.fun --dry-run
+npm run smoke:production
+```
+
+`npm run smoke:production` 会连接全部六个公开域名，要求证书通过系统信任校验且剩余有效期不少于 14 天，低于 21 天时输出告警。定时发布链每 6 小时运行一次，因此续期失效会在到期前两周内以失败运行的形式暴露，而不是等到站点不可访问。
+
 ## 故障处理
+
+### 所有域名提示“你的连接不是专用连接”或 `ERR_CERT_DATE_INVALID`
+
+1. 读实际证书的到期时间，不要只凭浏览器文案判断是过期还是域名不匹配：
+   `echo | openssl s_client -connect markz.fun:443 -servername markz.fun 2>/dev/null | openssl x509 -noout -subject -dates -ext subjectAltName`。
+2. 确认服务器时间正确：`ssh markz@39.97.237.248 date -u`。时间漂移与证书过期在浏览器里是同一句提示。
+3. 证书确实过期时先恢复服务：`sudo certbot renew --cert-name markz.fun`，再执行 `sudo /etc/letsencrypt/renewal-hooks/deploy/markz-tls-deploy.sh`。只续期不重载时 `markz-edge` 仍持有内存中的旧证书，公网依旧不可用。
+4. 定位续期为什么没跑：`systemctl status certbot-renew.timer --no-pager`。`enabled` 只表示开机自启已登记，`Active: inactive (dead)` 就是 2026-10-08 事故的根因；同时确认宝塔面板日志里的“没有找到30天内到期的SSL证书”不代表本站证书已被托管。
+5. 用 `npm run smoke:production` 确认六个域名全部通过信任与到期检查；恢复结论不能来自单个域名的 `200` 或浏览器单次刷新。
 
 ### markz.fun 打开 JSONUtils
 

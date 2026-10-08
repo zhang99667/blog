@@ -233,9 +233,12 @@ async function productionObservability(root) {
         "note.markz.fun",
         "jsonutils.markz.fun/admin",
         "markz-edge does not own both public ports",
+        "tlsHosts",
+        "production TLS for",
+        "tlsExpiryFailDays",
       ],
     },
-    "Scheduled publishing checks every public surface, runtime API, and edge port owner.",
+    "Scheduled publishing checks every public surface, runtime API, edge port owner, and public TLS trust and expiry.",
   )
 }
 
