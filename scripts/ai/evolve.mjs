@@ -236,9 +236,11 @@ async function productionObservability(root) {
         "tlsHosts",
         "production TLS for",
         "tlsExpiryFailDays",
+        "renew-timer",
+        "installed-cert-fingerprint",
       ],
     },
-    "Scheduled publishing checks every public surface, runtime API, edge port owner, and public TLS trust and expiry.",
+    "Scheduled publishing checks every public surface, runtime API, edge port owner, public TLS trust and expiry, installed-certificate match, and the renewal timer state.",
   )
 }
 

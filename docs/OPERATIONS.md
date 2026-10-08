@@ -148,9 +148,9 @@ GitHub 仓库需要以下 Actions 配置：
 
 ### 生产 TLS 证书
 
-公网 `80/443` 由 `markz-edge` 提供 TLS，证书是服务器上 certbot 的 `markz.fun` lineage，文件位于 `/www/server/panel/vhost/cert/39.97.237.248/`，经 `TLS_CERT_ROOT` 只读挂载进容器。宝塔面板不签发这张证书：面板的 `acme_v2.py` 订单只登记了 `jsonutils.markz.fun`，夜间续期永远报“没有找到30天内到期的SSL证书”，不能用面板的续期结果判断本站证书状态。接线、hook 安装命令和恢复命令见 `deploy/certbot/README.md`。
+公网 `80/443` 由 `markz-edge` 提供 TLS，证书是服务器上 certbot 的 `markz.fun` lineage，文件位于 `/www/server/panel/vhost/cert/39.97.237.248/`，经 `TLS_CERT_ROOT` 只读挂载进容器。宝塔面板不签发这张证书，也不再持有任何本站证书记录：面板的 `sites` 和 `domain` 表为空，`config/letsencrypt_v2.json` 里那三条指向 `markz.fun`、`jsonutils.markz.fun`、`zhangjihao.markz.fun` 的孤儿订单已在 2026-10-08 清空（备份为同目录 `letsencrypt_v2.json.bak-*`，恢复只需回填 `orders`）。面板的夜间 `acme_v2.py --renew=1` 仍会运行并输出“没有找到30天内到期的SSL证书”，这是它对空订单集的正常措辞，不能用来判断本站证书状态。接线、hook 安装命令和恢复命令见 `deploy/certbot/README.md`。
 
-续期依赖三个环节同时成立：`certbot-renew.timer` 真的在运行、80 端口 `/.well-known/acme-challenge/` 能取到 challenge、deploy hook 在复制证书后让 `markz-edge` 重新加载。`systemctl is-enabled` 返回 `enabled` 不代表定时器在运行，必须确认 `Active: active (waiting)` 和 `Trigger`。
+续期依赖三个环节同时成立：`certbot-renew.timer` 真的在运行、80 端口 `/.well-known/acme-challenge/` 能取到 challenge、deploy hook 在复制证书后让 `markz-edge` 重新加载。`systemctl is-enabled` 返回 `enabled` 不代表定时器在运行，必须确认 `Active: active (waiting)` 和 `Trigger`。注意 hook 跑完后 `systemctl status certbot-renew.service` 显示 `inactive (dead)` 是 oneshot 的正常结果，保持常驻的是 timer，不要把这两个状态混为一谈。
 
 ```bash
 systemctl status certbot-renew.timer --no-pager
@@ -160,7 +160,16 @@ sudo certbot renew --cert-name markz.fun --dry-run
 npm run smoke:production
 ```
 
-`npm run smoke:production` 会连接全部六个公开域名，要求证书通过系统信任校验且剩余有效期不少于 14 天，低于 21 天时输出告警。定时发布链每 6 小时运行一次，因此续期失效会在到期前两周内以失败运行的形式暴露，而不是等到站点不可访问。
+`npm run smoke:production` 覆盖这条链路的四种失效方式：
+
+- 六个公开域名必须通过系统信任校验，且剩余有效期不少于 14 天，低于 21 天时告警。
+- 六个域名必须提供同一张证书，且其 SHA-256 指纹必须等于 `markz-edge` 挂载目录里的证书指纹。续期成功但 nginx 没有重载时，两者不一致，检查会在 6 小时内失败，而不是等到旧证书进入 14 天窗口。
+- `certbot-renew.timer` 必须是 `active`。这正是 2026-10-08 事故中躺了十个月的状态。
+- 远端探测使用 `sudo -n` 读取 root-only 的证书文件，`markz` 用户具备免密 sudo；这也是发布链一直能直接操作 `markz-edge` 的前提。
+
+**不要连续重跑这个 smoke**：它对 `/api/reactions` 发起 3 次 POST，而 `deploy/nginx.conf` 对写入使用 `limit_req rate=10r/m burst=5`，`limit_req_status 429`。短时间内重复执行会让自己的出口 IP 触发限流，`429` 返回的是 HTML 错误页，表现为 `production interaction write failed: Unexpected token '<'`。这不是站点故障，等待限流窗口后重跑即可；CI 每次使用不同 runner，不受影响。
+
+定时发布链每 6 小时运行一次，因此续期失效会在到期前两周内以失败运行的形式暴露，而不是等到站点不可访问。
 
 ## 故障处理
 

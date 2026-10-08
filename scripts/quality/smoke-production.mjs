@@ -561,6 +561,8 @@ try {
   failures.push(`production interaction write failed: ${error.message}`)
 }
 
+let installedCertificateFingerprint
+
 if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
   try {
     const output = execFileSync(
@@ -573,7 +575,7 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
         "-o",
         "ConnectTimeout=10",
         sshHost,
-        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" markz-edge markz-reactions markz-reactions-backup jsonutil-app-frontend-1 jsonutil-app-backend-1 && docker exec markz-reactions-backup node /app/backup.mjs drill',
+        'docker inspect -f "{{.Name}} {{json .HostConfig.PortBindings}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" markz-edge markz-reactions markz-reactions-backup jsonutil-app-frontend-1 jsonutil-app-backend-1 && docker exec markz-reactions-backup node /app/backup.mjs drill; echo "renew-timer=$(systemctl is-active certbot-renew.timer)"; echo "installed-cert-fingerprint=$(sudo -n openssl x509 -in /www/server/panel/vhost/cert/39.97.237.248/fullchain.pem -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)"',
       ],
       { encoding: "utf8" },
     )
@@ -593,6 +595,18 @@ if (process.env.MARKZ_SKIP_REMOTE_PORT_CHECK !== "1") {
     }
     if (!/Reactions restore drill passed/.test(output)) {
       failures.push("production reactions backup did not pass a restore drill")
+    }
+    // A timer that is enabled but not running renews nothing: that state went
+    // unnoticed for ten months before the 2026-10-08 expiry.
+    const renewalTimer = /renew-timer=(\S+)/.exec(output)?.[1]
+    if (renewalTimer !== "active") {
+      failures.push(`markz TLS renewal timer is not active: ${renewalTimer ?? "unknown"}`)
+    }
+    installedCertificateFingerprint = /installed-cert-fingerprint=([0-9A-Fa-f:]{95})/
+      .exec(output)?.[1]
+      .toUpperCase()
+    if (!installedCertificateFingerprint) {
+      failures.push("could not read the certificate markz-edge loads from disk")
     }
   } catch (error) {
     failures.push(`remote port ownership check failed: ${error.message}`)
@@ -625,6 +639,27 @@ try {
       )
     }
   }
+  // Every public host must present the single installed certificate. A renewal
+  // that updates the file without reloading nginx leaves the edge serving the
+  // previous certificate, which the expiry check alone would only notice weeks
+  // later, so compare what is on the wire with what is installed on disk.
+  const servedFingerprints = new Set(
+    certificates
+      .map(({ certificate }) => String(certificate.fingerprint256 ?? "").toUpperCase())
+      .filter(Boolean),
+  )
+  if (servedFingerprints.size !== 1) {
+    failures.push(
+      `public hosts present ${servedFingerprints.size} different certificates instead of one`,
+    )
+  } else if (
+    installedCertificateFingerprint &&
+    !servedFingerprints.has(installedCertificateFingerprint)
+  ) {
+    failures.push(
+      "markz-edge serves a certificate that differs from the one installed on disk; nginx did not reload after renewal",
+    )
+  }
 } catch (error) {
   failures.push(`production TLS certificate check failed: ${error.message}`)
 }
@@ -634,6 +669,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    "Production routes, governed comments, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, public TLS trust and expiry, and port ownership are correct.",
+    "Production routes, governed comments, legacy CSS compatibility, canonical redirects, CSP and security headers, article social images, brand assets, notes graph index, visitor metrics, reactions, backup restore, API health, public TLS trust, expiry and installed-certificate match, renewal timer, and port ownership are correct.",
   )
 }
